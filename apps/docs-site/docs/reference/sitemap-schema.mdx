@@ -1,0 +1,88 @@
+---
+title: Sitemap Schema
+description: "Full field-by-field reference for streak.sitemap.json configuration."
+---
+
+# Sitemap Schema
+
+Complete field reference for `streak.sitemap.json`.
+
+---
+
+## Full Example
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",     "type": "PageHead" },
+        { "id": "HelloBanner",  "type": "HelloBanner" },
+        { "id": "HelloMessage", "type": "HelloMessage", "loadingStrategy": "lazy" }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+---
+
+## Top-Level Array
+
+The sitemap file is a JSON array. Each element is a page entry.
+
+---
+
+## Page Entry Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `url` | string | The URL path for this page |
+| `renderConfig` | object | All rendering configuration for this page |
+
+---
+
+## renderConfig Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `renderId` | string | Unique ID across all sitemap entries. Used as the output directory name: `out/<renderId>/index.html` |
+| `metadata` | object | Arbitrary object passed through to the renderer. Not used by Streak itself. |
+| `dataHandler` | string | Filename without extension in `src/handlers/` |
+| `rootLayout` | string | Filename without extension in `src/layouts/` |
+| `widgets` | array | Ordered list of widget entries for this page |
+| `version` | string | Opaque version string. Ignored by the renderer. |
+
+---
+
+## Widget Entry Fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | Yes | Must match the `WidgetPlaceholder id=` in the layout and the key returned by the data handler |
+| `type` | string | Yes | Must match the filename in `src/widgets/` (case-sensitive, without extension) |
+| `loadingStrategy` | `"lazy"` | No | When set, widget HTML is in the initial payload but JS assets are deferred until after page interactive |
+
+---
+
+## renderId Uniqueness
+
+`renderId` must be globally unique across all sitemap entries. Streak uses it as the output directory name. Duplicate `renderId` values will cause one page to overwrite another.
+
+---
+
+## File Lookups
+
+| Sitemap field | Resolved to |
+| --- | --- |
+| `"dataHandler": "HomeDataHandler"` | `src/handlers/HomeDataHandler.ts` |
+| `"rootLayout": "MainLayout"` | `src/layouts/MainLayout.tsx` |
+| `"type": "HelloBanner"` | `src/widgets/HelloBanner.tsx` |
+
+All lookups are by filename without extension. Matching is case-sensitive.

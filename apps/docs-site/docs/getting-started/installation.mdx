@@ -1,0 +1,72 @@
+---
+title: Installation
+description: "How to install Streak.js and set up your development environment."
+---
+
+# Installation
+
+Streak.js projects use the `streak-forge` CLI for development and builds. The project is configured via `streak.sitemap.json` and standard `package.json` scripts.
+
+---
+
+## CLI Commands
+
+There are two primary CLI commands:
+
+### streak-forge dev
+
+Starts the development server with hot-reload. Pages are rendered on request.
+
+```bash
+streak-forge dev
+```
+
+### streak-forge pre-build
+
+Used internally by the Nexus build pipeline. Reads the sitemap, renders all pages, and writes static HTML to `out/`. You do not need to run this command directly — Nexus runs it as part of the publish flow.
+
+---
+
+## package.json Scripts
+
+A typical Streak project uses the following scripts:
+
+```json
+"scripts": {
+  "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
+  "dev:streak": "streak-forge dev",
+  "build":      "bun run css-build && streak-forge pre-build",
+  "css-build":  "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css"
+}
+```
+
+| Script       | What it does                                                             |
+| ------------ | ------------------------------------------------------------------------ |
+| `dev`        | Runs CSS watch and `streak-forge dev` concurrently                       |
+| `dev:streak` | Runs the Streak dev server directly                                      |
+| `build`      | Compiles Tailwind CSS then runs `streak-forge pre-build` (used by Nexus) |
+| `css-build`  | Compiles Tailwind CSS to `public/styles/tailwind.css`                    |
+
+---
+
+## Running the Development Server
+
+```bash
+bun run dev
+```
+
+The dev server renders pages on demand and reloads on file changes.
+
+---
+
+## Building and Deploying
+
+Production builds are handled by **Nexus**. When you publish your site, Nexus runs the build pipeline and deploys the output based on your site configuration. You do not need to run `bun run build` locally for production.
+
+> For publishing and deployment steps, refer to the [Nexus documentation](https://nexusoneonline.com/).
+
+---
+
+## CSS / Tailwind
+
+Streak projects use Tailwind CSS compiled at build time. The compiled CSS file is written to `public/styles/tailwind.css` and linked from layouts. There is no CSS-in-JS — all styles are generated ahead of time.

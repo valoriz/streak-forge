@@ -1,0 +1,88 @@
+---
+title: Dynamic Components
+description: "Loading and injecting deferred content on demand with loadDynamicComponent."
+---
+
+# Dynamic Components
+
+The `Dynamic` component strips its children from the initial HTML at build time. At runtime, `gDom.loadDynamicComponent()` re-injects the content into the placeholder element on demand.
+
+---
+
+## Build-Time Behavior
+
+When the renderer encounters `<Dynamic id="my-panel">...</Dynamic>`:
+
+1. The child content is stripped from the output HTML
+2. A placeholder element is emitted with these attributes:
+   - `component-type="__dynamicWidgetType__"`
+   - `component-id="my-panel"`
+   - `component-placeholder` (marker attribute)
+
+The initial HTML contains the placeholder but not the child content.
+
+---
+
+## Runtime API
+
+### gDom.loadDynamicComponent
+
+```ts
+gDom.loadDynamicComponent(id: string, cb: (el: HTMLElement) => void): void
+```
+
+Re-injects the previously stripped HTML into the placeholder element identified by `id`, then calls `cb` with the injected element.
+
+---
+
+## Full Pattern
+
+`Dynamic` is always paired with a `Script` that triggers the injection at the right moment:
+
+```tsx
+<Dynamic id="nav-submenu">
+  <ul>
+    <li>Item A</li>
+    <li>Item B</li>
+  </ul>
+</Dynamic>
+
+<Script id="nav-submenu-trigger">
+  {(gDom: any) => {
+    document.getElementById("nav-btn")
+      .addEventListener("click", () => {
+        gDom.loadDynamicComponent("nav-submenu", () => {
+          console.info("submenu injected into DOM");
+        });
+      });
+  }}
+</Script>
+```
+
+---
+
+## Placeholder Attribute Constants
+
+Streak uses these internal constants for the placeholder attributes:
+
+| Constant | Value |
+| --- | --- |
+| `DYNAMIC_COMPONENT_KEY_TYPE` | `"component-type"` |
+| `DYNAMIC_COMPONENT_KEY_ID` | `"component-id"` |
+| `component-placeholder` | Marker attribute |
+| `__dynamicWidgetType__` | Value of `component-type` for `Dynamic` placeholders |
+
+---
+
+## Use Cases
+
+- Navigation submenus that should not be in the initial HTML
+- Modal content loaded only when the modal is opened
+- Below-the-fold sections injected after the user scrolls
+- Any HTML that would bloat the initial payload unnecessarily
+
+---
+
+## Relationship to lazy
+
+`Dynamic` removes content from the initial HTML entirely. `loadingStrategy: "lazy"` keeps the HTML in the initial payload but defers JS loading. They are complementary, not interchangeable.

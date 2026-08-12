@@ -1,0 +1,142 @@
+---
+title: Hello Streak App
+description: "Get started with Streak.js using the hello-streak-app reference project on GitHub."
+order: 0
+---
+
+# Hello Streak App
+
+The quickest way to explore Streak.js is the **hello-streak-app** — a minimal, working Streak project hosted on GitHub. Clone it, run it locally, and use it as your starting point while the `create-streak-app` CLI is being finalised.
+
+> **Note:** The `create-streak-app` CLI is coming soon. Until then, use this repository as your starting template.
+
+**Repository:** [https://github.com/valoriz/hello-streak-app](https://github.com/valoriz/hello-streak-app)
+
+---
+
+## Prerequisites
+
+- **Bun ≥ 1.2** — install from [bun.sh](https://bun.sh)
+
+---
+
+## Local Development
+
+Clone the repo, install dependencies, and start the dev server:
+
+```bash
+git clone https://github.com/valoriz/hello-streak-app.git
+cd hello-streak-app
+bun install
+bun run dev
+```
+
+The dev server starts on **port 3690**. Pages are rendered on request and the browser reloads automatically on file changes.
+
+> Local development only — there is no local build preview. The full optimised output is produced by Nexus in Stage 2.
+
+---
+
+## Project Structure
+
+```
+hello-streak-app/
+  src/
+    HomeDataHandler.ts       ← data provider for the home page
+    MainLayout.tsx           ← full HTML document wrapper
+    widgets/                 ← stateless TSX components
+  public/
+    assets/                  ← JS/CSS loaded at runtime via asset worker
+    styles/                  ← compiled Tailwind CSS
+  streak.sitemap.json        ← page registry — single source of truth
+  package.json
+```
+
+---
+
+## What the App Demonstrates
+
+The hello-streak-app showcases several Streak.js features:
+
+- **`Preload`** — resource hinting in `PageHead` and `HelloBanner`
+- **`Script`** — client interactivity via serialized IIFEs
+- **`Dynamic`** — deferred DOM injection on demand
+- **`loadPackage`** — loading third-party JS (Motion.js) via the asset web worker
+- **Lazy loading** — `HelloMessage` is deferred until after initial paint
+
+---
+
+## Build Pipeline
+
+Streak.js uses a two-stage build pipeline:
+
+| Stage | Where | What it does |
+| --- | --- | --- |
+| **Stage 1** — pre-build | Your CI / local machine | Reads `streak.sitemap.json`, generates raw build chunks into `.prebuild/` — the input for Stage 2 |
+| **Stage 2** — optimisation | Nexus (cloud) | Applies full build optimisations and produces the final deployable output |
+
+`bun run build` runs Stage 1. There is no local preview of the final output — Stage 2 only runs in Nexus.
+
+---
+
+## Release Pipeline
+
+The recommended workflow is to run Stage 1 in CI, zip the `.prebuild/` output, and publish it as a GitHub Release. Nexus picks up the zip automatically during the Stage 2 build once you install the **Nexus GitHub App**.
+
+Create `.github/workflows/build.yml` in your project:
+
+```yaml
+name: Build and Release
+
+on:
+  push:
+    branches: [your-release-branch]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: hello-streak-app
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+
+      - run: bun install
+      - run: bun run build
+
+      - name: Zip build
+        run: |
+          cd .prebuild
+          zip -r ../build-output.zip .
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: hello-streak-app/build-output.zip
+```
+
+Replace `your-release-branch` with your actual release branch name (e.g. `main` or `release`).
+
+Once the **Nexus GitHub App** is installed on your repository, Nexus will automatically detect new releases and trigger the Stage 2 build.
+
+---
+
+## Deploying via Nexus
+
+Sign up at [https://nexusoneonline.com](https://nexusoneonline.com), create a project, and connect your GitHub repository. Nexus handles Stage 2 optimisation and deployment automatically from there.
+
+---
+
+## Next Steps
+
+- [Project Structure](/getting-started/project-structure.html) — understand the layout in detail
+- [Core Concepts: Widgets](/core-concepts/widgets.html) — how widgets work
+- [Create a Project](/getting-started/create-a-project.html) — build a project from scratch

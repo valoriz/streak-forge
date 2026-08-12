@@ -1,0 +1,77 @@
+---
+title: loadPackage
+description: "Using loadPackage to load third-party libraries via the asset worker."
+---
+
+# loadPackage
+
+`gDom.loadPackage()` is the runtime API for loading third-party JS or CSS files from `public/assets/`. It goes through the asset worker pipeline and returns a `Promise` that resolves when the asset has been injected into the document.
+
+---
+
+## Signature
+
+```ts
+gDom.loadPackage(path: string): Promise<void>
+```
+
+---
+
+## Usage
+
+```ts
+await gDom.loadPackage("js/motion.js");
+const { animate, inView, scroll, stagger, spring } = gDom.Motion;
+```
+
+```ts
+await gDom.loadPackage("js/lenis.min.js");
+const lenis = new gDom.Lenis();
+```
+
+---
+
+## File Location Rule
+
+The `path` argument is relative to `/assets/`. The asset worker always prepends `/assets/` when fetching:
+
+| `loadPackage` call | File fetched from server | File must be at |
+| --- | --- | --- |
+| `loadPackage("js/motion.js")` | `/assets/js/motion.js` | `public/assets/js/motion.js` |
+| `loadPackage("js/lenis.min.js")` | `/assets/js/lenis.min.js` | `public/assets/js/lenis.min.js` |
+| `loadPackage("css/theme.css")` | `/assets/css/theme.css` | `public/assets/css/theme.css` |
+
+---
+
+## Caching
+
+The asset worker handler caches every loaded asset in a `Map`. Calling `loadPackage` for the same path a second time re-injects it immediately without hitting the network or spawning a new worker message. It is safe to call `loadPackage` for the same asset from multiple widgets.
+
+---
+
+## After Loading
+
+When a JS file is loaded, it is executed. If the library assigns itself to `window`, it is accessible via `gDom` immediately after the `await`:
+
+```ts
+await gDom.loadPackage("js/motion.js");
+// gDom.Motion is now available
+const { animate } = gDom.Motion;
+animate("#el", { opacity: [0, 1] }, { duration: 0.4 });
+```
+
+---
+
+## Inside a Script Component
+
+`loadPackage` is called inside a `Script` children function where `gDom` is the first argument:
+
+```tsx
+<Script id="animate-on-load">
+  {async (gDom: any) => {
+    await gDom.loadPackage("js/motion.js");
+    const { animate } = gDom.Motion;
+    animate("#hero", { opacity: [0, 1] }, { duration: 0.6 });
+  }}
+</Script>
+```

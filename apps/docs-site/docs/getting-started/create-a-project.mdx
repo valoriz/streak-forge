@@ -1,0 +1,161 @@
+---
+title: Create a Project
+description: "Step-by-step guide to creating a new Streak.js project from scratch."
+---
+
+# Create a Project
+
+A Streak.js project requires four things:
+
+1. `streak.sitemap.json` — declares pages
+2. A data handler in `src/handlers/`
+3. A layout in `src/layouts/`
+4. At least one widget in `src/widgets/`
+
+This guide walks through creating each one from scratch.
+
+---
+
+## Step 1 — Create streak.sitemap.json
+
+The sitemap is the single entry point for the build. Place it at the project root.
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",     "type": "PageHead" },
+        { "id": "HelloBanner",  "type": "HelloBanner" },
+        { "id": "HelloMessage", "type": "HelloMessage", "loadingStrategy": "lazy" }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+`renderId` must be globally unique — it becomes the output directory name (`out/homeRenderId/index.html`).
+
+---
+
+## Step 2 — Create the Data Handler
+
+Create `src/handlers/HomeDataHandler.ts`. The filename must match `dataHandler` in the sitemap (without extension).
+
+```ts
+// src/handlers/HomeDataHandler.ts
+const getHomeData = async () => {
+  return {
+    status: 200,             // required — signals render success
+    PageHead: {              // key matches widget id from sitemap
+      title: "Hello",
+    },
+    HelloBanner: {
+      heading: "Hello World",
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+Rules:
+- Must be the default export
+- Must return `{ status: 200, ...widgetData }`
+- Each top-level key must match a widget `id` in the sitemap
+- The value under each key is passed to the matching widget as `props.data`
+- It is async — you can `await` any database, CMS, or API call here
+
+---
+
+## Step 3 — Create the Layout
+
+Create `src/layouts/MainLayout.tsx`. The filename must match `rootLayout` in the sitemap (without extension).
+
+```tsx
+// src/layouts/MainLayout.tsx
+import { WidgetPlaceholder } from "streak/components";
+
+const MainLayout = () => {
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body>
+        <WidgetPlaceholder id="HelloBanner"  type="HelloBanner"  />
+        <WidgetPlaceholder id="HelloMessage" type="HelloMessage" />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+Rules:
+- Must be the default export
+- Must return the full HTML document — `<html>`, `<head>`, `<body>`
+- Every widget in the sitemap's `widgets[]` needs a matching `WidgetPlaceholder` here
+- `id` and `type` on `WidgetPlaceholder` must match the sitemap entry exactly
+
+---
+
+## Step 4 — Create Widgets
+
+Create `src/widgets/HelloBanner.tsx`. The filename must exactly match the `type` field in the sitemap (case-sensitive).
+
+```tsx
+// src/widgets/HelloBanner.tsx
+type HelloBannerProps = {
+  data?: {
+    heading?: string;
+  };
+};
+
+const HelloBanner = (props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello World";
+  return (
+    <section>
+      <h1>{heading}</h1>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+Rules:
+- Must be the default export
+- Data arrives as `props.data` — always use optional chaining (`?.`) and fallbacks (`??`)
+- Widgets are stateless — no `useState`, no `useEffect`
+
+---
+
+## Step 5 — Run the Dev Server
+
+```bash
+bun run dev
+```
+
+---
+
+## Step 6 — Build
+
+```bash
+bun run build
+```
+
+Output is written to:
+
+```
+out/homeRenderId/index.html
+```
+
+The generated HTML contains the rendered layout, all widget HTML, a hidden `<script id="w-m">` with widget metadata, and the `app.js` IIFE.

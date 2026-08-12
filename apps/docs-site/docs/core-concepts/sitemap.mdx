@@ -1,0 +1,133 @@
+---
+title: Sitemap
+description: "How streak.sitemap.json defines every page, layout, and widget in your site."
+---
+
+# Sitemap
+
+`streak.sitemap.json` is the single entry point for the entire build. Every page, its layout, its data source, and its widget list is declared here.
+
+---
+
+## File Location
+
+```
+streak.sitemap.json   ← project root
+```
+
+---
+
+## Full Example
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",     "type": "PageHead" },
+        { "id": "HelloBanner",  "type": "HelloBanner" },
+        { "id": "HelloMessage", "type": "HelloMessage", "loadingStrategy": "lazy" }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+---
+
+## Field Reference
+
+### Top-level page entry
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `url` | string | The URL path for this page |
+| `renderConfig` | object | All rendering configuration for this page |
+
+### renderConfig fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `renderId` | string | Unique ID; the output folder name inside `out/` |
+| `metadata` | object | Arbitrary bag passed through to the renderer |
+| `dataHandler` | string | Filename (without extension) in `src/handlers/` |
+| `rootLayout` | string | Filename (without extension) in `src/layouts/` |
+| `widgets[]` | array | Ordered list of widgets to place on this page |
+| `version` | string | Opaque version string, ignored by the renderer |
+
+### Widget entry fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | Must match `WidgetPlaceholder id=` in the layout |
+| `type` | string | Must match the filename in `src/widgets/` |
+| `loadingStrategy` | `"lazy"` | If set, widget JS assets are deferred until after page is interactive |
+
+---
+
+## renderId Uniqueness
+
+`renderId` must be globally unique across all sitemap entries. Streak uses it as the output directory name:
+
+```
+out/<renderId>/index.html
+```
+
+If two entries share the same `renderId`, one will overwrite the other.
+
+---
+
+## Widget Array
+
+The `widgets[]` array is ordered. Widgets are rendered and injected in the order they appear. Each entry must have a corresponding `WidgetPlaceholder` in the layout with matching `id` and `type`.
+
+---
+
+## loadingStrategy: "lazy"
+
+When a widget entry includes `"loadingStrategy": "lazy"`, the widget's HTML is still rendered at build time and included in the initial HTML. However, `app.js` defers loading the widget's JS assets until after the page is interactive. See [Lazy Widgets](/runtime/lazy-widgets) for details.
+
+---
+
+## Data Handler and Layout Resolution
+
+- `dataHandler: "HomeDataHandler"` → `src/handlers/HomeDataHandler.ts`
+- `rootLayout: "MainLayout"` → `src/layouts/MainLayout.tsx`
+- `widgets[].type: "HelloBanner"` → `src/widgets/HelloBanner.tsx`
+
+All lookups are by filename without extension.
+
+---
+
+## Multiple Pages
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": []
+    }
+  },
+  {
+    "url": "/about",
+    "renderConfig": {
+      "renderId": "aboutRenderId",
+      "dataHandler": "AboutDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": []
+    }
+  }
+]
+```
+
+Each entry produces one output file: `out/homeRenderId/index.html` and `out/aboutRenderId/index.html`.

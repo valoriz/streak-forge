@@ -1,0 +1,34 @@
+---
+title: CDN Deployment
+description: "How Streak.js sites are deployed to CDN providers through Nexus."
+---
+
+# CDN Deployment
+
+Streak.js output is fully static and is served from a CDN. Building and deploying to the CDN is handled by **Nexus** based on your site configuration — you do not need to upload files manually.
+
+> For CDN configuration and publishing steps, refer to the [Nexus documentation](https://nexusoneonline.com/).
+
+---
+
+## The /assets/ Path Requirement
+
+The asset worker fetches files via:
+
+```
+/assets/<path>
+```
+
+This maps to `public/assets/<path>` in the source project. Ensure your site configuration in Nexus preserves this path. If `/assets/` is served from a different path or a different origin without proper CORS headers, `gDom.loadPackage()` calls will fail silently.
+
+---
+
+## Caching Considerations
+
+The asset worker caches loaded assets in memory for the lifetime of the page. At the CDN level, static assets in `/assets/` can be cached aggressively because Streak versions them (the `v` field in the `w-m` metadata). HTML files should use shorter cache durations or cache-busting to ensure updated pages are served promptly.
+
+---
+
+## Routing
+
+Streak generates one `index.html` per `renderId` directory. CDN routing must map URL paths to the correct `index.html` files — for example, `/about` should serve the `index.html` for the about page's `renderId`. This mapping is configured as part of your Nexus site setup.

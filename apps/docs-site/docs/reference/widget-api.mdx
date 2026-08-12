@@ -1,0 +1,128 @@
+---
+title: Widget API
+description: "Widget file conventions, props patterns, and component API reference."
+---
+
+# Widget API
+
+Reference for writing widget files in `src/widgets/`.
+
+---
+
+## File Conventions
+
+| Rule | Detail |
+| --- | --- |
+| Location | `src/widgets/` |
+| Filename | Must exactly match the `type` field in the sitemap (case-sensitive) |
+| Export | Must be the default export |
+| Extension | `.tsx` |
+
+Example: sitemap entry `"type": "HelloBanner"` → file `src/widgets/HelloBanner.tsx`.
+
+---
+
+## Function Signature
+
+```ts
+type Widget<T = unknown> = (props: { data?: T }) => JSX.Element;
+```
+
+Widgets receive a single `props` argument. The only relevant prop is `data`.
+
+---
+
+## props.data
+
+`props.data` is the value returned by the data handler under the key matching this widget's `id`.
+
+Handler:
+```ts
+return {
+  status: 200,
+  HelloBanner: { heading: "Hello World" },
+};
+```
+
+Widget:
+```ts
+props.data === { heading: "Hello World" }
+```
+
+If the handler returned no entry for this widget, `props.data` is `undefined`. Always use optional chaining (`?.`) and nullish coalescing (`??`).
+
+---
+
+## Full Example
+
+```tsx
+// src/widgets/HelloBanner.tsx
+type HelloBannerProps = {
+  data?: {
+    heading?: string;
+    accentColor?: string;
+  };
+};
+
+const HelloBanner = (props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello World";
+  return (
+    <section>
+      <h1>{heading}</h1>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+---
+
+## Rules
+
+- **Stateless** — no `useState`, no `useEffect`. Widgets are rendered once at build time. Nothing runs in the browser.
+- **Default export required** — Streak resolves widget files by filename and calls the default export.
+- **No data fetching in widgets** — all data comes through `props.data` from the handler.
+- **Client interactivity via Script** — any browser-side behavior must be implemented in a `Script` component inside the widget.
+
+---
+
+## Adding Client-Side Behavior
+
+```tsx
+import { Script } from "streak/components";
+
+const HelloBanner = (props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello World";
+  return (
+    <section>
+      <h1 id="banner-heading">{heading}</h1>
+      <Script id="hello-banner-init" options={{ color: "#818cf8" }}>
+        {(gDom: any, options: any) => {
+          document.getElementById("banner-heading").style.color = options.color;
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+The `Script` children function is serialized to a string at build time. No closures or outer-scope references survive. Pass any build-time values through the `options` prop.
+
+---
+
+## Sitemap Registration
+
+Every widget must be declared in `streak.sitemap.json`:
+
+```json
+{ "id": "HelloBanner", "type": "HelloBanner" }
+```
+
+And must have a matching `WidgetPlaceholder` in the layout:
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```

@@ -1,0 +1,93 @@
+---
+title: Dynamic
+description: "The Dynamic component for deferring content from the initial HTML payload."
+---
+
+# Dynamic
+
+`Dynamic` is a component from `streak/components` that strips its children from the initial HTML payload at build time. The content is injected into the DOM on demand via `gDom.loadDynamicComponent()`.
+
+---
+
+## Import
+
+```tsx
+import { Dynamic } from "streak/components";
+```
+
+---
+
+## Example
+
+```tsx
+import { Dynamic } from "streak/components";
+
+<Dynamic id="my-panel">
+  <div>This content is deferred</div>
+</Dynamic>
+```
+
+---
+
+## What It Does
+
+**At build time:** the content inside `Dynamic` is stripped from the initial HTML. The element is rendered as a placeholder with two attributes:
+
+- `component-type="__dynamicWidgetType__"`
+- `component-id="my-panel"`
+
+**At runtime:** calling `gDom.loadDynamicComponent("my-panel", callback)` re-injects the original content into the placeholder element and calls the callback when done.
+
+---
+
+## Pattern — Always Paired with a Script
+
+`Dynamic` is always used together with a `Script` that triggers the injection. The script decides when to call `loadDynamicComponent`.
+
+```tsx
+<Dynamic id="my-panel">
+  <ExpensiveComponent />
+</Dynamic>
+
+<Script id="my-panel-loader">
+  {(gDom: any) => {
+    document.getElementById("trigger-btn")
+      .addEventListener("click", () => {
+        gDom.loadDynamicComponent("my-panel", () => {
+          console.info("panel injected into DOM");
+        });
+      });
+  }}
+</Script>
+```
+
+---
+
+## Attributes on the Placeholder Element
+
+| Attribute | Value |
+| --- | --- |
+| `component-type` | `"__dynamicWidgetType__"` |
+| `component-id` | The `id` prop passed to `Dynamic` |
+| `component-placeholder` | Present as a marker |
+
+---
+
+## Use Cases
+
+- Navigation submenus that open on interaction
+- Modals whose content should not be in the initial payload
+- Below-the-fold sections loaded after user scroll
+- Any content that should not be part of the initial HTML for performance reasons
+
+---
+
+## Dynamic vs lazy
+
+`Dynamic` and `loadingStrategy: "lazy"` are different mechanisms:
+
+| | HTML in initial payload | JS loaded |
+| --- | --- | --- |
+| No `loadingStrategy` | Yes | Immediately |
+| `loadingStrategy: "lazy"` | Yes | After page is interactive |
+| `Dynamic` | **No** | On demand via `loadDynamicComponent` |

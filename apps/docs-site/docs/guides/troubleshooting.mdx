@@ -1,0 +1,140 @@
+---
+title: Troubleshooting
+description: Solutions for common Streak.js errors and unexpected behavior.
+order: 2
+---
+
+# Troubleshooting
+
+Common errors and their solutions.
+
+---
+
+## 404 GET for Assets
+
+**Symptom:** The browser console shows `404 GET /assets/js/motion.js` (or similar).
+
+**Cause:** The file is missing from `public/assets/`.
+
+**Fix:** Verify the file exists at the expected path. The `loadPackage` path is relative to `/assets/`, so `loadPackage("js/motion.js")` fetches `/assets/js/motion.js`, which must be at `public/assets/js/motion.js`.
+
+```
+public/
+  assets/
+    js/
+      motion.js     ← this file must exist
+```
+
+---
+
+## TypeError Reading 'progress'
+
+**Symptom:** `TypeError: Cannot read properties of undefined (reading 'progress')` from a Motion.js `scroll()` call.
+
+**Cause:** Motion.js `scroll()` expects a callback function as its first argument, not an options object. This error occurs when the callback form is incorrect.
+
+**Fix:** Pass a function that receives the scroll progress:
+
+```ts
+// WRONG
+scroll({ target: el }, { onChange: (p) => { ... } });
+
+// CORRECT
+scroll((progress) => {
+  // use progress.y.progress, etc.
+}, { target: el });
+```
+
+---
+
+## TypeError at inView.margin
+
+**Symptom:** `TypeError` thrown at the `margin` option of Motion.js `inView()`.
+
+**Cause:** The `margin` value must be a CSS margin string (e.g., `"-100px 0px"`), not a number.
+
+**Fix:** Pass a valid CSS margin string:
+
+```ts
+// WRONG
+inView(el, callback, { margin: -100 });
+
+// CORRECT
+inView(el, callback, { margin: "-100px 0px -100px 0px" });
+```
+
+---
+
+## loadPackage Resolves but Library Is Undefined
+
+**Symptom:** `await gDom.loadPackage("js/my-lib.js")` completes without error, but `gDom.MyLib` is `undefined`.
+
+**Cause:** Either the file does not exist at `public/assets/js/my-lib.js`, or the library does not assign itself to `window`.
+
+**Fix:**
+
+1. Confirm the file exists at the correct path under `public/assets/`.
+2. Confirm the library sets a global: `window.MyLib = ...`. If it uses ES modules instead of a UMD/IIFE build, it will not set a global. Use the IIFE or UMD build of the library.
+3. Check for typos in the property name — `gDom.Motion` vs `gDom.motion`, for example.
+
+---
+
+## Script Reads Undefined Variable
+
+**Symptom:** A variable used inside a `Script` children function is `undefined` at runtime, even though it has a value at build time.
+
+**Cause:** The function body is serialized with `.toString()`. Closures do not survive serialization — outer-scope variables are not captured.
+
+**Fix:** Pass the value through the `options` prop:
+
+```tsx
+// WRONG — heading is a build-time variable, undefined at runtime
+const heading = props?.data?.heading ?? "Hello";
+<Script id="my-script">
+  {(gDom: any) => {
+    console.log(heading); // undefined
+  }}
+</Script>
+
+// CORRECT
+<Script id="my-script" options={{ heading: props?.data?.heading ?? "Hello" }}>
+  {(gDom: any, options: any) => {
+    console.log(options.heading); // "Hello"
+  }}
+</Script>
+```
+
+---
+
+## Widget Renders with No Data or Wrong Data
+
+**Symptom:** A widget renders but `props.data` is `undefined` or contains unexpected values.
+
+**Cause:** The handler return key does not match the widget `id` in the sitemap.
+
+**Fix:** Verify all three locations use the exact same string (case-sensitive):
+
+| Location | Must match |
+| --- | --- |
+| `streak.sitemap.json` → `widgets[].id` | `"HelloBanner"` |
+| Handler return object key | `HelloBanner: { ... }` |
+| `WidgetPlaceholder` in layout | `id="HelloBanner"` |
+
+A mismatch like `"helloBanner"` vs `"HelloBanner"` causes the widget to receive `undefined` data.
+
+---
+
+## Build Succeeds but Widget Is Missing from the Page
+
+**Symptom:** `streak-forge pre-build` completes without errors, but a widget does not appear in the output HTML.
+
+**Cause:** There is no matching `WidgetPlaceholder` in the layout for this widget.
+
+**Fix:** Add a `WidgetPlaceholder` to the layout with `id` and `type` matching the sitemap entry:
+
+```tsx
+// In your layout file
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```
+
+The renderer replaces each `WidgetPlaceholder` with the rendered widget HTML. If there is no placeholder, the widget is rendered but has nowhere to be injected.

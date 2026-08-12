@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}" />
+  <meta property="og:title" content="{{title}}" />
+  <meta property="og:description" content="{{description}}" />
+  <meta property="og:type" content="article" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+
+  <!-- ── Topbar ──────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+      <a class="logo" href="/index.html">
+        <img class="logo-img logo-img--light" src="/streak-logo-light-mode.svg" alt="Streak.js" height="28" />
+        <img class="logo-img logo-img--dark" src="/streak-logo-dark-mode.svg" alt="Streak.js" height="28" />
+      </a>
+    </div>
+    <div class="topbar-right">
+      <button class="search-trigger" id="search-trigger" aria-label="Search docs">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span class="search-trigger-text">Search docs...</span>
+        <kbd class="search-kbd"><span class="kbd-mod"></span>K</kbd>
+      </button>
+      <a class="topbar-icon-link" href="https://github.com/valoriz/streak-forge" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+      </a>
+      <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Search Modal ────────────────────────────────────── -->
+  <div class="search-overlay" id="search-overlay">
+    <div class="search-modal" id="search-modal">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-input" id="search-input" type="text" placeholder="Search documentation..." autocomplete="off" />
+        <kbd class="search-esc">Esc</kbd>
+      </div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ── Layout ──────────────────────────────────────────── -->
+  <div class="layout">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+        {{sidebar}}
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="content">
+      <nav class="breadcrumbs">{{breadcrumbs}}</nav>
+      <article class="prose">
+        {{content}}
+      </article>
+      <div class="edit-link">
+        <a href="https://github.com/valoriz/streak-forge/edit/main/apps/docs-site/{{edit_url}}" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit this page on GitHub
+        </a>
+      </div>
+      <nav class="page-nav">
+        {{prev}}
+        {{next}}
+      </nav>
+    </main>
+
+    <aside class="toc" id="toc">
+      <div class="toc-inner">
+        <p class="toc-title">On this page</p>
+        {{toc}}
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span>Built with Streak.js</span>
+      <span class="footer-sep">&middot;</span>
+      <a href="https://github.com/valoriz/streak-forge" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </footer>
+
+  <!-- ── Scripts ─────────────────────────────────────────── -->
+  <script>
+    // ── Theme ──────────────────────────────────────────────
+    (function () {
+      var stored = localStorage.getItem('theme');
+      if (stored) document.documentElement.setAttribute('data-theme', stored);
+    })();
+
+    function toggleTheme() {
+      var current = document.documentElement.getAttribute('data-theme');
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    }
+
+    // ── Sidebar (mobile) ───────────────────────────────────
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebar-overlay').classList.toggle('show');
+    }
+
+    // ── Copy to clipboard ──────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.prose pre').forEach(function (pre) {
+        var btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        btn.setAttribute('aria-label', 'Copy code');
+        btn.addEventListener('click', function () {
+          var code = pre.querySelector('code');
+          var text = code ? code.textContent : pre.textContent;
+          navigator.clipboard.writeText(text || '').then(function () {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(function () {
+              btn.textContent = 'Copy';
+              btn.classList.remove('copied');
+            }, 2000);
+          });
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+      });
+
+      // ── Scroll-spy for TOC ─────────────────────────────────
+      var tocLinks = document.querySelectorAll('.toc-link');
+      if (tocLinks.length > 0) {
+        var headings = [];
+        tocLinks.forEach(function (link) {
+          var id = link.getAttribute('href').replace('#', '');
+          var el = document.getElementById(id);
+          if (el) headings.push({ el: el, link: link });
+        });
+
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              tocLinks.forEach(function (l) { l.classList.remove('active'); });
+              var match = headings.find(function (h) { return h.el === entry.target; });
+              if (match) match.link.classList.add('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -75% 0px', threshold: 0 });
+
+        headings.forEach(function (h) { observer.observe(h.el); });
+      }
+
+      // ── Search ─────────────────────────────────────────────
+      var searchOverlay = document.getElementById('search-overlay');
+      var searchInput   = document.getElementById('search-input');
+      var searchResults = document.getElementById('search-results');
+      var searchTrigger = document.getElementById('search-trigger');
+
+      var searchIndex = null;
+
+      // ── Recent searches (localStorage) ───────────────────
+      var RECENT_KEY = 'search_recent';
+      var RECENT_MAX = 5;
+
+      function getRecent() {
+        try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e) { return []; }
+      }
+      function addRecent(item) {
+        var list = getRecent().filter(function(r) { return r.url !== item.url; });
+        list.unshift({ title: item.title, url: item.url, section: item.section || '', excerpt: item.excerpt || '' });
+        localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+      }
+
+      // ── Scoring ──────────────────────────────────────────
+      function scoreItem(item, qLower, words) {
+        var title   = item.title.toLowerCase();
+        var excerpt = item.excerpt ? item.excerpt.toLowerCase() : '';
+        var heads   = item.headings ? item.headings.map(function(h) { return h.toLowerCase(); }) : [];
+
+        // All words must appear somewhere
+        var allMatch = words.every(function(w) {
+          return title.indexOf(w) !== -1 || excerpt.indexOf(w) !== -1 ||
+            heads.some(function(h) { return h.indexOf(w) !== -1; });
+        });
+        if (!allMatch) return -1;
+
+        var score = 0;
+        // Phrase-level title bonus
+        if (title === qLower)              score += 100;
+        else if (title.startsWith(qLower)) score += 80;
+        else if (title.indexOf(qLower) !== -1) score += 60;
+
+        // Per-word bonuses
+        words.forEach(function(w) {
+          if (title.indexOf(w) !== -1)                                score += 20;
+          if (heads.some(function(h) { return h.indexOf(w) !== -1; })) score += 10;
+          if (excerpt.indexOf(w) !== -1)                              score += 5;
+        });
+
+        return score;
+      }
+
+      // Extract the excerpt snippet closest to the first matched word
+      function getSnippet(excerpt, words) {
+        if (!excerpt) return '';
+        var lower = excerpt.toLowerCase();
+        var best = -1;
+        words.forEach(function(w) {
+          var idx = lower.indexOf(w);
+          if (idx !== -1 && (best === -1 || idx < best)) best = idx;
+        });
+        var start = best === -1 ? 0 : Math.max(0, best - 40);
+        var end   = Math.min(excerpt.length, start + 130);
+        return (start > 0 ? '…' : '') + excerpt.slice(start, end) + (end < excerpt.length ? '…' : '');
+      }
+
+      // ── Suggestions (empty state) ────────────────────────
+      function makeSuggestGroup(label) {
+        var g = document.createElement('div');
+        g.className = 'search-suggest-group';
+        var l = document.createElement('span');
+        l.className = 'search-suggest-label';
+        l.textContent = label;
+        g.appendChild(l);
+        return g;
+      }
+
+      function makeSuggestItem(item) {
+        var a = document.createElement('a');
+        a.className = 'search-result search-suggest-item';
+        a.href = item.url;
+        a.addEventListener('click', function() { addRecent(item); });
+        var body = document.createElement('span');
+        body.className = 'search-suggest-body';
+        var t = document.createElement('span');
+        t.className = 'search-result-title';
+        t.textContent = item.title;
+        body.appendChild(t);
+        if (item.excerpt) {
+          var d = document.createElement('span');
+          d.className = 'search-suggest-desc';
+          d.textContent = item.excerpt.slice(0, 80);
+          body.appendChild(d);
+        }
+        if (item.section) {
+          var s = document.createElement('span');
+          s.className = 'search-result-section';
+          s.textContent = item.section;
+          body.appendChild(s);
+        }
+        a.appendChild(body);
+        return a;
+      }
+
+      function renderSuggestions() {
+        while (searchResults.firstChild) searchResults.removeChild(searchResults.firstChild);
+        var recent = getRecent();
+        if (recent.length > 0) {
+          var rg = makeSuggestGroup('Recent');
+          recent.forEach(function(item) { rg.appendChild(makeSuggestItem(item)); });
+          searchResults.appendChild(rg);
+        }
+        if (searchIndex) {
+          var seen = {};
+          var quick = searchIndex.filter(function(item) {
+            var k = item.section || '_root';
+            if (seen[k]) return false;
+            seen[k] = true;
+            return true;
+          }).slice(0, 6);
+          if (quick.length > 0) {
+            var qg = makeSuggestGroup(recent.length > 0 ? 'Browse' : 'Quick Links');
+            quick.forEach(function(item) { qg.appendChild(makeSuggestItem(item)); });
+            searchResults.appendChild(qg);
+          }
+        }
+      }
+
+      // ── Results ──────────────────────────────────────────
+      function renderResults(results, words) {
+        while (searchResults.firstChild) searchResults.removeChild(searchResults.firstChild);
+        if (results.length === 0) {
+          var empty = document.createElement('div');
+          empty.className = 'search-empty';
+          empty.textContent = 'No results found';
+          searchResults.appendChild(empty);
+          return;
+        }
+        results.forEach(function(item) {
+          var a = document.createElement('a');
+          a.className = 'search-result';
+          a.href = item.url;
+          a.addEventListener('click', function() { addRecent(item); });
+          var t = document.createElement('span');
+          t.className = 'search-result-title';
+          t.textContent = item.title;
+          a.appendChild(t);
+          if (item.section) {
+            var s = document.createElement('span');
+            s.className = 'search-result-section';
+            s.textContent = item.section;
+            a.appendChild(s);
+          }
+          var e = document.createElement('span');
+          e.className = 'search-result-excerpt';
+          e.textContent = getSnippet(item.excerpt, words);
+          a.appendChild(e);
+          searchResults.appendChild(a);
+        });
+      }
+
+      function runSearch(q) {
+        if (!searchIndex || !q) { while (searchResults.firstChild) searchResults.removeChild(searchResults.firstChild); return; }
+        var qLower = q.toLowerCase();
+        var words  = qLower.split(/\s+/).filter(Boolean);
+
+        var scored = [];
+        searchIndex.forEach(function(item) {
+          var s = scoreItem(item, qLower, words);
+          if (s >= 0) scored.push({ item: item, score: s });
+        });
+        scored.sort(function(a, b) { return b.score - a.score; });
+
+        renderResults(scored.slice(0, 8).map(function(r) { return r.item; }), words);
+      }
+
+      function openSearch() {
+        searchOverlay.classList.add('open');
+        searchInput.value = '';
+        setTimeout(function() { searchInput.focus(); }, 50);
+        if (!searchIndex) {
+          fetch('/search-index.json')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              searchIndex = d;
+              var q = searchInput.value.trim();
+              if (q) runSearch(q); else renderSuggestions();
+            })
+            .catch(function() { searchIndex = []; });
+        }
+        renderSuggestions();
+      }
+
+      function closeSearch() { searchOverlay.classList.remove('open'); }
+
+      searchTrigger.addEventListener('click', openSearch);
+      searchOverlay.addEventListener('click', function(e) { if (e.target === searchOverlay) closeSearch(); });
+
+      document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          if (searchOverlay.classList.contains('open')) closeSearch(); else openSearch();
+        }
+        if (e.key === 'Escape') closeSearch();
+      });
+
+      searchInput.addEventListener('input', function() {
+        var q = searchInput.value.trim();
+        if (!q) { renderSuggestions(); return; }
+        runSearch(q);
+      });
+
+      // ── Keyboard navigation for search results ────────────
+      searchInput.addEventListener('keydown', function(e) {
+        var items = searchResults.querySelectorAll('.search-result');
+        if (!items.length) return;
+        var current = searchResults.querySelector('.search-result.focused');
+        var idx = current ? Array.from(items).indexOf(current) : -1;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (current) current.classList.remove('focused');
+          items[(idx + 1) % items.length].classList.add('focused');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (current) current.classList.remove('focused');
+          items[idx <= 0 ? items.length - 1 : idx - 1].classList.add('focused');
+        } else if (e.key === 'Enter' && current) {
+          e.preventDefault();
+          window.location.href = current.getAttribute('href');
+        }
+      });
+    });
+  </script>
+
+</body>
+
+</html>

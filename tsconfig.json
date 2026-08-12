@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "exclude": [
+    "**/*.html",
+    "node_modules",
+    "build",
+    "dist",
+    "**/*.js"
+  ]
+}

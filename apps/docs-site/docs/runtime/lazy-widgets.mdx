@@ -1,0 +1,59 @@
+---
+title: Lazy Widgets
+description: "How lazy-loaded widgets defer JS execution until after page interactive."
+---
+
+# Lazy Widgets
+
+`loadingStrategy: "lazy"` is an optional field on a widget entry in `streak.sitemap.json`. When set, the widget's HTML is still rendered at build time and included in the initial HTML payload, but `app.js` defers loading the widget's JS assets until after the page is interactive.
+
+---
+
+## How to Declare a Lazy Widget
+
+```json
+{
+  "id": "HelloMessage",
+  "type": "HelloMessage",
+  "loadingStrategy": "lazy"
+}
+```
+
+---
+
+## What "lazy" Does
+
+- The widget's HTML is rendered at build time and is present in `out/<renderId>/index.html`
+- The `w-m` metadata script marks this widget as lazy
+- `app.js` processes lazy widgets after all eager (non-lazy) widgets have finished loading
+
+---
+
+## Comparison: lazy vs Dynamic vs default
+
+| | HTML in initial payload | JS loaded |
+| --- | --- | --- |
+| No `loadingStrategy` | Yes | Immediately on page load |
+| `loadingStrategy: "lazy"` | Yes | After page is interactive |
+| `Dynamic` component | No — stripped at build time | On demand via `loadDynamicComponent` |
+
+`lazy` and `Dynamic` solve different problems. Use `lazy` when the HTML should be visible from the start but the JS can wait. Use `Dynamic` when the HTML itself should not be in the initial payload.
+
+---
+
+## app.js Behavior
+
+`app.js` loads widgets sequentially by chaining callbacks. Widgets without `loadingStrategy` are loaded first, in order. Widgets marked `"lazy"` are queued and loaded after the eager set completes.
+
+The `w-m` metadata embedded in the page HTML identifies which widgets are lazy:
+
+```json
+{
+  "w": [
+    { "id": "HelloBanner",  "v": "abc123" },
+    { "id": "HelloMessage", "v": "def456" }
+  ]
+}
+```
+
+The renderer adds the necessary metadata flags; you only need to set `"loadingStrategy": "lazy"` in the sitemap.

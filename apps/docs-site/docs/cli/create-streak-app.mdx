@@ -1,0 +1,91 @@
+---
+title: create-streak-app
+description: "The create-streak-app scaffolding tool for new Streak.js projects."
+---
+
+# Project Setup and package.json Scripts
+
+A Streak.js project is configured through `package.json` scripts. The key scripts are `dev`, `build`, `css-build`, and `start`.
+
+---
+
+## package.json Scripts
+
+```json
+"scripts": {
+  "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
+  "dev:streak": "streak-forge dev",
+  "build":      "bun run css-build && streak-forge pre-build",
+  "css-build":  "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css",
+  "start":      "python3 -m http.server 8000 --directory out"
+}
+```
+
+---
+
+## Script Descriptions
+
+### dev
+
+Runs two processes concurrently using `concurrently`:
+
+1. `css-dev` — watches Tailwind CSS input and rebuilds on changes
+2. `dev:streak` — runs `streak-forge dev` (the Streak development server)
+
+```bash
+bun run dev
+```
+
+### dev:streak
+
+Runs the Streak development server directly, without the CSS watcher.
+
+```bash
+bun run dev:streak
+```
+
+### build
+
+Compiles Tailwind CSS first, then runs the full Streak build:
+
+```bash
+bun run css-build && streak-forge pre-build
+```
+
+The CSS must be compiled before the build so that `public/styles/tailwind.css` exists when pages are rendered.
+
+```bash
+bun run build
+```
+
+### css-build
+
+Compiles Tailwind CSS from `./src/common/styles/input.css` and writes the output to `./public/styles/tailwind.css`.
+
+```bash
+tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css
+```
+
+### start
+
+Serves the `out/` directory on port 8000 using Python's built-in HTTP server. Use this to preview the production build locally.
+
+```bash
+python3 -m http.server 8000 --directory out
+```
+
+Navigate to port 8000 in your browser.
+
+---
+
+## Build Output
+
+After `bun run build`, static HTML is written to:
+
+```
+out/
+  <renderId>/
+    index.html
+```
+
+One directory per sitemap entry, named after its `renderId`.

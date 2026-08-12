@@ -1,0 +1,99 @@
+---
+title: WidgetPlaceholder
+description: "The WidgetPlaceholder component for marking widget injection slots in layouts."
+---
+
+# WidgetPlaceholder
+
+`WidgetPlaceholder` is a build-time component from `streak/components` used inside layouts. It marks the position where a widget's rendered HTML will be injected.
+
+---
+
+## Import
+
+```tsx
+import { WidgetPlaceholder } from "streak/components";
+```
+
+---
+
+## Static Form — Used in Layouts
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```
+
+Both props are required:
+
+| Prop | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | Must match the widget `id` in the sitemap and the handler return key |
+| `type` | string | Must match the widget filename in `src/widgets/` (case-sensitive) |
+
+---
+
+## Dummy Form — Used Inside Dynamic Content
+
+```tsx
+<WidgetPlaceholder dummy />
+```
+
+Used in rare cases inside `Dynamic` content where a placeholder is needed without a specific widget binding.
+
+---
+
+## How It Works at Build Time
+
+At build time, the Streak renderer:
+
+1. Renders the layout JSX to an HTML string
+2. For each widget in `widgets[]`, renders the widget JSX with its handler data
+3. Replaces the `WidgetPlaceholder` in the layout HTML string with the rendered widget HTML
+4. The placeholder element itself does not appear in the final output
+
+---
+
+## w-m Metadata Script
+
+After all widgets are injected, the rendered page also contains a hidden `<script id="w-m">` element with JSON metadata. `app.js` reads this on page load to know which widgets to load and in what order.
+
+```json
+{
+  "w": [
+    { "id": "HelloBanner",  "v": "abc123" },
+    { "id": "HelloMessage", "v": "def456" }
+  ],
+  "secondary-css": { "v": "xyz" },
+  "layout-scripts": true
+}
+```
+
+- `w` — array of widget entries with their versioned asset paths
+- `secondary-css` — optional secondary CSS asset
+- `layout-scripts` — whether layout-level scripts should be loaded
+
+---
+
+## Example Layout Usage
+
+```tsx
+import { WidgetPlaceholder } from "streak/components";
+
+const MainLayout = () => {
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body>
+        <WidgetPlaceholder id="HelloBanner"  type="HelloBanner"  />
+        <WidgetPlaceholder id="HelloMessage" type="HelloMessage" />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+Every widget declared in `streak.sitemap.json` `widgets[]` must have a corresponding `WidgetPlaceholder` in the layout. The `id` and `type` values must match exactly.

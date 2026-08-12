@@ -1,0 +1,94 @@
+---
+title: Project Structure
+description: "Directory layout and file conventions for Streak.js projects."
+---
+
+# Project Structure
+
+A Streak.js project has the following folder layout:
+
+```
+my-streak-site/
+  src/
+    handlers/       ← data handlers (one per page)
+    layouts/        ← layout components (full HTML document)
+    widgets/        ← widget components (page sections)
+  public/
+    assets/         ← JS/CSS files loaded by the asset worker
+    styles/         ← compiled Tailwind CSS
+  out/              ← generated static output (created by build)
+  streak.sitemap.json
+  tsconfig.json
+  package.json
+```
+
+---
+
+## src/handlers/
+
+Data handlers are async functions that run before any JSX is rendered. Each page in the sitemap references one handler by filename (without extension).
+
+```
+src/handlers/HomeDataHandler.ts   ← referenced as "dataHandler": "HomeDataHandler"
+```
+
+---
+
+## src/layouts/
+
+Layouts are TSX components that return the full HTML document. Each layout uses `WidgetPlaceholder` components from `streak/components` to mark where widgets are inserted.
+
+```
+src/layouts/MainLayout.tsx   ← referenced as "rootLayout": "MainLayout"
+```
+
+---
+
+## src/widgets/
+
+Widgets are TSX components rendered at build time. Each widget filename must exactly match the `type` field in the sitemap (case-sensitive).
+
+```
+src/widgets/HelloBanner.tsx    ← referenced as "type": "HelloBanner"
+src/widgets/HelloMessage.tsx   ← referenced as "type": "HelloMessage"
+```
+
+---
+
+## public/assets/
+
+JavaScript and CSS files placed here are served at `/assets/` and can be loaded at runtime via `gDom.loadPackage("js/motion.js")`. The asset worker always prepends `/assets/` when fetching, so a file at `public/assets/js/motion.js` is fetched as `/assets/js/motion.js`.
+
+---
+
+## out/
+
+The build output directory. Created by `streak-forge pre-build`. Each sitemap entry produces one subdirectory named after its `renderId`:
+
+```
+out/
+  homeRenderId/
+    index.html
+  aboutRenderId/
+    index.html
+```
+
+---
+
+## streak.sitemap.json
+
+The single configuration file that defines every page in the site. It declares each page's URL, `renderId`, data handler, layout, and widget list.
+
+---
+
+## TypeScript Path Aliases
+
+Projects use `"baseUrl": "src/"` in `tsconfig.json`, so imports resolve from `src/`:
+
+```ts
+import { getHomePageContents } from "services/SanityServices"; // src/services/SanityServices
+import Button from "@common/components/button/Button";         // src/common/components/...
+import { baseUrl } from "utils/config";                        // src/utils/config
+```
+
+The `streak/components` import resolves from `node_modules/streak`.

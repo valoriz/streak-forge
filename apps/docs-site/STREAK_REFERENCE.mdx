@@ -1,0 +1,1627 @@
+# Streak.js — Complete Reference
+
+> **For humans and AI agents.** Everything you need to build, understand, and extend a Streak.js project — from first principles through internals.
+
+---
+
+## Table of Contents
+
+1. [What is Streak.js?](#1-what-is-streakjs)
+2. [Mental Model](#2-mental-model)
+3. [Project Structure](#3-project-structure)
+4. [streak.sitemap.json](#4-streaksitemapjson)
+5. [Data Handlers](#5-data-handlers)
+6. [Layouts](#6-layouts)
+7. [Widgets](#7-widgets)
+8. [streak/components API](#8-streakcomponents-api)
+   - [WidgetPlaceholder](#81-widgetplaceholder)
+   - [Script](#82-script)
+   - [Dynamic](#83-dynamic)
+   - [Preload](#84-preload)
+9. [gDom — The Browser Interface](#9-gdom--the-browser-interface)
+10. [loadPackage — Third-Party Assets via Web Worker](#10-loadpackage--third-party-assets-via-web-worker)
+11. [Loading Strategies](#11-loading-strategies)
+12. [The Build Pipeline (7 Stages)](#12-the-build-pipeline-7-stages)
+13. [Client Coordinator — app.js](#13-client-coordinator--appjs)
+14. [window.ftr — First-Time Render Flag](#14-windowftr--first-time-render-flag)
+15. [Build Scripts and CLI](#15-build-scripts-and-cli)
+16. [TypeScript Configuration](#16-typescript-configuration)
+17. [TailwindCSS Setup](#17-tailwindcss-setup)
+18. [Testing with bun:test](#18-testing-with-buntest)
+19. [ESLint Configuration](#19-eslint-configuration)
+20. [Common Errors and Fixes](#20-common-errors-and-fixes)
+21. [hello-streak-app — Complete Annotated Example](#21-hello-streak-app--complete-annotated-example)
+22. [Quick-Start Checklist](#22-quick-start-checklist)
+
+---
+
+## 1. What is Streak.js?
+
+Streak.js is a **React-based static site generator (SSG)** that pre-renders every page to plain HTML at build time.
+
+Key properties:
+- **Zero runtime** — no React, no framework JS is shipped to the browser by default
+- **Widget-driven** — pages are assembled from independent React components called *widgets*
+- **Data at build time** — async data handlers run once during `pre-build`, never on the server or client
+- **Progressive enhancement** — client interactivity is opt-in via the `Script` component
+
+The CLI tool is `streak-forge`. The package is imported as `streak` in your project.
+
+---
+
+## 2. Mental Model
+
+```
+streak.sitemap.json          ← page registry: one entry per URL
+        │
+        ├── dataHandler ──►  src/handlers/HomeDataHandler.ts
+        │                    async fn → { status, WidgetId: data, ... }
+        │
+        ├── rootLayout ───►  src/layouts/MainLayout.tsx
+        │                    full <html> document with WidgetPlaceholder slots
+        │
+        └── widgets[] ─────► src/widgets/*.tsx
+                             stateless React components; receive props.data
+```
+
+At build time:
+1. Streak calls the `dataHandler` and captures its return value
+2. Each widget key in the return value is matched to a widget by `id`
+3. Streak renders each widget React component to an HTML string, passing `{ data: handlerValue[widgetId] }` as props
+4. Widget HTML is injected into the layout's `WidgetPlaceholder` slots
+5. The final HTML file is written to `out/<renderId>/index.html`
+
+**Nothing renders at runtime.** The browser receives complete, pre-rendered HTML.
+
+---
+
+## 3. Project Structure
+
+```
+my-streak-app/
+├── streak.sitemap.json          # page registry (REQUIRED)
+├── package.json
+├── tsconfig.json
+├── tailwind.config.js           # if using Tailwind
+├── eslint.config.js             # ESLint 9 flat config
+│
+├── src/
+│   ├── layouts/
+│   │   └── MainLayout.tsx       # one layout per page family
+│   ├── handlers/
+│   │   └── HomeDataHandler.ts   # data handler per page
+│   ├── widgets/
+│   │   ├── PageHead.tsx
+│   │   ├── HelloNav.tsx
+│   │   └── ...
+│   ├── common/
+│   │   └── styles/
+│   │       └── input.css        # Tailwind entry point
+│   └── tests/
+│       └── HomeDataHandler.test.ts
+│
+├── public/
+│   ├── styles/
+│   │   └── tailwind.css         # compiled by tailwindcss CLI
+│   ├── images/
+│   │   └── streak-logo.svg
+│   └── assets/
+│       └── js/
+│           └── motion.js        # third-party JS committed to repo
+│
+└── out/                         # build output (gitignored)
+    └── homeRenderId/
+        └── index.html
+```
+
+**Important rules:**
+- `streak.sitemap.json` must be at the project root
+- Handler filenames must match `dataHandler` value in sitemap (no extension)
+- Layout filenames must match `rootLayout` value in sitemap (no extension)
+- Widget filenames must match `type` values in sitemap (no extension)
+- Files inside `public/` are served statically under `/`
+- `out/` is the build output — never edit files there
+
+---
+
+## 4. streak.sitemap.json
+
+The **central registry** for all pages. Every page that Streak builds must have an entry here.
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",     "type": "PageHead"     },
+        { "id": "HelloNav",     "type": "HelloNav"     },
+        { "id": "HelloBanner",  "type": "HelloBanner"  },
+        {
+          "id": "HelloFeatures",
+          "type": "HelloFeatures",
+          "loadingStrategy": "lazy"
+        },
+        {
+          "id": "HelloAnimated",
+          "type": "HelloAnimated",
+          "loadingStrategy": "lazy"
+        }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| `url` | `string` | The URL path this page is served at |
+| `renderId` | `string` | **Globally unique** identifier; output goes to `out/<renderId>/` |
+| `metadata` | `object` | Extra per-page metadata (passed to Streak internals) |
+| `dataHandler` | `string` | Filename of the data handler in `src/handlers/` **without extension** |
+| `rootLayout` | `string` | Filename of the layout in `src/layouts/` **without extension** |
+| `widgets[]` | `array` | Ordered list of widgets to render into this page |
+| `widgets[].id` | `string` | Identifies which slice of handler data to pass as `props.data` |
+| `widgets[].type` | `string` | Identifies the widget filename in `src/widgets/` **without extension** |
+| `widgets[].loadingStrategy` | `"lazy"` \| omitted | If `"lazy"`, widget JS loads after page interactive |
+| `version` | `string` | Config schema version |
+
+### Critical rules
+
+- `renderId` must be **unique across the entire sitemap** — collisions cause builds to overwrite each other
+- `id` and `type` in widgets[] are independent:
+  - `id` links to the handler return object key
+  - `type` links to the widget component filename
+  - They are usually the same string but don't have to be
+- Every widget listed in `widgets[]` must have a corresponding `WidgetPlaceholder` with matching `id` and `type` in the layout
+
+---
+
+## 5. Data Handlers
+
+A data handler is a **default-exported async function** that returns a plain object. Each key in that object corresponds to a widget `id`.
+
+```typescript
+// src/handlers/HomeDataHandler.ts
+
+const getHomeData = async () => {
+  return {
+    status: 200,               // required: 200 = success
+
+    PageHead: {                // key matches widget id="PageHead"
+      title: "My Site",
+      description: "Built with Streak.js",
+    },
+
+    HelloBanner: {             // key matches widget id="HelloBanner"
+      heading: "Hello, World.",
+      accentColor: "#818cf8",
+      animationMs: 700,
+    },
+
+    HelloFeatures: {           // key matches widget id="HelloFeatures"
+      features: [
+        { id: "f1", title: "Fast", description: "Pre-rendered HTML" },
+      ],
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+### Rules
+
+- Must be `export default` — Streak imports it by default export
+- Must be `async` (or return a Promise)
+- Must return `{ status: 200, ...widgetData }`
+- Return value is serialized and frozen at build time — no live data fetching at runtime
+- You can call APIs, read files, query databases — any async operation is allowed
+- The handler filename (without `.ts`) must match `dataHandler` in `streak.sitemap.json`
+
+### How widget data flows
+
+```
+Handler returns:
+{
+  status: 200,
+  HelloBanner: { heading: "Hello", accentColor: "#818cf8" }
+}
+
+Widget receives:
+props = { data: { heading: "Hello", accentColor: "#818cf8" } }
+
+// Access in widget:
+const heading = props?.data?.heading ?? "Default";
+```
+
+---
+
+## 6. Layouts
+
+A layout is a **default-exported React component** that returns a full HTML document. It uses `WidgetPlaceholder` to mark where widgets are injected.
+
+```tsx
+// src/layouts/MainLayout.tsx
+
+import { WidgetPlaceholder } from "streak/components";
+
+const MainLayout = () => {
+  console.info("Rendering Main Layout");
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body className="bg-white text-gray-900 antialiased">
+        <WidgetPlaceholder id="HelloNav"      type="HelloNav"      />
+        <WidgetPlaceholder id="HelloBanner"   type="HelloBanner"   />
+        <WidgetPlaceholder id="HelloFeatures" type="HelloFeatures" />
+        <WidgetPlaceholder id="HelloAnimated" type="HelloAnimated" />
+        <WidgetPlaceholder id="HelloFooter"   type="HelloFooter"   />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+### Rules
+
+- Must be `export default`
+- Must render a complete `<html>` document (not a fragment)
+- Every widget listed in `streak.sitemap.json`'s `widgets[]` array must have a matching `WidgetPlaceholder` in the layout
+- `WidgetPlaceholder` `id` and `type` must exactly match the sitemap entries
+- The layout filename (without `.tsx`) must match `rootLayout` in the sitemap
+
+---
+
+## 7. Widgets
+
+A widget is a **default-exported React component** that receives `props.data` from the handler.
+
+```tsx
+// src/widgets/HelloBanner.tsx
+
+import { Preload, Script } from "streak/components";
+
+type HelloBannerProps = {
+  data?: {
+    heading?: string;
+    accentColor?: string;
+    animationMs?: number;
+  };
+};
+
+const HelloBanner = (props: HelloBannerProps) => {
+  // Always use optional chaining + nullish coalescing for safety
+  const heading    = props?.data?.heading    ?? "Hello, World.";
+  const accentColor = props?.data?.accentColor ?? "#818cf8";
+  const animationMs = props?.data?.animationMs ?? 700;
+
+  return (
+    <section id="hello_banner">
+      <h1>{heading}</h1>
+
+      {/* Preload the stylesheet early */}
+      <Preload href="/styles/tailwind.css" as="style" media="" />
+
+      {/* Script: runs in the browser after the HTML is painted */}
+      <Script id="hello-banner-script" options={{ accentColor, animationMs }}>
+        {(gDom: any, options: any) => {
+          const section = document.getElementById("hello_banner");
+          if (section) {
+            section.style.opacity = "0";
+            section.style.transition = `opacity ${options.animationMs}ms ease`;
+            requestAnimationFrame(() => { section.style.opacity = "1"; });
+          }
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+### Rules
+
+- Must be `export default`
+- Props type must follow the `{ data?: YourType }` pattern
+- Always use `??` defaults — `data` may be `undefined` if handler doesn't return that key
+- Widget filename (without `.tsx`) must match `type` in the sitemap and `type` in the layout `WidgetPlaceholder`
+- Widgets are **stateless** at runtime — no React state, no hooks run in the browser
+
+---
+
+## 8. streak/components API
+
+Import from `"streak/components"`:
+
+```tsx
+import { WidgetPlaceholder, Script, Dynamic, Preload } from "streak/components";
+```
+
+### 8.1 WidgetPlaceholder
+
+**Used in: layouts only**
+
+Marks a slot where a widget is injected at build time.
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```
+
+| Prop | Type | Description |
+|---|---|---|
+| `id` | `string` | Links to the widget `id` in the sitemap and the handler return key |
+| `type` | `string` | Links to the widget component filename in `src/widgets/` |
+
+At build time, Streak replaces the `WidgetPlaceholder` node with the rendered HTML of the corresponding widget.
+
+### 8.2 Script
+
+**Used in: widgets only**
+
+Injects a `<script>` tag into the page. The function body is serialized using `.toString()` and executed as an IIFE in the browser.
+
+```tsx
+<Script id="my-widget-script" options={{ color: accentColor, delay: animationMs }}>
+  {(gDom: any, options: any) => {
+    // This runs in the browser — not on the server
+    // gDom = window (extended with Streak helpers)
+    // options = the object passed to the options prop above
+    const el = document.getElementById("my-element");
+    if (el) el.style.color = options.color;
+  }}
+</Script>
+```
+
+| Prop | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique script tag id — prevents duplicate injection |
+| `options` | `object` | **The only way to pass server values to browser code** |
+| `children` | `function` | `(gDom, options) => void` — serialized as IIFE |
+
+#### Critical rules for Script
+
+1. **`options` is the ONLY bridge from server to browser.** The function is serialized via `.toString()` — it cannot close over variables from the widget component scope. Only data in `options` is available.
+
+   ```tsx
+   // WRONG — closure variable doesn't survive serialization
+   const color = props?.data?.color ?? "#fff";
+   <Script id="x">
+     {() => { document.body.style.color = color; /* color is undefined! */ }}
+   </Script>
+
+   // CORRECT — pass via options
+   const color = props?.data?.color ?? "#fff";
+   <Script id="x" options={{ color }}>
+     {(gDom: any, options: any) => { document.body.style.color = options.color; }}
+   </Script>
+   ```
+
+2. **No imports inside Script.** The script runs in a plain browser context.
+
+3. **`gDom` is `window`** extended with Streak helpers (`loadPackage`, `loadDynamicComponent`, `ftr`, `onVisible`, `stall`, etc.)
+
+4. **Always type `gDom` and `options` as `any`** in TypeScript — they exist only at browser runtime.
+
+5. The generated script looks like:
+   ```html
+   <script id="my-widget-script">
+   (function(gDom, options){
+     /* your function body here */
+   })(window, {"color":"#818cf8","delay":700})
+   </script>
+   ```
+
+### 8.3 Dynamic
+
+**Used in: widgets only**
+
+Wraps content that should be **absent from the initial HTML** and injected on demand.
+
+```tsx
+<Dynamic id="my-panel">
+  <div id="my-panel-content" style={{ opacity: 0 }}>
+    <p>This content is NOT in the initial static HTML.</p>
+  </div>
+</Dynamic>
+```
+
+Then trigger injection from a `Script`:
+
+```tsx
+<Script id="my-script">
+  {(gDom: any) => {
+    const btn = document.getElementById("show-btn");
+    btn?.addEventListener("click", () => {
+      gDom.loadDynamicComponent("my-panel", () => {
+        // Called after the content is injected into the DOM
+        const el = document.getElementById("my-panel-content");
+        if (el) requestAnimationFrame(() => { el.style.opacity = "1"; });
+      });
+    });
+  }}
+</Script>
+```
+
+| Prop | Type | Description |
+|---|---|---|
+| `id` | `string` | Identifies this Dynamic block — used as the argument to `loadDynamicComponent` |
+| `children` | `ReactNode` | Content to defer — removed from initial HTML at build time |
+
+#### How Dynamic works internally
+
+1. At build time, Streak strips the children from the HTML and stores them separately
+2. The `id` acts as a reference key in the client coordinator's widget registry (`w-m` element)
+3. When `gDom.loadDynamicComponent(id, callback)` is called, the coordinator reinjects the stored HTML
+4. The `callback` fires after injection — use it to trigger CSS transitions
+
+#### Dynamic vs lazy loadingStrategy
+
+| | `Dynamic` | `loadingStrategy: "lazy"` |
+|---|---|---|
+| Initial HTML | Content **removed** | Content **present** |
+| When injected | On `loadDynamicComponent()` call | After page interactive |
+| Use case | Heavy/conditional content | Below-the-fold widgets |
+
+### 8.4 Preload
+
+**Used in: widgets and layouts**
+
+Emits a `<link rel="preload">` tag to hint the browser to fetch a resource early.
+
+```tsx
+<Preload href="/styles/tailwind.css" as="style" media="" />
+<Preload href="https://example.com/hero.jpg" as="image" media="(min-width: 768px)" />
+<Preload href="/fonts/Inter.woff2" as="font" media="" />
+```
+
+| Prop | Type | Description |
+|---|---|---|
+| `href` | `string` | URL to preload |
+| `as` | `string` | Resource type: `"style"` \| `"image"` \| `"font"` \| `"script"` \| `"video"` |
+| `media` | `string` | Media query — `""` means all screens |
+
+`Preload` only emits a hint tag — you still need the actual `<link>` or `<img>` tag in your markup.
+
+---
+
+## 9. gDom — The Browser Interface
+
+`gDom` is `window` extended by Streak's client coordinator. It's passed as the first argument to every `Script` function.
+
+### Available helpers
+
+```typescript
+// Load a widget's Dynamic content
+gDom.loadDynamicComponent(id: string, callback: () => void): void
+
+// Load a third-party asset via the asset Web Worker
+gDom.loadPackage(assetPath: string): Promise<void>
+// assetPath is relative to /assets/ — e.g. "js/motion.js" → fetches /assets/js/motion.js
+
+// Load a raw asset (internal, lower-level)
+gDom.loadAsset(assetId: string, callback: (metadata) => void): void
+
+// Add a script/style/widget to the document
+gDom.addWidgetToBody(id: string, callback: () => void, type: string): void
+gDom.addResourceToBody(url: string, attrs: object, callback: () => void): void
+
+// IntersectionObserver helper
+gDom.onVisible(
+  element: Element,
+  callback: (isVisible: boolean, el: Element, opts: any) => void,
+  opts?: { onlyOnce?: boolean }
+): void
+
+// Debounce utility
+gDom.debounce(fn: Function, ms: number): Function
+
+// DOM shorthand
+gDom.geById(id: string): HTMLElement | null  // document.getElementById bound to document
+
+// Async sleep
+gDom.stall(ms: number): Promise<void>        // await gDom.stall(500)
+
+// Cookie helpers
+gDom.setCookie(name: string, value: string, days?: number): void
+gDom.getCookie(name: string): string | null
+
+// First-time render flag (see §14)
+gDom.ftr: boolean
+
+// The window.__sy_a config object (internal)
+gDom.__sy_a: { awh: string; wp: string; ... }
+```
+
+### After loadPackage resolves
+
+When you call `gDom.loadPackage("js/motion.js")`, after the promise resolves the library is available on `gDom` (i.e. `window`) under whatever global it sets. For Motion.js:
+
+```typescript
+gDom.loadPackage("js/motion.js").then(() => {
+  const { animate, scroll, inView, stagger, spring } = (gDom as any).Motion;
+  // now use Motion.js APIs
+});
+```
+
+---
+
+## 10. loadPackage — Third-Party Assets via Web Worker
+
+Streak ships a built-in Web Worker pipeline for loading third-party JavaScript or CSS files off the main thread.
+
+### Pipeline
+
+```
+gDom.loadPackage("js/motion.js")
+    │
+    ▼ calls gDom.addResourceToBody(awh, {async: true}, callback)
+    │       where awh = URL of the asset-worker-handler.js
+    │
+    ▼ asset-worker-handler.js initializes a Web Worker (asset-worker.js)
+    │
+    ▼ main thread calls gDom.loadAsset("js/motion.js", callback)
+    │       → posts LOAD_ASSET message to the worker
+    │
+    ▼ asset-worker.js (separate thread) does:
+    │       fetch("/assets/js/motion.js")   ← maps to public/assets/js/motion.js
+    │       posts ASSET_LOADED message back with { content, type }
+    │
+    ▼ asset-worker-handler.js receives ASSET_LOADED:
+    │       creates <script id="js/motion.js"> tag
+    │       injects into document.head
+    │
+    ▼ Promise resolves
+    │       window.Motion is now available
+```
+
+### How to use it
+
+```tsx
+// In your widget's Script:
+<Script id="my-animated-script" options={{ duration: 0.65 }}>
+  {(gDom: any, options: any) => {
+    gDom.loadPackage("js/motion.js")
+      .then(() => {
+        const { animate, scroll, inView, stagger, spring } = (gDom as any).Motion;
+        // Use Motion.js APIs here
+        animate("#my-element", { opacity: [0, 1] }, { duration: options.duration });
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to load motion.js:", err);
+      });
+  }}
+</Script>
+```
+
+### File placement
+
+The asset path `"js/motion.js"` maps to `public/assets/js/motion.js`.
+
+```
+Your project:
+  public/assets/js/motion.js   ← commit this file to the repo
+
+Fetched by worker as:
+  GET /assets/js/motion.js
+```
+
+**Do not gitignore `public/assets/js/*.js`** — these files are committed by developers and served as static assets.
+
+### Asset caching
+
+The asset worker handler caches loaded assets in a `Map`. If the same `assetId` is requested again, it uses the cached version and does not re-fetch.
+
+---
+
+## 11. Loading Strategies
+
+### Default (no `loadingStrategy`)
+
+The widget's HTML and JS are both included in the initial page. JS loads as part of the normal page load sequence.
+
+### `"lazy"`
+
+```json
+{ "id": "HelloFeatures", "type": "HelloFeatures", "loadingStrategy": "lazy" }
+```
+
+- Widget HTML **is present** in the initial static output (good for SEO, above-the-fold content)
+- Widget JS loads **after the page becomes interactive**
+- The `app.js` coordinator queues lazy widgets and loads them sequentially after DOMContentLoaded
+
+Use `"lazy"` for:
+- Below-the-fold sections
+- Heavy interactive widgets that don't need JS immediately
+- Anything that should render statically but hydrate later
+
+### `Dynamic` component (not a loading strategy)
+
+`Dynamic` removes content from the initial HTML entirely. This is separate from `loadingStrategy`.
+
+---
+
+## 12. The Build Pipeline (7 Stages)
+
+When you run `streak-forge pre-build`, Streak executes these stages in order:
+
+```
+1. validateStreakConfig
+   └── Reads and validates streak.sitemap.json
+   └── Checks all handler/layout/widget files exist
+
+2. pageDataHandler
+   └── Imports and calls the dataHandler
+   └── Captures and serializes the return value
+
+3. renderRootLayout
+   └── Renders the layout component to an HTML string
+   └── WidgetPlaceholder slots are recorded as injection points
+
+4. renderWidgets
+   └── For each widget in widgets[]:
+       ├── Imports the widget component
+       ├── Passes { data: handlerData[widgetId] } as props
+       ├── Renders to HTML string
+       └── Injects into the layout's slot
+
+5. pageBuildAndOptimize
+   └── Assembles the final HTML
+   └── Handles Dynamic component stripping
+   └── Builds the w-m widget registry JSON
+   └── Injects app.js and asset worker scripts
+
+6. prepareStyle
+   └── Processes CSS references
+   └── Handles secondary-css injection
+
+7. prepareRawForBuild
+   └── Writes the final index.html to out/<renderId>/
+   └── Copies public/ assets to out/
+```
+
+**Output:** `out/<renderId>/index.html` — a complete, self-contained HTML file.
+
+---
+
+## 13. Client Coordinator — app.js
+
+`app.js` is Streak's client-side coordinator IIFE, automatically injected into every built page. It runs immediately when the page loads and orchestrates everything.
+
+### What it does
+
+```javascript
+// Simplified pseudocode of app.js
+
+(function(window, config) {
+  // 1. Register utility helpers on window (gDom)
+  window.onVisible = /* IntersectionObserver wrapper */;
+  window.debounce  = /* debounce utility */;
+  window.geById    = document.getElementById.bind(document);
+  window.stall     = /* Promise-based setTimeout */;
+  window.setCookie = /* cookie setter */;
+  window.getCookie = /* cookie getter */;
+
+  // 2. Compute session age (lo = __wlt__ last-open timestamp)
+  const sessionAge = Date.now() - (window.__wlt__ || 0);
+
+  // 3. Set first-time render flag (ftr)
+  // iftr="ftr", ve="__vi" cookie name, tat=1800 (30-min TTL in seconds)
+  window.ftr = !window.getCookie("__vi");
+  if (window.ftr) window.setCookie("__vi", "1");  // no expiry = session cookie
+
+  // 4. Read widget registry from w-m element
+  const widgetManifest = JSON.parse(
+    document.getElementById("w-m")?.innerHTML || "{}"
+  );
+
+  // 5. Load common layout scripts
+  if (widgetManifest["layout-scripts"]) {
+    window.addWidgetToBody("/common.json", undefined, "layout-scripts");
+  }
+
+  // 6. Load secondary CSS
+  if (widgetManifest["secondary-css"]) {
+    const cssPath = window.location.pathname + widgetManifest["secondary-css"].v + "/secondary-css.css";
+    window.addResourceToBody(cssPath, {}, () => {});
+  }
+
+  // 7. Load widgets sequentially (lazy strategy)
+  const loadNext = ([first, ...rest]) => {
+    if (!first) return;
+    window.addWidgetToBody(first.id, () => loadNext(rest), "w");
+  };
+
+  if (Array.isArray(widgetManifest.w)) {
+    loadNext(widgetManifest.w);
+  }
+
+  // 8. Expose loadPackage
+  window.loadPackage = (assetPath) => new Promise((resolve, reject) => {
+    window.addResourceToBody(window.__sy_a.awh, { async: true }, () => {
+      window.loadAsset(assetPath, (metadata, ...rest) => {
+        metadata ? resolve(rest[0]) : reject(new Error(`Failed to load: ${assetPath}`));
+      });
+    });
+  });
+
+})(window, { /* config from build */ });
+```
+
+### The w-m element
+
+```html
+<script id="w-m" type="application/json">
+{
+  "w": [
+    { "id": "HelloFeatures", "v": "abc123" },
+    { "id": "HelloAnimated", "v": "def456" }
+  ],
+  "layout-scripts": { "v": "xyz789" }
+}
+</script>
+```
+
+This hidden `<script>` tag contains the widget registry. `app.js` reads it on page load to know which widgets to load and in what order.
+
+---
+
+## 14. window.ftr — First-Time Render Flag
+
+`gDom.ftr` (or `window.ftr`) is `true` if this is the user's first visit in the current 30-minute session.
+
+```javascript
+// How it works:
+// - Cookie name: __vi (the "ve" config key)
+// - If cookie is absent → ftr = true, set the cookie (session cookie, no expiry)
+// - If cookie is present → ftr = false
+// - Cookie has no explicit max-age → expires when browser tab closes (session cookie)
+
+// Usage in a Script:
+{(gDom: any) => {
+  if (gDom.ftr) {
+    // Show welcome animation only on first visit
+    const banner = document.getElementById("welcome");
+    if (banner) banner.style.display = "block";
+  }
+}}
+```
+
+Note: The `tat` config value (1800) in `app.js` relates to session time tracking, not the cookie TTL. The `__vi` cookie itself does not expire — it's a session cookie.
+
+---
+
+## 15. Build Scripts and CLI
+
+### Commands
+
+```bash
+# Development — parallel Tailwind + Streak dev server
+bun run dev
+
+# Individual dev servers
+bun run css-dev          # tailwindcss --watch
+bun run dev:streak       # streak-forge dev
+
+# Production build
+bun run build            # css-build + streak-forge pre-build
+
+# Preview the build output
+bun run start            # python3 -m http.server 8000 --directory out
+
+# Testing
+bun test                 # run all tests once
+bun test --watch         # watch mode
+
+# Linting
+bun run lint             # eslint .
+bun run lint:fix         # eslint . --fix
+
+# Type checking (no emit)
+bun run typecheck        # tsc --noEmit
+```
+
+### package.json
+
+```json
+{
+  "name": "my-streak-app",
+  "version": "1.0.0",
+  "scripts": {
+    "start":       "python3 -m http.server 8000 --directory out",
+    "css-build":   "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css",
+    "css-dev":     "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css --watch",
+    "dev:streak":  "streak-forge dev",
+    "dev":         "concurrently -k -n TAILWIND,STREAK -c blue,green \"bun run css-dev\" \"bun run dev:streak\"",
+    "build":       "bun run css-build && streak-forge pre-build",
+    "test":        "bun test",
+    "test:watch":  "bun test --watch",
+    "lint":        "eslint .",
+    "lint:fix":    "eslint . --fix",
+    "typecheck":   "tsc --noEmit"
+  },
+  "dependencies": {
+    "streak": "file:../streak/streak-forge-2.0.36.tgz"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "bun": "^1.2.21",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "tailwindcss": "^3.4.17"
+  }
+}
+```
+
+### .gitignore
+
+```gitignore
+out/
+dist/
+node_modules/
+public/styles/tailwind.css
+.env
+.env.local
+.cache/
+.streak-cache/
+.streak/
+.DS_Store
+*.log
+tsconfig.tsbuildinfo
+```
+
+Note: `public/assets/js/*.js` is **NOT** gitignored. Third-party JS files like `motion.js` are committed to the repo by developers.
+
+---
+
+## 16. TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "lib":              ["ESNext", "dom"],
+    "target":           "ESNext",
+    "module":           "ESNext",
+    "jsx":              "react-jsx",
+    "moduleResolution": "bundler",
+    "strict":           true,
+    "baseUrl":          "src/"
+  }
+}
+```
+
+- `jsx: "react-jsx"` — uses the automatic JSX transform (no `import React` needed)
+- `moduleResolution: "bundler"` — matches Bun's module resolution behavior
+- `baseUrl: "src/"` — enables absolute imports from `src/` (e.g. `import X from "widgets/X"`)
+- `strict: true` — all strict checks enabled; use `any` intentionally inside Script functions
+
+---
+
+## 17. TailwindCSS Setup
+
+### tailwind.config.js
+
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./src/**/*.{tsx,ts,jsx,js}"],
+  theme: { extend: {} },
+  plugins: [],
+};
+```
+
+### src/common/styles/input.css
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+### Workflow
+
+1. `bun run css-build` compiles `input.css` → `public/styles/tailwind.css`
+2. Reference it in `PageHead.tsx`: `<link rel="stylesheet" href="/styles/tailwind.css" />`
+3. Use Tailwind classes freely in all widget JSX
+4. `public/styles/tailwind.css` is gitignored — regenerated on every build
+
+---
+
+## 18. Testing with bun:test
+
+Bun ships a built-in Jest-compatible test runner. No extra packages needed.
+
+```typescript
+// src/tests/HomeDataHandler.test.ts
+
+import { describe, test, expect, beforeAll } from "bun:test";
+import getHomeData from "../handlers/HomeDataHandler";
+
+let data: Awaited<ReturnType<typeof getHomeData>>;
+
+beforeAll(async () => {
+  data = await getHomeData();
+});
+
+describe("HomeDataHandler — top-level shape", () => {
+  test("returns status 200", () => {
+    expect(data.status).toBe(200);
+  });
+
+  test("contains all required widget keys", () => {
+    const keys = ["PageHead", "HelloNav", "HelloBanner", "HelloFeatures"];
+    for (const key of keys) {
+      expect(data).toHaveProperty(key);
+    }
+  });
+});
+
+describe("HomeDataHandler — HelloBanner", () => {
+  test("accentColor is a valid hex string", () => {
+    expect(data.HelloBanner.accentColor).toMatch(/^#[0-9a-fA-F]{3,8}$/);
+  });
+
+  test("animationMs is positive", () => {
+    expect(data.HelloBanner.animationMs).toBeGreaterThan(0);
+  });
+
+  test("feature ids are unique", () => {
+    const ids = data.HelloFeatures.features.map(f => f.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+```
+
+### Test patterns
+
+- **Handler tests**: Import the handler, call it, assert on return value shape, types, non-empty strings, valid hex colors, ID uniqueness, numeric ranges
+- **Widget helper tests**: Extract pure logic from widgets (validation, defaults, formatters) and test independently
+- **No DOM tests**: Widgets render to static HTML — test handler data integrity instead
+
+---
+
+## 19. ESLint Configuration
+
+```javascript
+// eslint.config.js (ESLint 9 flat config)
+
+import globals from "globals";
+import tsParser from "@typescript-eslint/parser";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
+
+export default [
+  {
+    ignores: ["node_modules/", "out/", "dist/", "public/styles/", ".streak/"],
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.browser, ...globals.node },
+    },
+    plugins: { "@typescript-eslint": tsPlugin },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-var": "error",
+      "prefer-const": "error",
+      "no-console": ["warn", { allow: ["info", "error", "warn"] }],
+      eqeqeq: ["error", "always"],
+    },
+  },
+  {
+    // Relaxed rules for test files
+    files: ["**/*.test.{ts,tsx}", "src/tests/**"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
+    },
+  },
+];
+```
+
+---
+
+## 20. Common Errors and Fixes
+
+### Error: 404 GET /images/hero.webp
+
+**Cause:** Handler returns an image path that doesn't exist in `public/images/`.
+
+**Fix:** Either add the file, or remove the field from the handler return value. Don't reference files you haven't placed in `public/`.
+
+---
+
+### Error: TypeError: Cannot read properties of undefined (reading 'progress')
+
+**Cause:** Using Motion.js `scroll()` with the callback form in an incompatible version:
+
+```typescript
+// WRONG — y is undefined in some Motion.js versions
+scroll(({ y }) => {
+  animate("#bar", { scaleX: y.progress }, { duration: 0 });
+});
+```
+
+**Fix:** Use the **linked animation form** which drives the animation directly from scroll:
+
+```typescript
+// CORRECT — links the animation progress to scroll position
+scroll(animate("#bar", { scaleX: [0, 1] }));
+```
+
+---
+
+### Error: TypeError: Cannot read properties of undefined (reading '0') at inView.margin
+
+**Cause:** Passing `{ margin: "-40px 0px" }` as the third argument to `inView()`. Motion.js tries to parse the string as an array.
+
+```typescript
+// WRONG
+inView("#grid", callback, { margin: "-40px 0px" });
+```
+
+**Fix:** Remove the `margin` option entirely:
+
+```typescript
+// CORRECT
+inView("#grid", callback);
+```
+
+---
+
+### Error: loadPackage resolves but window.Motion is undefined
+
+**Cause:** The file at `public/assets/js/motion.js` doesn't exist or doesn't set `window.Motion`.
+
+**Fix:**
+1. Ensure `public/assets/js/motion.js` exists (committed to repo, not gitignored)
+2. Verify the file sets `window.Motion = { animate, scroll, inView, stagger, spring }`
+
+---
+
+### Error: Script function reads undefined variable from widget scope
+
+**Cause:** Trying to use a widget-scope variable inside `Script` without passing it through `options`.
+
+```tsx
+// WRONG — the_color is a React variable, not available after serialization
+const the_color = props?.data?.color ?? "#fff";
+<Script id="x">{() => { el.style.color = the_color; }}</Script>
+```
+
+**Fix:** Pass all server values through `options`:
+
+```tsx
+const the_color = props?.data?.color ?? "#fff";
+<Script id="x" options={{ color: the_color }}>
+  {(gDom: any, options: any) => { el.style.color = options.color; }}
+</Script>
+```
+
+---
+
+### Error: Widget renders but shows no data / wrong data
+
+**Cause:** Mismatch between the widget `id` in the sitemap and the key name in the handler return.
+
+**Fix:** Make sure they match exactly. If sitemap has `{ "id": "HelloBanner" }`, the handler must return `{ HelloBanner: { ... } }`.
+
+---
+
+### Error: Build succeeds but a widget is missing from the output
+
+**Cause:** Widget is in the sitemap's `widgets[]` but has no `WidgetPlaceholder` in the layout with a matching `id` and `type`.
+
+**Fix:** Add `<WidgetPlaceholder id="MyWidget" type="MyWidget" />` to the layout at the correct position.
+
+---
+
+## 21. hello-streak-app — Complete Annotated Example
+
+This section documents the full hello-streak-app reference implementation, showing all four `streak/components` in action.
+
+### File tree
+
+```
+hello-streak-app/
+├── streak.sitemap.json
+├── package.json
+├── tsconfig.json
+├── tailwind.config.js
+├── eslint.config.js
+├── STREAK_REFERENCE.mdx          ← this file
+│
+├── src/
+│   ├── layouts/
+│   │   └── MainLayout.tsx         uses: WidgetPlaceholder
+│   ├── handlers/
+│   │   └── HomeDataHandler.ts
+│   ├── widgets/
+│   │   ├── PageHead.tsx           uses: Preload
+│   │   ├── HelloNav.tsx           uses: Script
+│   │   ├── HelloBanner.tsx        uses: Preload + Script
+│   │   ├── HelloFeatures.tsx      uses: Dynamic + Script
+│   │   ├── HelloAnimated.tsx      uses: Script + loadPackage(motion.js)
+│   │   ├── HelloMessage.tsx       uses: Dynamic + Script
+│   │   └── HelloFooter.tsx
+│   ├── common/styles/input.css
+│   └── tests/
+│       ├── HomeDataHandler.test.ts
+│       └── widgets.test.ts
+│
+└── public/
+    ├── styles/tailwind.css        (gitignored — compiled)
+    ├── images/streak-logo.svg
+    └── assets/js/motion.js        (committed — third-party JS)
+```
+
+### streak.sitemap.json
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",      "type": "PageHead"      },
+        { "id": "HelloNav",      "type": "HelloNav"      },
+        { "id": "HelloBanner",   "type": "HelloBanner"   },
+        { "id": "HelloFeatures", "type": "HelloFeatures", "loadingStrategy": "lazy" },
+        { "id": "HelloAnimated", "type": "HelloAnimated", "loadingStrategy": "lazy" },
+        { "id": "HelloMessage",  "type": "HelloMessage",  "loadingStrategy": "lazy" },
+        { "id": "HelloFooter",   "type": "HelloFooter",   "loadingStrategy": "lazy" }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+### MainLayout.tsx — WidgetPlaceholder
+
+```tsx
+import { WidgetPlaceholder } from "streak/components";
+
+const MainLayout = () => {
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body className="bg-white text-gray-900 antialiased">
+        <WidgetPlaceholder id="HelloNav"      type="HelloNav"      />
+        <WidgetPlaceholder id="HelloBanner"   type="HelloBanner"   />
+        <WidgetPlaceholder id="HelloFeatures" type="HelloFeatures" />
+        <WidgetPlaceholder id="HelloAnimated" type="HelloAnimated" />
+        <WidgetPlaceholder id="HelloMessage"  type="HelloMessage"  />
+        <WidgetPlaceholder id="HelloFooter"   type="HelloFooter"   />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+### PageHead.tsx — Preload
+
+Demonstrates `Preload` to hint the browser to fetch the stylesheet and optionally a hero image before they are discovered in the HTML body.
+
+```tsx
+import { Preload } from "streak/components";
+
+const PageHead = (props: { data?: { title?: string; description?: string; heroImageUrl?: string } }) => {
+  const title       = props?.data?.title       ?? "Hello Streak";
+  const description = props?.data?.description ?? "A Streak.js app";
+  const heroImageUrl = props?.data?.heroImageUrl;
+
+  return (
+    <>
+      <meta charSet="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>{title}</title>
+      <meta name="description" content={description} />
+
+      {/* Preload the stylesheet — browser fetches it before seeing <link> in body */}
+      <Preload href="/styles/tailwind.css" as="style" media="" />
+
+      {/* Conditionally preload hero image on tablet+ */}
+      {heroImageUrl && (
+        <Preload href={heroImageUrl} as="image" media="(min-width: 768px)" />
+      )}
+
+      <link rel="stylesheet" href="/styles/tailwind.css" />
+      <link rel="icon" href="/images/streak-logo.svg" type="image/svg+xml" />
+    </>
+  );
+};
+
+export default PageHead;
+```
+
+### HelloBanner.tsx — Preload + Script
+
+Demonstrates passing server values to the browser via `options`, using `Preload` for the background image, and using `Script` for fade-in and hover effects.
+
+```tsx
+import { Preload, Script } from "streak/components";
+
+const HelloBanner = (props: { data?: { heading?: string; backgroundImage?: string; accentColor?: string; animationMs?: number } }) => {
+  const heading        = props?.data?.heading        ?? "Hello, World.";
+  const backgroundImage = props?.data?.backgroundImage ?? "";
+  const accentColor    = props?.data?.accentColor    ?? "#818cf8";
+  const animationMs    = props?.data?.animationMs    ?? 700;
+
+  return (
+    <section id="hello_banner" style={{ background: "#0f172a" }}>
+      {backgroundImage && (
+        <>
+          {/* Preload background image so it loads before it's discovered */}
+          <Preload href={backgroundImage} as="image" media="" />
+          <img src={backgroundImage} alt="" aria-hidden="true" loading="eager" />
+        </>
+      )}
+
+      <h1 id="hero-heading">{heading}</h1>
+      <a id="hero-cta" href="#features">Get Started →</a>
+
+      {/*
+        Script: accentColor and animationMs come from the handler via options.
+        The function body is serialized — it cannot close over React variables.
+        Everything the browser needs must come through the options prop.
+      */}
+      <Script id="hello-banner-script" options={{ accentColor, animationMs }}>
+        {(gDom: any, options: any) => {
+          const section = document.getElementById("hello_banner");
+          const cta     = document.getElementById("hero-cta");
+
+          // Fade in the hero section
+          if (section) {
+            section.style.opacity = "0";
+            section.style.transition = `opacity ${options.animationMs}ms ease`;
+            requestAnimationFrame(() => { section.style.opacity = "1"; });
+          }
+
+          // Glow on CTA hover — color from handler data
+          if (cta) {
+            cta.addEventListener("mouseenter", () => {
+              cta.style.boxShadow = `0 0 32px ${options.accentColor}88`;
+              cta.style.transform = "translateY(-2px)";
+            });
+            cta.addEventListener("mouseleave", () => {
+              cta.style.boxShadow = "none";
+              cta.style.transform = "translateY(0)";
+            });
+          }
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+### HelloFeatures.tsx — Dynamic + Script
+
+Demonstrates `Dynamic` to defer a panel and `gDom.loadDynamicComponent` to inject it on button click.
+
+```tsx
+import { Dynamic, Script } from "streak/components";
+
+const HelloFeatures = (props: { data?: { heading?: string; features?: any[] } }) => {
+  const heading  = props?.data?.heading  ?? "Features";
+  const features = props?.data?.features ?? [];
+
+  return (
+    <section id="features">
+      <h2>{heading}</h2>
+
+      {/* Static feature cards — present in initial HTML */}
+      {features.map(f => (
+        <article key={f.id}>
+          <img src={f.image} alt={f.imageAlt} loading="lazy" />
+          <h3>{f.title}</h3>
+          <p>{f.description}</p>
+        </article>
+      ))}
+
+      {/*
+        Dynamic: this panel is ABSENT from initial HTML.
+        It is only injected when gDom.loadDynamicComponent("features-expand-panel") is called.
+        id="features-expand-panel" is the handle used to trigger injection.
+      */}
+      <Dynamic id="features-expand-panel">
+        <div id="features-panel-content" style={{ opacity: 0, transition: "opacity 0.4s ease" }}>
+          <h3>How the build pipeline works</h3>
+          <ol>
+            <li>streak-forge reads streak.sitemap.json</li>
+            <li>Calls your dataHandler and captures the output</li>
+            <li>Renders each widget with its slice of data</li>
+            <li>Writes static HTML to out/renderId/index.html</li>
+          </ol>
+        </div>
+      </Dynamic>
+
+      <button id="expand-features-btn">How does the build work? ↓</button>
+
+      <Script id="hello-features-script">
+        {(gDom: any) => {
+          const btn = document.getElementById("expand-features-btn");
+          if (!btn) return;
+
+          let loaded = false;
+
+          btn.addEventListener("click", () => {
+            if (loaded) return;
+            loaded = true;
+            btn.setAttribute("disabled", "true");
+
+            // Inject the Dynamic panel
+            gDom.loadDynamicComponent("features-expand-panel", () => {
+              btn.removeAttribute("disabled");
+              const panel = document.getElementById("features-panel-content");
+              if (panel) requestAnimationFrame(() => { panel.style.opacity = "1"; });
+            });
+          });
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloFeatures;
+```
+
+### HelloAnimated.tsx — Script + loadPackage (Motion.js)
+
+Demonstrates loading a third-party library via the asset Web Worker and using it for rich animations. This widget uses all seven Motion.js features.
+
+```tsx
+import { Script } from "streak/components";
+
+const HelloAnimated = (props: { data?: { words?: string[]; cards?: any[]; animationDuration?: number } }) => {
+  const words             = props?.data?.words             ?? ["Fast", "Beautiful", "Powerful"];
+  const cards             = props?.data?.cards             ?? [];
+  const animationDuration = props?.data?.animationDuration ?? 0.65;
+
+  return (
+    <section id="hello-animated" style={{ background: "#09090b" }}>
+
+      {/* Scroll progress bar — width driven by Motion.scroll */}
+      <div id="scroll-bar" style={{ position: "fixed", top: 0, left: 0, right: 0, height: "3px",
+        background: "linear-gradient(90deg, #818cf8, #a78bfa, #ec4899)",
+        transformOrigin: "0% 50%", transform: "scaleX(0)", zIndex: 9999 }} />
+
+      {/* Background orbs that drift toward the cursor */}
+      <div id="orb-1" aria-hidden="true" style={{ position: "absolute", borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(99,102,241,0.28) 0%, transparent 70%)" }} />
+      <div id="orb-2" aria-hidden="true" style={{ position: "absolute", borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(167,139,250,0.22) 0%, transparent 70%)" }} />
+
+      {/* Morphing headline — first word is static, rest cycle via JS */}
+      <h2>Build something</h2>
+      <h2 id="morph-word">{words[0]}</h2>
+
+      {/* 3D tilt cards — parent needs perspective for rotateX/Y */}
+      <div id="cards-grid" style={{ perspective: "1200px" }}>
+        {cards.map(card => (
+          <div key={card.id} className="tilt-card" style={{ opacity: 0 }}>
+            <div className="card-glow" style={{ opacity: 0 }} />
+            <span>{card.icon}</span>
+            <h3>{card.title}</h3>
+            <p>{card.description}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Magnetic button */}
+      <div id="magnetic-zone" style={{ padding: "3rem" }}>
+        <a id="magnetic-btn" href="#">
+          <span>Explore Streak.js</span>
+          <span id="btn-arrow">→</span>
+        </a>
+      </div>
+
+      {/*
+        Script: loads Motion.js via the asset worker, then wires up 7 animations.
+        animationDuration and words are passed via options (the server→browser bridge).
+      */}
+      <Script id="hello-animated-script" options={{ animationDuration, words }}>
+        {(gDom: any, options: any) => {
+          gDom.loadPackage("js/motion.js")
+            .then(() => {
+              const { animate, scroll, inView, stagger, spring } = (gDom as any).Motion;
+
+              // 1. Scroll progress bar — linked animation form (NOT callback form)
+              scroll(animate("#scroll-bar", { scaleX: [0, 1] }));
+
+              // 2. Header entrance
+              animate("#animated-header",
+                { opacity: [0, 1], y: [-30, 0] },
+                { duration: options.animationDuration, easing: "ease-out" }
+              );
+
+              // 3. Morphing headline — .finished promise chain for sequencing
+              const morphEl = document.getElementById("morph-word");
+              const words: string[] = options.words ?? [];
+              let wordIndex = 0;
+
+              const morphNext = () => {
+                wordIndex = (wordIndex + 1) % words.length;
+                animate(morphEl, { opacity: 0, y: -20 }, { duration: 0.22, easing: "ease-in" })
+                  .finished
+                  .then(() => {
+                    if (morphEl) morphEl.textContent = words[wordIndex] ?? "";
+                    return animate(morphEl, { opacity: 1, y: 0 }, {
+                      duration: 0.55,
+                      easing: spring({ stiffness: 180, damping: 16, restSpeed: 0.5 }),
+                    }).finished;
+                  })
+                  .then(() => setTimeout(morphNext, 2200));
+              };
+
+              if (morphEl && words.length > 1) setTimeout(morphNext, 2200);
+
+              // 4. Staggered card entrance — inView with NO margin option
+              inView("#cards-grid", () => {
+                animate(".tilt-card",
+                  { opacity: [0, 1], y: [70, 0], scale: [0.86, 1] },
+                  { delay: stagger(0.13), duration: 0.9,
+                    easing: spring({ stiffness: 110, damping: 13, restSpeed: 0.5 }) }
+                );
+              });
+
+              // 5. 3D perspective tilt on hover
+              const tiltCards = document.querySelectorAll<HTMLElement>(".tilt-card");
+              tiltCards.forEach(card => {
+                card.addEventListener("mousemove", (e: MouseEvent) => {
+                  const r = card.getBoundingClientRect();
+                  const x = (e.clientX - r.left) / r.width  - 0.5;
+                  const y = (e.clientY - r.top)  / r.height - 0.5;
+                  animate(card, { rotateX: -y * 22, rotateY: x * 22, scale: 1.05 },
+                    { duration: 0.12, easing: "linear" });
+
+                  const glow = card.querySelector<HTMLElement>(".card-glow");
+                  if (glow) {
+                    glow.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+                    glow.style.setProperty("--my", `${((e.clientY - r.top)  / r.height) * 100}%`);
+                    animate(glow, { opacity: 1 }, { duration: 0.15 });
+                  }
+                });
+                card.addEventListener("mouseleave", () => {
+                  animate(card, { rotateX: 0, rotateY: 0, scale: 1 },
+                    { duration: 0.8, easing: spring({ stiffness: 75, damping: 11, restSpeed: 0.5 }) });
+                  const glow = card.querySelector<HTMLElement>(".card-glow");
+                  if (glow) animate(glow, { opacity: 0 }, { duration: 0.3 });
+                });
+              });
+
+              // 6. Magnetic button
+              const zone  = document.getElementById("magnetic-zone");
+              const btn   = document.getElementById("magnetic-btn");
+              const arrow = document.getElementById("btn-arrow");
+              if (zone && btn) {
+                zone.addEventListener("mousemove", (e: MouseEvent) => {
+                  const r  = zone.getBoundingClientRect();
+                  const dx = (e.clientX - (r.left + r.width  / 2)) * 0.35;
+                  const dy = (e.clientY - (r.top  + r.height / 2)) * 0.35;
+                  animate(btn, { x: dx, y: dy }, { duration: 0.22, easing: "ease-out" });
+                  if (arrow) animate(arrow, { x: dx * 0.4 }, { duration: 0.22 });
+                }, { passive: true });
+                zone.addEventListener("mouseleave", () => {
+                  animate(btn,  { x: 0, y: 0 }, { duration: 0.9,
+                    easing: spring({ stiffness: 75, damping: 11, restSpeed: 0.5 }) });
+                  if (arrow) animate(arrow, { x: 0 }, { duration: 0.7,
+                    easing: spring({ stiffness: 100, damping: 14 }) });
+                });
+              }
+
+              // 7. Background orbs drift toward cursor
+              const orb1 = document.getElementById("orb-1");
+              const orb2 = document.getElementById("orb-2");
+              document.addEventListener("mousemove", (e: MouseEvent) => {
+                const nx = e.clientX / window.innerWidth;
+                const ny = e.clientY / window.innerHeight;
+                if (orb1) animate(orb1, { x: nx * 130 - 65, y: ny * 90 - 45 },
+                  { duration: 2.8, easing: "ease-out" });
+                if (orb2) animate(orb2, { x: -(nx * 110 - 55), y: -(ny * 70 - 35) },
+                  { duration: 3.5, easing: "ease-out" });
+              }, { passive: true });
+
+            })
+            .catch((err: unknown) => {
+              console.error("[HelloAnimated] motion.js failed to load:", err);
+            });
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloAnimated;
+```
+
+### Motion.js API notes (for Streak context)
+
+| API | Correct usage | Wrong usage (causes crash) |
+|---|---|---|
+| `scroll()` | `scroll(animate(el, {...}))` — linked form | `scroll(({ y }) => { y.progress })` — callback form with `y.progress` |
+| `inView()` | `inView(el, callback)` — no third argument | `inView(el, cb, { margin: "-40px" })` — crashes on string margin |
+| `animate().finished` | Use for sequencing — returns a Promise | Do not mix with `async/await` in Script (no top-level await) |
+| `spring()` | `spring({ stiffness: 75, damping: 11, restSpeed: 0.5 })` | Omitting `restSpeed` may cause infinite oscillation |
+
+---
+
+## 22. Quick-Start Checklist
+
+Use this when creating a new Streak.js page or project.
+
+### New project
+
+- [ ] Install Streak: `bun add streak@file:../path/to/streak-forge-x.x.x.tgz`
+- [ ] Create `streak.sitemap.json` at project root
+- [ ] Set up `tsconfig.json` with `jsx: "react-jsx"` and `moduleResolution: "bundler"`
+- [ ] Set up Tailwind: `tailwind.config.js` + `src/common/styles/input.css`
+- [ ] Add build scripts to `package.json`
+
+### New page
+
+- [ ] Add entry to `streak.sitemap.json` with unique `renderId`
+- [ ] Create `src/handlers/YourHandler.ts` (default export async fn, returns `{ status: 200, ... }`)
+- [ ] Create `src/layouts/YourLayout.tsx` (default export, full `<html>` doc, `WidgetPlaceholder` for each widget)
+- [ ] Create each widget in `src/widgets/YourWidget.tsx` (default export, accepts `props.data`)
+- [ ] Verify every sitemap widget has a matching `WidgetPlaceholder` in the layout
+- [ ] Verify every `WidgetPlaceholder` `type` matches the widget filename exactly
+
+### Adding client interactivity (Script)
+
+- [ ] Add `<Script id="unique-id" options={{ ...serverData }}>` to the widget JSX
+- [ ] Write `(gDom: any, options: any) => { ... }` as the child function
+- [ ] Confirm all server values are passed via `options` (not closed over)
+- [ ] Use `document.getElementById(...)` to find DOM elements (use stable IDs in JSX)
+- [ ] Add `{ passive: true }` to scroll/mousemove event listeners
+
+### Adding deferred content (Dynamic)
+
+- [ ] Wrap deferred content in `<Dynamic id="panel-id">...</Dynamic>`
+- [ ] In a `Script`, call `gDom.loadDynamicComponent("panel-id", callback)` on user interaction
+- [ ] In the callback, fade in the injected content with `requestAnimationFrame`
+- [ ] Start the injected content with `style={{ opacity: 0 }}` for smooth reveal
+
+### Adding third-party JS (loadPackage)
+
+- [ ] Place the library file in `public/assets/js/yourlib.js`
+- [ ] Commit the file to git (do NOT gitignore it)
+- [ ] In a `Script`, call `gDom.loadPackage("js/yourlib.js").then(() => { ... })`
+- [ ] Access the library as `(gDom as any).LibraryGlobal`
+
+### Adding resource hints (Preload)
+
+- [ ] Add `<Preload href="..." as="style|image|font|script" media="..." />` before the `<link>` or `<img>` tag
+- [ ] Use `media=""` for all-screen preloads, or a media query for responsive preloads
+- [ ] Keep Preload in `<head>` context (inside `PageHead` or before body tags)
+
+---
+
+*Generated from the hello-streak-app reference implementation. Last updated: 2026-03-10.*

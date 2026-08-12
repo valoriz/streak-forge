@@ -1,0 +1,58 @@
+{
+  "name": "create-streak-app",
+  "version": "0.0.1",
+  "description": "CLI tool to scaffold Streak.js applications",
+  "bin": {
+    "create-streak-app": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "template/**/*"
+  ],
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "eslint src && npx esbuild src/index.ts --bundle --platform=node --format=esm --banner:js='#!/usr/bin/env node' --outfile=dist/index.js",
+    "prepare": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "streak",
+    "streak-forge",
+    "create-streak-app",
+    "scaffold",
+    "cli",
+    "template"
+  ],
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valoriz/streak-forge.git",
+    "directory": "packages/create-streak-app"
+  },
+  "bugs": {
+    "url": "https://github.com/valoriz/streak-forge/issues"
+  },
+  "homepage": "https://github.com/valoriz/streak-forge#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "picocolors": "^1.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@types/node": "^24.5.2",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.35.0",
+    "globals": "^16.4.0",
+    "jiti": "^2.5.1",
+    "typescript-eslint": "^8.44.0"
+  }
+}

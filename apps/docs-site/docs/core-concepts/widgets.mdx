@@ -1,0 +1,116 @@
+---
+title: Widgets
+description: "Building stateless React components that render page sections at build time."
+---
+
+# Widgets
+
+A widget is a TSX component, default-exported, in `src/widgets/`. It receives handler data as `props.data` and renders a section of the page. Widgets are rendered at build time to static HTML — nothing runs in the browser.
+
+---
+
+## Location
+
+```
+src/widgets/HelloBanner.tsx
+```
+
+The filename must exactly match the `type` field in the sitemap (case-sensitive).
+
+---
+
+## Example
+
+```tsx
+// src/widgets/HelloBanner.tsx
+type HelloBannerProps = {
+  data?: {
+    heading?: string;
+    accentColor?: string;
+  };
+};
+
+const HelloBanner = (props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello World";
+  return (
+    <section>
+      <h1>{heading}</h1>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+---
+
+## Rules
+
+- Filename must exactly match the `type` in the sitemap (case-sensitive): `HelloBanner.tsx` → `"type": "HelloBanner"`
+- Must be the **default export**
+- Data arrives as `props.data` — never spread directly
+- Always use optional chaining (`?.`) and fallbacks (`??`) — Streak passes `{ data: undefined }` if the handler returned nothing for this widget
+- Widgets are **stateless** — no `useState`, no `useEffect` — rendered once at build time
+- Client-side interactivity lives in `<Script>` components inside the widget
+
+---
+
+## props.data
+
+The data for a widget comes from the page's data handler. The handler key must match the widget `id` in the sitemap.
+
+Handler returns:
+```ts
+{ status: 200, HelloBanner: { heading: "Hello World" } }
+```
+
+Widget receives:
+```ts
+props.data === { heading: "Hello World" }
+```
+
+Always use `?.` when accessing `props.data` fields because `data` is `undefined` if the handler returned no entry for this widget.
+
+---
+
+## Adding Client-Side Behavior
+
+Widgets can include a `Script` component for browser-side JavaScript. The function body is serialized to a string at build time and executed as an IIFE in the browser:
+
+```tsx
+import { Script } from "streak/components";
+
+const HelloBanner = (props: HelloBannerProps) => {
+  return (
+    <section>
+      <h1 id="banner-heading">{props?.data?.heading ?? "Hello World"}</h1>
+      <Script id="hello-banner-script" options={{ color: "#818cf8" }}>
+        {(gDom: any, options: any) => {
+          document.getElementById("banner-heading").style.color = options.color;
+        }}
+      </Script>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+---
+
+## Sitemap Declaration
+
+Every widget must be declared in `streak.sitemap.json`:
+
+```json
+{
+  "id": "HelloBanner",
+  "type": "HelloBanner"
+}
+```
+
+And must have a matching `WidgetPlaceholder` in the layout:
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```

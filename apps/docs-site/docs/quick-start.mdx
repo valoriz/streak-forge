@@ -1,0 +1,81 @@
+---
+title: Quick Start
+description: Get a Streak.js site running in under 5 minutes.
+order: 1
+---
+
+# Quick Start
+
+Get a Streak.js site running in under 5 minutes.
+
+---
+
+## Prerequisites
+
+- **Bun >= 1.0** — Streak.js uses Bun as its runtime and package manager. Install it from [bun.sh](https://bun.sh).
+- **Node.js** (optional) — not required, but compatible if your tooling depends on it.
+
+---
+
+## Create a New Project
+
+> **Note:** The `create-streak-app` CLI is coming soon. For now, use the **hello-streak-app** starter repository:
+>
+> ```bash
+> git clone https://github.com/valoriz/hello-streak-app.git my-app && cd my-app && bun install
+> ```
+>
+> See [Hello Streak App](/getting-started/hello-streak-app.html) for the full getting-started guide.
+
+---
+
+## Project Structure
+
+```
+my-app/
+  src/
+    handlers/       ← async data providers (one per page)
+    layouts/        ← full HTML document templates with WidgetPlaceholders
+    widgets/        ← stateless TSX components rendered at build time
+  public/
+    assets/         ← JS/CSS files loaded at runtime via the asset worker
+    styles/         ← compiled Tailwind CSS
+  out/              ← generated static output (created by build)
+  streak.sitemap.json
+  tsconfig.json
+  package.json
+```
+
+---
+
+## Start the Dev Server
+
+```bash
+bun run dev
+```
+
+The dev server starts on **port 3690**. It renders pages on demand and reloads on file changes.
+
+---
+
+## Build for Production
+
+Production builds are handled by **Nexus** — the Streak cloud build and deployment system. When you publish your site through Nexus, it runs the build pipeline and deploys the output automatically based on your site configuration. Local `bun run build` is not needed for production.
+
+> For full details on publishing and deployment, refer to the [Nexus documentation](https://nexusoneonline.com/).
+
+---
+
+## Adding a New Page — Quick Checklist
+
+Adding a page to a Streak site requires four files and one sitemap entry. Here is the minimum checklist:
+
+1. **Sitemap entry** — add a new object to `streak.sitemap.json` with `url`, `renderId`, `dataHandler`, `rootLayout`, and `widgets[]`.
+
+2. **Data handler** — create `src/handlers/MyPageDataHandler.ts`. Default-export an async function that returns `{ status: 200, WidgetId: { ... } }`.
+
+3. **Layout** — reuse an existing layout or create a new one in `src/layouts/`. Add a `<WidgetPlaceholder id="WidgetId" type="WidgetType" />` for every widget.
+
+4. **Widget** — create `src/widgets/MyWidget.tsx`. Default-export a function that receives `props.data` and returns JSX.
+
+5. **Verify** — run `bun run dev` and navigate to the new URL on port 3690.

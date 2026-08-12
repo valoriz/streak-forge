@@ -1,0 +1,179 @@
+---
+title: GDOM API
+description: "The gDom browser API — Streak's window extensions for Script functions."
+---
+
+# gDom — The Extended Window
+
+Inside every `Script` children function, the first argument (`gDom`) is `window` extended with everything `app.js` injected. It is not a separate object — it is literally `window`.
+
+---
+
+## Full Interface
+
+```ts
+interface GDom extends Window {
+  // Streak-injected helpers
+  ftr: boolean;
+  loadPackage: (path: string) => Promise<void>;
+  loadDynamicComponent: (id: string, cb: (el: HTMLElement) => void) => void;
+  loadAsset: (name: string | string[], cb: Function) => void;
+  addResourceToBody: (url: string, opts: object, cb: Function) => void;
+  addWidgetToBody: (id: string, cb: Function, type: string) => void;
+  onVisible: (el: Element, cb: Function, opts?: object) => void;
+  debounce: (fn: Function, delay: number) => Function;
+  geById: typeof document.getElementById;
+  stall: (ms: number) => Promise<void>;
+  setCookie: (name: string, value: string, days: number) => void;
+  getCookie: (name: string) => string | null;
+  assetLoader: Record<string, any>;
+
+  // After loadPackage("js/motion.js"):
+  Motion: typeof import("motion");
+
+  // After loadPackage("js/lenis.min.js"):
+  Lenis: typeof Lenis;
+
+  triggeredEvents: Record<string, any>;
+}
+```
+
+---
+
+## Property and Method Reference
+
+### ftr
+
+```ts
+ftr: boolean
+```
+
+`true` if this is the user's first page load in the current session (no `__vi` cookie found). Set once on startup by `app.js`. Use this to decide whether to delay heavy animations.
+
+```ts
+if (gDom.ftr) {
+  setTimeout(triggerScrollFadeLoad, 2000);
+} else {
+  triggerScrollFadeLoad();
+}
+```
+
+---
+
+### loadPackage
+
+```ts
+loadPackage(path: string): Promise<void>
+```
+
+Loads a JS or CSS file from `public/assets/` via the asset worker. The path is relative to `/assets/` — `"js/motion.js"` fetches `/assets/js/motion.js`.
+
+Assets are cached in memory. Calling `loadPackage` for the same file twice re-injects it without hitting the network.
+
+```ts
+await gDom.loadPackage("js/motion.js");
+const { animate } = gDom.Motion;
+```
+
+---
+
+### loadDynamicComponent
+
+```ts
+loadDynamicComponent(id: string, cb: (el: HTMLElement) => void): void
+```
+
+Re-injects the HTML of a `Dynamic` component into its placeholder element in the DOM, then calls `cb` with the injected element.
+
+```ts
+gDom.loadDynamicComponent("my-panel", (el) => {
+  console.info("panel injected", el);
+});
+```
+
+---
+
+### onVisible
+
+```ts
+onVisible(el: Element, cb: Function, opts?: object): void
+```
+
+`IntersectionObserver` wrapper. Calls `cb` when `el` enters the viewport.
+
+---
+
+### debounce
+
+```ts
+debounce(fn: Function, delay: number): Function
+```
+
+Returns a debounced version of `fn` that fires at most once per `delay` milliseconds.
+
+---
+
+### geById
+
+```ts
+geById: typeof document.getElementById
+```
+
+Shorthand for `document.getElementById`, bound to `document`.
+
+---
+
+### stall
+
+```ts
+stall(ms: number): Promise<void>
+```
+
+Returns a `Promise` that resolves after `ms` milliseconds. Use with `await` to introduce a delay.
+
+---
+
+### setCookie / getCookie
+
+```ts
+setCookie(name: string, value: string, days: number): void
+getCookie(name: string): string | null
+```
+
+Browser cookie utilities.
+
+---
+
+### assetLoader
+
+```ts
+assetLoader: Record<string, any>
+```
+
+Tracks in-flight and completed asset loads. Managed internally by the asset worker handler.
+
+---
+
+### triggeredEvents
+
+```ts
+triggeredEvents: Record<string, any>
+```
+
+A registry used by animation helpers to track which custom events have already fired. Managed by convention in widget scripts.
+
+---
+
+## After loadPackage
+
+Calling `gDom.loadPackage("js/motion.js")` fetches the file and executes it. If the library assigns itself to `window`, it is accessible via `gDom`:
+
+```ts
+await gDom.loadPackage("js/motion.js");
+const { animate, inView, scroll, stagger, spring } = gDom.Motion;
+
+await gDom.loadPackage("js/lenis.min.js");
+const lenis = new gDom.Lenis();
+```
+
+The file must be present at `public/assets/js/motion.js` (or `public/assets/js/lenis.min.js`).

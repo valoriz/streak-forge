@@ -1,0 +1,95 @@
+---
+title: Layouts
+description: "Creating full HTML document layouts with WidgetPlaceholder slots."
+---
+
+# Layouts
+
+A layout is a TSX component, default-exported, in `src/layouts/`. It returns the entire HTML document — `<html>`, `<head>`, `<body>` and all. Its only job is structural; it contains no business logic.
+
+---
+
+## Location
+
+```
+src/layouts/MainLayout.tsx
+```
+
+The filename (without extension) must match the `rootLayout` field in the sitemap.
+
+---
+
+## Example
+
+```tsx
+// src/layouts/MainLayout.tsx
+import { WidgetPlaceholder } from "streak/components";
+
+const MainLayout = () => {
+  console.info("Rendering Main Layout"); // runs at build time on the server
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body>
+        <WidgetPlaceholder id="HelloBanner"  type="HelloBanner"  />
+        <WidgetPlaceholder id="HelloMessage" type="HelloMessage" />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+---
+
+## Rules
+
+- Must be the **default export**
+- Must return the full HTML document — `<html>`, `<head>`, `<body>`
+- Every widget in `streak.sitemap.json` `widgets[]` needs a matching `WidgetPlaceholder` here
+- `id` and `type` on `WidgetPlaceholder` must both be present and must match the sitemap entry exactly
+- `console.info` inside a layout runs at build time, not in the browser
+- The layout is rendered **once per build** — it is not re-rendered per request
+
+---
+
+## WidgetPlaceholder
+
+`WidgetPlaceholder` from `streak/components` marks where a widget's HTML will be injected.
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```
+
+At build time, Streak replaces this element with the fully rendered HTML of the matching widget. The `id` links it to the handler data; the `type` links it to the widget file.
+
+---
+
+## Widget Placement in Head vs Body
+
+Widgets can be placed in `<head>` as well as `<body>`. A common pattern is a `PageHead` widget that renders `<title>`, `<meta>`, and `<link>` tags:
+
+```tsx
+<html dir="ltr" lang="en">
+  <head>
+    <WidgetPlaceholder id="PageHead" type="PageHead" />
+  </head>
+  <body>
+    <WidgetPlaceholder id="NavBar"      type="NavBar"      />
+    <WidgetPlaceholder id="HeroBanner"  type="HeroBanner"  />
+    <WidgetPlaceholder id="Footer"      type="Footer"      />
+  </body>
+</html>
+```
+
+---
+
+## What Layouts Should NOT Do
+
+Layouts should not contain business logic, data fetching, or conditional rendering based on data. All of that belongs in:
+
+- Data handlers (data fetching)
+- Widgets (conditional rendering based on data)

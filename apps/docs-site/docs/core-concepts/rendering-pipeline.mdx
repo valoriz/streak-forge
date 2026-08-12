@@ -1,0 +1,84 @@
+---
+title: Rendering Pipeline
+description: "The 7-stage build pipeline from sitemap to static HTML output."
+---
+
+# Rendering Pipeline
+
+When you run `streak-forge pre-build`, the renderer processes each sitemap entry through 7 stages.
+
+---
+
+## The 7 Stages
+
+| Stage | Name | What it does |
+| --- | --- | --- |
+| 1 | `validateStreakConfig` | Validates the sitemap entry structure |
+| 2 | `pageDataHandler` | Calls the `dataHandler` async function |
+| 3 | `renderRootLayout` | Renders the layout JSX to an HTML string |
+| 4 | `renderWidgets` | For each widget: renders JSX, injects into layout |
+| 5 | `pageBuildAndOptimize` | (build mode) Optimizes the output |
+| 6 | `prepareStyle` | (build mode) Embeds or links CSS |
+| 7 | `prepareRawForBuild` | (build mode) Writes `out/<renderId>/index.html` |
+
+---
+
+## Dev vs Build Mode
+
+In dev mode (`streak-forge dev`), stages 5–7 are replaced with dev-specific versions that serve the result over HTTP with hot-reload.
+
+In build mode (`streak-forge pre-build`), all 7 stages run and the final HTML is written to disk.
+
+---
+
+## Widget Data Injection (Stage 4)
+
+Stage 4 is where widgets are resolved and injected into the layout. For each widget in `widgets[]`:
+
+1. Find `src/widgets/<type>.tsx` using the `type` field
+2. Look up `handlerData[widget.id]` from what the handler returned in stage 2
+3. Render the TSX component with `{ data: handlerData[widget.id] }`
+4. Render to an HTML string
+5. Replace the `WidgetPlaceholder` in the layout HTML string with that output
+
+---
+
+## High-Level Flow
+
+```
+streak.sitemap.json
+        ↓
+Stage 1: validateStreakConfig
+        ↓
+Stage 2: pageDataHandler  ← calls async handler, gets { status, widgetData }
+        ↓
+Stage 3: renderRootLayout ← renders layout JSX to HTML string
+        ↓
+Stage 4: renderWidgets    ← for each widget:
+                               render JSX with handler data
+                               replace WidgetPlaceholder in layout HTML
+        ↓
+Stage 5: pageBuildAndOptimize  (build only)
+        ↓
+Stage 6: prepareStyle          (build only)
+        ↓
+Stage 7: prepareRawForBuild    (build only) → out/<renderId>/index.html
+```
+
+---
+
+## Output
+
+Each sitemap entry produces one file:
+
+```
+out/<renderId>/index.html
+```
+
+The file contains:
+- Fully rendered layout with all widget HTML injected
+- `<script id="w-m">` — hidden JSON element with widget metadata (ids, versioned asset paths)
+- `app.js` IIFE — the client coordinator
+- Inline `<script>` tags for each `Script` component: `((fn)(window, opts));`
+
+No framework runtime is included in the output.

@@ -1,0 +1,82 @@
+---
+title: streak-forge
+description: "The streak-forge CLI for development and production builds."
+---
+
+# streak-forge
+
+`streak-forge` is the Streak.js CLI. It has two commands: `dev` for local development and `pre-build` for generating the static site.
+
+---
+
+## Commands
+
+### streak-forge dev
+
+Starts a development server with hot-reload. Pages are rendered on request rather than written to disk.
+
+```bash
+streak-forge dev
+```
+
+- Renders each page when it is requested
+- Watches source files and reloads on changes
+- Runs dev-specific versions of pipeline stages 5–7 (no disk output)
+- Does not write to `out/`
+
+### streak-forge pre-build
+
+Reads `streak.sitemap.json`, processes every page through all 7 pipeline stages, and writes static HTML to `out/`.
+
+```bash
+streak-forge pre-build
+```
+
+- Runs all 7 pipeline stages for every sitemap entry
+- Writes `out/<renderId>/index.html` for each entry
+- `renderId` must be unique across all entries
+
+---
+
+## Output Structure
+
+```
+out/
+  homeRenderId/
+    index.html
+  aboutRenderId/
+    index.html
+```
+
+Each directory name is the `renderId` from the sitemap entry.
+
+---
+
+## Typical package.json Integration
+
+```json
+"scripts": {
+  "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
+  "dev:streak": "streak-forge dev",
+  "build":      "bun run css-build && streak-forge pre-build",
+  "start":      "python3 -m http.server 8000 --directory out"
+}
+```
+
+Run dev:
+
+```bash
+bun run dev
+```
+
+Run build:
+
+```bash
+bun run build
+```
+
+Preview the built output locally:
+
+```bash
+bun run start
+```
