@@ -1,29 +1,10 @@
 import path from "path";
-import { parse, HTMLElement } from "node-html-parser";
 import config from "../config";
 import { importFromDir } from "../moduleLoader";
 import { renderComponent } from "../jsxRender";
 import { collectStyles } from "./styleExtract";
-import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR, customTags } from "../constants";
+import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR } from "../constants";
 import type { RenderConfig, WidgetProps } from "../types";
-
-// <Script> renders to a custom <sf-script> marker tag (same reasoning as
-// <widget>/<dynamic>/<preload> staying raw elsewhere in this snapshot: it
-// can't get accidentally executed or mangled by HTML tooling before it's
-// meant to run) - but unlike those, the real <script> tag it represents is
-// meant to actually ship as-is, so it gets swapped in here rather than left
-// for a later stage that doesn't exist yet.
-const convertSfScriptTags = (html: string): string => {
-  if (!html.includes(`<${customTags.SCRIPT}`)) return html;
-  const root = parse(html);
-  root.querySelectorAll(customTags.SCRIPT).forEach((el) => {
-    const script = parse(`<script></script>`).firstChild as HTMLElement;
-    Object.entries(el.attributes).forEach(([key, value]) => script.setAttribute(key, value));
-    script.innerHTML = el.innerHTML;
-    el.replaceWith(script);
-  });
-  return root.toString();
-};
 
 export interface WidgetOut {
   id: string;
@@ -91,14 +72,14 @@ export const buildPageData = async (renderConfig: RenderConfig): Promise<RawCont
   }
 
   const layoutModule = await importFromDir(layoutsDir, renderConfig.rootLayout);
-  const rootLayoutOut = convertSfScriptTags(await renderComponent(layoutModule.default, renderConfig.metadata || {}));
+  const rootLayoutOut = await renderComponent(layoutModule.default, renderConfig.metadata || {});
 
   const widgets: WidgetOut[] = await Promise.all(
     renderConfig.widgets.map(async (w) => {
       const widgetModule = await importFromDir(widgetsDir, w.type);
       const props: WidgetProps = { data: dataHandlerOut[w.id] };
-      const out = convertSfScriptTags(await renderComponent(widgetModule.default, props));
-      const sOut = typeof widgetModule.skeleton === "function" ? convertSfScriptTags(await renderComponent(widgetModule.skeleton, props)) : "";
+      const out = await renderComponent(widgetModule.default, props);
+      const sOut = typeof widgetModule.skeleton === "function" ? await renderComponent(widgetModule.skeleton, props) : "";
       return { id: w.id, type: w.type, loadingStrategy: w.loadingStrategy, out, sOut };
     }),
   );

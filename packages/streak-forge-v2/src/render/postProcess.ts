@@ -55,7 +55,7 @@ interface ProcessedFragment {
   dynamicComponents: DynamicComponentInfo[];
 }
 
-// Strips <dynamic>/<sf-script>/<preload> markers out of one widget's SSR
+// Strips <dynamic>/<script>/<preload> markers out of one widget's SSR
 // output. <dynamic> blocks always get pulled out and replaced with a
 // fetchable placeholder, regardless of whether the parent widget itself
 // ends up inline or lazy - this is what lets `<Dynamic id>` work correctly

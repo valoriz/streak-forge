@@ -8,7 +8,7 @@ export const PUBLIC_DIR = "public";
 export const customTags = {
   WIDGET: "widget",
   DYNAMIC: "dynamic",
-  SCRIPT: "sf-script",
+  SCRIPT: "script",
   PRELOAD: "preload",
 } as const;
 
