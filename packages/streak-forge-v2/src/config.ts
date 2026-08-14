@@ -20,6 +20,9 @@ const config = {
   devPort: Number(env.PORT) || 3690,
   hmrEnabled: env.STREAK_HMR !== "false",
   disableCriticalCss: env.STREAK_DISABLE_CRITICAL_CSS === "true",
+  preBuildDir: env.PREBUILD_DIR || path.join(targetSrc, ".prebuild"),
+  readFromPrebuild: env.READ_FROM_PREBUILD === "1",
+  staticBuildDir: path.join(targetSrc, env.STATIC_BUILD_DIR || "out"),
   srcDir: {
     root: targetSrc,
     handlerDir: path.join(targetSrc, HANDLERS_DIR),

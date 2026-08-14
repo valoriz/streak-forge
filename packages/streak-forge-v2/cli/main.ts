@@ -6,12 +6,15 @@ import {
 import { startDevServer } from "../src/devServer";
 import { startWatcher } from "../src/watcher";
 import { findAllClosureLeaks } from "../src/validate";
+import { runPreBuild } from "../src/build/preBuild";
+import { runBuild } from "../src/build/build";
+import { runDevBuild } from "../src/build/devBuild";
 
 const command = process.argv[2];
 
 switch (command) {
   case "dev": {
-    registerScriptTransform();
+    await registerScriptTransform();
     await startDevServer();
     startWatcher();
     break;
@@ -29,10 +32,24 @@ switch (command) {
     process.exit(1);
     break;
   }
+  case "pre-build": {
+    await runPreBuild();
+    break;
+  }
+  case "build": {
+    await registerScriptTransform();
+    await runBuild();
+    break;
+  }
+  case "dev-build": {
+    await registerScriptTransform();
+    await runDevBuild();
+    break;
+  }
   default:
+    console.info(`streak-forge v2 - unknown command: ${command ?? ""}`);
     console.info(
-      `streak v2 - stage 1 (dev server only). Unknown command: ${command ?? ""}`,
+      "Usage: streak-forge dev | streak-forge validate | streak-forge pre-build | streak-forge build | streak-forge dev-build",
     );
-    console.info("Usage: streak-forge dev | streak-forge validate");
     process.exit(1);
 }

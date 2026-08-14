@@ -42,25 +42,34 @@ const skeletonPlaceholder = (type: string, id: string, skeletonHtml?: string) =>
     skeletonHtml || `<span style="display:none"></span>`
   }</div>`;
 
+export interface DynamicComponentInfo {
+  id: string;
+  html: string;
+  scripts: ScriptItem[];
+}
+
 interface ProcessedFragment {
   html: string;
   scripts: ScriptItem[];
   headLinks: string[];
+  dynamicComponents: DynamicComponentInfo[];
 }
 
 // Strips <dynamic>/<sf-script>/<preload> markers out of one widget's SSR
-// output. <dynamic> blocks always get pulled into the content store and
-// replaced with a fetchable placeholder, regardless of whether the parent
-// widget itself ends up inline or lazy - this is what lets `<Dynamic id>`
-// work correctly even inside a `loadingStrategy: "lazy"` widget: once the
-// lazy widget's own HTML is inserted client-side, the placeholder anchor for
-// its nested Dynamic block comes along with it and remains fetchable.
+// output. <dynamic> blocks always get pulled out and replaced with a
+// fetchable placeholder, regardless of whether the parent widget itself
+// ends up inline or lazy - this is what lets `<Dynamic id>` work correctly
+// even inside a `loadingStrategy: "lazy"` widget: once the lazy widget's own
+// HTML is inserted client-side, the placeholder anchor for its nested
+// Dynamic block comes along with it and remains fetchable. What happens to
+// the extracted dynamic content (dev's live contentStore vs build's
+// dynamicComponents array) is the caller's decision, not this function's.
 const processWidgetFragment = (
   html: string,
-  pageUrl: string,
   scriptIds: Set<string>,
 ): ProcessedFragment => {
   const root = parse(html);
+  const dynamicComponents: DynamicComponentInfo[] = [];
 
   root.querySelectorAll(customTags.DYNAMIC).forEach((el) => {
     const id = el.getAttribute("id");
@@ -70,18 +79,14 @@ const processWidgetFragment = (
       return;
     }
     const innerScripts = extractScripts(el, new Set());
-    putContent(pageUrl, resourceTypes.DYNAMIC, {
-      id,
-      html: el.innerHTML,
-      scripts: innerScripts,
-    });
+    dynamicComponents.push({ id, html: el.innerHTML, scripts: innerScripts });
     el.replaceWith(skeletonPlaceholder(resourceTypes.DYNAMIC, id));
   });
 
   const headLinks = extractPreloads(root);
   const scripts = extractScripts(root, scriptIds);
 
-  return { html: root.toString(), scripts, headLinks };
+  return { html: root.toString(), scripts, headLinks, dynamicComponents };
 };
 
 export interface WidgetForAssembly {
@@ -127,8 +132,11 @@ export const assemblePage = (
       return;
     }
 
-    const fragment = processWidgetFragment(widget.html, pageUrl, scriptIds);
+    const fragment = processWidgetFragment(widget.html, scriptIds);
     headLinks.push(...fragment.headLinks);
+    fragment.dynamicComponents.forEach((dc) =>
+      putContent(pageUrl, resourceTypes.DYNAMIC, dc),
+    );
 
     const isLazy = widget.loadingStrategy === WIDGET_LOADING_STRATEGIES.LAZY;
     if (isLazy) {
