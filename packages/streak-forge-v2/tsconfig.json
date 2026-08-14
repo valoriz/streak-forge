@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {},
+    "jsxImportSource": "streak",
+    "types": ["bun"]
+  },
+  "include": ["cli", "src"]
+}

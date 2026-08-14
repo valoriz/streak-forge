@@ -1,0 +1,28 @@
+{
+  "name": "streak",
+  "version": "0.1.0-v2.0",
+  "description": "streak-forge v2 (rewrite in progress) - stage 1: dev server only",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "bin": {
+    "streak": "./cli/main.ts"
+  },
+  "exports": {
+    "./components": "./src/components/index.tsx",
+    "./jsx-runtime": "./src/jsx/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx/jsx-dev-runtime.ts"
+  },
+  "scripts": {
+    "dev": "echo 'run `streak dev` from a consumer app instead'"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "dotenv": "^17.2.2",
+    "node-html-parser": "^7.0.1",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21"
+  }
+}
