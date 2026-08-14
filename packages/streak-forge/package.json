@@ -1,6 +1,6 @@
 {
   "version": "3.2.4-beta.0",
-  "name": "streak-forge",
+  "name": "streak-forge-legacy",
   "author": "indrajithc",
   "main": "./dist/index.js",
   "devDependencies": {
@@ -32,7 +32,7 @@
     "typescript": "^5"
   },
   "bin": {
-    "streak-forge": "./dist/cli/main.js"
+    "streak-forge-legacy": "./dist/cli/main.js"
   },
   "description": "A performance-first static site builder. Build",
   "files": [
