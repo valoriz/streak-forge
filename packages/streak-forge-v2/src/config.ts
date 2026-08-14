@@ -8,7 +8,7 @@ import {
 } from "./constants";
 
 // Consumer app's cwd - this module always runs invoked from inside the consumer
-// app's directory (e.g. `streak dev` run from apps/hello-streak-app).
+// app's directory (e.g. `streak-forge dev` run from apps/hello-streak-app).
 const targetSrc = process.cwd();
 
 dotenv.config({ path: path.join(targetSrc, ".env") });

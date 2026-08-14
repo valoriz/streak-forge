@@ -33,6 +33,6 @@ switch (command) {
     console.info(
       `streak v2 - stage 1 (dev server only). Unknown command: ${command ?? ""}`,
     );
-    console.info("Usage: streak dev | streak validate");
+    console.info("Usage: streak-forge dev | streak-forge validate");
     process.exit(1);
 }
