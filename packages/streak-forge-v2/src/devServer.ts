@@ -4,14 +4,59 @@ import config from "./config";
 import { loadSitemap } from "./sitemap";
 import { renderPage } from "./render/renderPage";
 import { getContent } from "./render/contentStore";
+import { onClosureLeak } from "./build/scriptTransform";
+import type { ClosureLeak } from "./build/scriptTransform";
 import { CONTENT_ENDPOINT, HMR_ENDPOINT, resourceTypes } from "./constants";
 import type { StreakSitemapItem } from "./types";
 
+// Next.js-style dismissible error banner for <Script> closure leaks, pushed
+// live over the same SSE stream used for reload - no separate channel.
 const HMR_CLIENT_SCRIPT = `<script>
 (function(){
+  var seen = {};
+
+  function ensureOverlay(){
+    var el = document.getElementById("__streak_error_overlay");
+    if (el) return el;
+    el = document.createElement("div");
+    el.id = "__streak_error_overlay";
+    el.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#450a0a;color:#fecaca;font:12px/1.5 ui-monospace,monospace;z-index:2147483647;box-shadow:0 -2px 12px rgba(0,0,0,.4);";
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function showWarning(leak){
+    var key = leak.file + ":" + leak.line + ":" + leak.column + ":" + leak.name;
+    if (seen[key]) return;
+    seen[key] = true;
+
+    var overlay = ensureOverlay();
+    var row = document.createElement("div");
+    row.style.cssText = "padding:8px 12px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;gap:12px;align-items:flex-start;";
+
+    var text = document.createElement("div");
+    text.textContent = "streak: <Script> closure leak - \\"" + leak.name + "\\" referenced at " + leak.file + ":" + leak.line + ":" + leak.column + ". Pass it via the Script's options prop instead.";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.textContent = "Dismiss";
+    closeBtn.style.cssText = "background:none;border:1px solid rgba(255,255,255,.3);color:#fecaca;font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer;flex:0 0 auto;";
+    closeBtn.onclick = function(){
+      row.remove();
+      delete seen[key];
+      if (!overlay.children.length) overlay.remove();
+    };
+
+    row.appendChild(text);
+    row.appendChild(closeBtn);
+    overlay.appendChild(row);
+  }
+
   function connect(){
     var es = new EventSource(${JSON.stringify(HMR_ENDPOINT)});
     es.addEventListener("reload", function(){ location.reload(); });
+    es.addEventListener("script-warning", function(e){
+      try { showWarning(JSON.parse(e.data)); } catch (err) {}
+    });
     es.onerror = function(){ es.close(); setTimeout(connect, 1000); };
   }
   connect();
@@ -30,6 +75,20 @@ const sseClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 export const broadcastReload = () => {
   const encoder = new TextEncoder();
   const msg = encoder.encode("event: reload\ndata: \n\n");
+  for (const ctrl of sseClients) {
+    try {
+      ctrl.enqueue(msg);
+    } catch {
+      sseClients.delete(ctrl);
+    }
+  }
+};
+
+export const broadcastScriptWarning = (leak: ClosureLeak) => {
+  const encoder = new TextEncoder();
+  const msg = encoder.encode(
+    `event: script-warning\ndata: ${JSON.stringify(leak)}\n\n`,
+  );
   for (const ctrl of sseClients) {
     try {
       ctrl.enqueue(msg);
@@ -111,6 +170,8 @@ export const startDevServer = async () => {
   console.info(
     `streak v2: loaded ${pages.size} page(s) from streak.sitemap.json`,
   );
+
+  onClosureLeak(broadcastScriptWarning);
 
   const server = Bun.serve({
     port: config.devPort,
