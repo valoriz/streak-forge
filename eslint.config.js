@@ -42,6 +42,15 @@ export default [
       "unused-imports": unusedImports,
     },
 
+    settings: {
+      "import/resolver": {
+        typescript: {
+          project: ["packages/*/tsconfig.json", "apps/*/tsconfig.json"],
+          noWarnOnMultipleProjects: true,
+        },
+      },
+    },
+
     rules: {
       "prettier/prettier": "error",
 

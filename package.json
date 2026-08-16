@@ -27,6 +27,7 @@
   },
   "homepage": "https://github.com/valoriz/streak-forge#readme",
   "devDependencies": {
+    "eslint-import-resolver-typescript": "^4.4.5",
     "typescript": "^5.9.3"
   }
 }

@@ -23,8 +23,6 @@ streak-forge/
 │   └── create-streak-app   # project scaffolding CLI (npm: create-streak-app)
 ├── apps/
 │   └── docs-site           # documentation site (docs.streakjs.com)
-├── libs/
-│   └── core                # rendering pipeline shared by streak-forge
 └── package.json            # workspace root
 ```
 
