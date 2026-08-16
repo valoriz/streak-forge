@@ -237,9 +237,14 @@ const transformSource = (source: string, filePath: string): string => {
 // Bun's own JSX pass for plugin content, we compile JSX to plain JS
 // ourselves via the TS compiler and hand Bun only "js" - Bun's JSX pipeline
 // is then never in the loop for plugin-supplied content, in any context.
-const compileToJs = (source: string, filePath: string, ext: string): string => {
-  if (ext !== "tsx" && ext !== "jsx") return source;
-
+// Also covers plain .ts/.js: the same onLoad-vs-native-parse divergence shows
+// up there too (confirmed - a plain `import type {...}` statement, valid
+// TS, fails to re-parse with "Expected 'from' but found '{'" when handed
+// back via onLoad with an explicit `loader:"ts"` during a build/CLI run,
+// despite parsing fine as a native, non-plugin-mediated import). Running
+// every matched file through the compiler ourselves and always handing Bun
+// plain "js" sidesteps Bun's onLoad re-parse entirely, for every extension.
+const compileToJs = (source: string, filePath: string): string => {
   return ts.transpileModule(source, {
     fileName: filePath,
     compilerOptions: {
@@ -274,22 +279,19 @@ export const scriptTransformPlugin: Bun.BunPlugin = {
     build.onLoad({ filter: /\.(tsx|jsx|ts|js)(\?.*)?$/ }, (args) => {
       const filePath = args.path.split("?")[0]!;
       const source = readFileSync(filePath, "utf-8");
-      const ext = filePath.split(".").pop() as string;
-
-      // .ts/.js have no JSX to compile away and Bun handles them fine
-      // natively - only .tsx/.jsx need the compile-to-js workaround above.
-      const isJsxFile = ext === "tsx" || ext === "jsx";
-      const loader: "js" | "ts" = isJsxFile ? "js" : (ext as "ts" | "js");
 
       // Bun requires an object back once a file matches the filter (unlike
       // esbuild, where returning undefined here falls through to the
       // default loader) - so untouched files still get handled the same way.
+      // Always "js": every matched file goes through compileToJs regardless
+      // of extension (see its comment for why), so there's never TS/JSX
+      // syntax left for Bun's own loader to re-parse.
       if (!source.includes(`<${SCRIPT_TAG}`)) {
-        return { contents: compileToJs(source, filePath, ext), loader };
+        return { contents: compileToJs(source, filePath), loader: "js" };
       }
 
       const transformed = transformSource(source, filePath);
-      return { contents: compileToJs(transformed, filePath, ext), loader };
+      return { contents: compileToJs(transformed, filePath), loader: "js" };
     });
   },
 };

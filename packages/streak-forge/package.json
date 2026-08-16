@@ -1,11 +1,33 @@
 {
   "name": "streak-forge",
-  "version": "0.1.0-v2.2",
-  "description": "streak-forge v2 (rewrite in progress) - stage 1: dev server only",
+  "version": "4.0.0",
+  "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
+  "author": "indrajithc",
+  "license": "Apache-2.0",
   "type": "module",
-  "private": true,
   "bin": {
     "streak-forge": "./dist/cli/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valoriz/streak-forge.git",
+    "directory": "packages/streak-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/valoriz/streak-forge/issues"
+  },
+  "homepage": "https://docs.streakjs.com/",
+  "keywords": [
+    "static-site",
+    "static-site-generator",
+    "ssg",
+    "bun",
+    "streak",
+    "streak-js",
+    "streak-forge"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     "./components": {
@@ -25,7 +47,7 @@
       "import": "./dist/src/render.js"
     }
   },
-  "files": ["dist/**/*.js", "dist/**/*.d.ts"],
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "LICENSE"],
   "scripts": {
     "clean": "rm -rf dist",
     "build:js": "bun bun.build.ts",
