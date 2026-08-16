@@ -27,7 +27,7 @@ export const runBuild = async (): Promise<void> => {
   let failures = 0;
 
   for (const [url, page] of pages) {
-    debugLog(`streak-forge: building ${url}`);
+    console.info(`streak-forge: building ${url}`);
     const pageStart = Date.now();
     try {
       const { renderedPage } = await render(page.renderConfig, { common, url });
@@ -36,13 +36,13 @@ export const runBuild = async (): Promise<void> => {
       const outputPath = path.join(pageDir, file.path);
       writeFile(outputPath, file.content);
       debugLog(`streak-forge: wrote ${outputPath}`);
-      debugLog(`streak-forge: ${url} took ${Date.now() - pageStart}ms to render`);
+      console.info(`streak-forge: built ${url} in ${((Date.now() - pageStart) / 1000).toFixed(2)}s`);
     } catch (err) {
       failures += 1;
       console.error(`streak-forge: failed to build ${url}`, err);
     }
   }
 
-  debugLog(`streak-forge: build complete (${pages.size - failures}/${pages.size} page(s) succeeded).`);
+  console.info(`streak-forge: build complete (${pages.size - failures}/${pages.size} page(s) succeeded).`);
   if (failures > 0) process.exitCode = 1;
 };
