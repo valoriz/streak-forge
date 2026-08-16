@@ -1,12 +1,12 @@
 ---
 title: Removing a Page from Your Site
-description: How to mark a page as not found so it is automatically removed from your live site on the next build.
+description: How to mark a page as not found in its data handler.
 order: 10
 ---
 
 # Removing a Page from Your Site
 
-When you no longer want a page to be live, you do not need to delete any files or manually remove it from your CDN. You can mark it as "not found" in its data handler, and Streak will take care of removing it for you the next time a build runs.
+When you no longer want a page to be live, you do not need to delete any files. You can mark it as "not found" in its data handler, and the build output will reflect that.
 
 ---
 
@@ -15,7 +15,7 @@ When you no longer want a page to be live, you do not need to delete any files o
 Open the data handler for the page you want to remove and return `notFound: true`:
 
 ```ts
-export default async function handler() {
+export default async function handler(metadata, { common }) {
   return {
     notFound: true,
   };
@@ -28,12 +28,7 @@ That is the only change needed. You do not need to remove the page from your sit
 
 ## What Happens Next
 
-1. You publish your site as normal.
-2. During the build, Streak detects that the page is marked as not found.
-3. Once the build completes, Streak automatically removes the page from your CDN.
-4. Visitors who navigate to that URL will no longer see the page.
-
-> **Note:** The page is removed from your live site only after a successful publish. It remains live until that build completes.
+During `streak-forge build`, the page's `notFound` flag is included in its rendered output. Publishing this output live — including whether and how a not-found page is taken down from your live site — is handled by Nexus. See the Nexus documentation for publishing/hosting details.
 
 ---
 
@@ -43,4 +38,4 @@ That is the only change needed. You do not need to remove the page from your sit
 - A campaign page that has ended.
 - Any page that should no longer be publicly accessible.
 
-Once a page is removed from the CDN, you can safely delete its handler, widget, and layout files from your project at any time — or leave them in place if you think you might bring the page back later.
+You can safely delete a removed page's handler, widget, and layout files from your project at any time once you've confirmed it's no longer needed — or leave them in place if you think you might bring the page back later.

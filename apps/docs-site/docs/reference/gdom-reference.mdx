@@ -5,164 +5,98 @@ description: "Complete API listing of all gDom helper functions and properties."
 
 # gDom Reference
 
-Complete listing of all properties and methods available on `gDom` inside `Script` children functions. `gDom` is `window` extended with helpers injected by `app.js`.
+Complete listing of every property and method available on `gDom` inside `Script` children functions. `gDom` is `window` extended with exactly four helpers registered by Streak's client runtime — a single inline script injected at the end of every generated page. There is no Web Worker, no cookie/session state, and no DOM-utility grab bag; this is the entire surface.
 
 ---
 
-## Core Properties
-
-### ftr
-
-```ts
-ftr: boolean
-```
-
-`true` if this is the user's first page load in the current 30-minute session (no `__vi` cookie present). Set once on startup. Use to defer heavy animations on first load.
-
----
-
-### assetLoader
-
-```ts
-assetLoader: Record<string, any>
-```
-
-Internal registry used by the asset worker handler to track in-flight and completed asset loads. Not intended for direct use.
-
----
-
-### triggeredEvents
-
-```ts
-triggeredEvents: Record<string, any>
-```
-
-Custom event registry used by animation helpers to track which scroll/visibility events have already fired. Managed by convention in widget scripts.
-
----
-
-## Asset Loading
-
-### loadPackage
-
-```ts
-loadPackage(path: string): Promise<void>
-```
-
-Loads a JS or CSS file from `public/assets/` via the asset worker. The `path` is relative to `/assets/`. Cached in memory — safe to call multiple times for the same file.
-
-```ts
-await gDom.loadPackage("js/motion.js");
-const { animate } = gDom.Motion;
-```
-
-### loadAsset
-
-```ts
-loadAsset(name: string | string[], cb: Function): void
-```
-
-Lower-level asset loader used internally by `loadPackage`. Calls `cb` when the asset is injected.
+## Resource Loading
 
 ### addResourceToBody
 
 ```ts
-addResourceToBody(url: string, opts: object, cb: Function): void
+addResourceToBody(
+  src: string,
+  options?: { async?: boolean },
+  callback?: () => void,
+): void
 ```
 
-Injects a `<script>` or `<link>` element into the document and calls `cb` when loaded.
+Inserts a real `<script src="...">` (for a `.js` URL) or `<link rel="stylesheet" href="...">` (for a `.css` URL) into `document.body`. Calls `callback` once loaded.
 
-### addWidgetToBody
+Requests are cached by `src` in an in-flight/loaded promise map: calling this twice for the same `src` never appends a second tag or re-fetches — it just re-runs `callback` once the existing load resolves (or immediately if already loaded).
 
 ```ts
-addWidgetToBody(id: string, cb: Function, type: string): void
+gDom.addResourceToBody("/assets/css/theme.css", undefined, () => {
+  console.info("theme.css applied");
+});
 ```
 
-Injects a widget's assets into the document. Called internally by `app.js` during startup.
+### loadPackage
+
+```ts
+loadPackage(name: string): Promise<void>
+```
+
+Loads a JS or CSS file from `public/assets/` by calling `addResourceToBody(`/assets/${name}`, { async: true })` under the hood. `name` is relative to `/assets/`. Returns a `Promise` that resolves once the resource has loaded.
+
+```ts
+await gDom.loadPackage("js/motion.js");
+```
 
 ---
 
-## Dynamic Components
+## Dynamic Content
 
 ### loadDynamicComponent
 
 ```ts
-loadDynamicComponent(id: string, cb: (el: HTMLElement) => void): void
+loadDynamicComponent(id: string, callback?: () => void): void
 ```
 
-Re-injects the HTML of a `Dynamic` component into its placeholder element, then calls `cb` with the injected element.
+Fetches the content of a `<Dynamic id>` block from the content endpoint and replaces its placeholder element's `outerHTML` with the result. Injects any bundled `<script>` tags. Calls `callback` when done.
 
 ```ts
-gDom.loadDynamicComponent("my-panel", (el) => {
-  console.info("panel ready", el);
+gDom.loadDynamicComponent("my-panel", () => {
+  console.info("panel ready");
+});
+```
+
+### addWidgetToBody
+
+```ts
+addWidgetToBody(id: string, callback?: () => void): void
+```
+
+Same fetch-and-swap mechanism as `loadDynamicComponent`, targeting a lazy widget's placeholder instead of a `Dynamic` block. Called automatically by the client runtime on page load, once per id in the `w-m` registry, chained sequentially.
+
+```ts
+gDom.addWidgetToBody("HelloMessage", () => {
+  console.info("widget ready");
 });
 ```
 
 ---
 
-## DOM Utilities
+## w-m Registry
 
-### geById
-
-```ts
-geById: typeof document.getElementById
+```html
+<script type="application/json" id="w-m">["HelloMessage"]</script>
 ```
 
-Shorthand for `document.getElementById`, bound to `document`.
-
-### onVisible
-
-```ts
-onVisible(el: Element, cb: Function, opts?: object): void
-```
-
-`IntersectionObserver` wrapper. Calls `cb` when `el` enters the viewport.
-
-### debounce
-
-```ts
-debounce(fn: Function, delay: number): Function
-```
-
-Returns a debounced version of `fn` that fires at most once per `delay` milliseconds.
-
-### stall
-
-```ts
-stall(ms: number): Promise<void>
-```
-
-Returns a `Promise` that resolves after `ms` milliseconds.
+A plain JSON array of lazy widget ids, read once on startup. Not a `gDom` method, but the data every fresh page load feeds into `addWidgetToBody`.
 
 ---
 
-## Cookie Utilities
+## Not Part of gDom
 
-### setCookie
+The following do **not** exist on `gDom` — if you're looking for them, they're either not needed or handled differently:
 
-```ts
-setCookie(name: string, value: string, days: number): void
-```
-
-Sets a browser cookie with the given name, value, and expiry in days.
-
-### getCookie
-
-```ts
-getCookie(name: string): string | null
-```
-
-Returns the value of a browser cookie, or `null` if not found.
-
----
-
-## Available After loadPackage
-
-These properties become available on `gDom` after calling `loadPackage` with the corresponding file:
-
-| Property | Available after |
+| Not real | What to use instead |
 | --- | --- |
-| `gDom.Motion` | `loadPackage("js/motion.js")` |
-| `gDom.Lenis` | `loadPackage("js/lenis.min.js")` |
-
-The library must assign itself to `window` for it to appear on `gDom`.
+| `onVisible` | Use a plain `IntersectionObserver` inside your `Script` body |
+| `debounce` | Write your own inline, or load one via `loadPackage` |
+| `geById` | `document.getElementById` |
+| `stall` | `new Promise(r => setTimeout(r, ms))` |
+| `setCookie` / `getCookie` | Standard `document.cookie` handling |
+| `ftr` / first-time-render flag | Not tracked by the runtime |
+| `loadAsset`, `assetLoader`, Web Worker asset pipeline | `loadPackage` / `addResourceToBody` — there is no worker |

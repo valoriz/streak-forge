@@ -5,7 +5,7 @@ description: "Serving static files from the public/ directory."
 
 # Public Assets
 
-The `public/assets/` directory is where JS and CSS files are placed for runtime loading via `gDom.loadPackage()`. The asset worker fetches files from this directory at the `/assets/` URL path.
+The `public/assets/` directory is where JS and CSS files are placed for runtime loading via `gDom.loadPackage()`. `loadPackage` fetches files from this directory at the `/assets/` URL path by inserting a real `<script src>` or `<link rel="stylesheet">` tag into the page.
 
 ---
 
@@ -27,7 +27,7 @@ public/
 
 ## Path Convention
 
-The asset worker always prepends `/assets/` to the path passed to `loadPackage`. A file at `public/assets/js/motion.js` is fetched as `/assets/js/motion.js`:
+`loadPackage` always prepends `/assets/` to the path you pass it. A file at `public/assets/js/motion.js` is fetched as `/assets/js/motion.js`:
 
 ```ts
 gDom.loadPackage("js/motion.js")
@@ -58,4 +58,4 @@ Place any JS or CSS library that should be loaded on demand at runtime:
 
 In dev mode (`streak-forge dev`) the `public/` directory is served as static files. The `/assets/` path maps directly to `public/assets/`.
 
-In production, the static host or CDN must serve `public/assets/` at the `/assets/` path. The asset worker will fail to load packages if this path mapping is not preserved.
+In production, the static host or CDN must serve `public/assets/` at the `/assets/` path. `loadPackage` calls will fail to load packages if this path mapping is not preserved.

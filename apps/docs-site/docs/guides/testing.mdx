@@ -40,7 +40,17 @@ bun test src/handlers/HomeDataHandler.test.ts
 
 ## Testing Data Handlers
 
-Data handlers are async functions that return plain objects. Import the handler, call it, and assert the shape of the return value.
+Data handlers are async functions with the signature `(metadata, { common }) => {...}` that return plain objects. Import the handler, call it, and assert the shape of the return value.
+
+```ts
+// src/handlers/HomeDataHandler.ts
+export default async function getHomeData(metadata, { common }) {
+  return {
+    status: 200,
+    HelloBanner: { heading: "Hello World" },
+  };
+}
+```
 
 ```ts
 // src/handlers/HomeDataHandler.test.ts
@@ -51,6 +61,8 @@ describe("HomeDataHandler", () => {
   let data: Record<string, any>;
 
   beforeAll(async () => {
+    // Called with no arguments here since this test doesn't need metadata
+    // or a common handler result — real calls receive (metadata, { common }).
     data = await getHomeData();
   });
 

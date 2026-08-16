@@ -1,6 +1,7 @@
 ---
 title: Widgets
 description: "Building stateless React components that render page sections at build time."
+order: 7
 ---
 
 # Widgets
@@ -78,7 +79,7 @@ Always use `?.` when accessing `props.data` fields because `data` is `undefined`
 Widgets can include a `Script` component for browser-side JavaScript. The function body is serialized to a string at build time and executed as an IIFE in the browser:
 
 ```tsx
-import { Script } from "streak/components";
+import { Script } from "streak-forge/components";
 
 const HelloBanner = (props: HelloBannerProps) => {
   return (

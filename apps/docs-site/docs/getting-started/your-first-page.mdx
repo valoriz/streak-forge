@@ -1,11 +1,11 @@
 ---
 title: Your First Page
-description: "Complete walkthrough from sitemap entry to generated HTML output."
+description: "Complete walkthrough from sitemap entry to a rendered page."
 ---
 
 # Your First Page
 
-This walkthrough shows the complete path from a sitemap entry to a generated HTML file.
+This walkthrough shows the complete path from a sitemap entry to Streak rendering a page — both live in the dev server and in a full build.
 
 ---
 
@@ -30,7 +30,7 @@ This walkthrough shows the complete path from a sitemap entry to a generated HTM
 ]
 ```
 
-The `renderId` is globally unique and becomes the output folder name: `out/homeRenderId/index.html`.
+`renderId` must be globally unique across the sitemap. The `url` and `version` fields determine where a full build writes this page's output: `out/1.0.0/raw-content.json`.
 
 ---
 
@@ -39,7 +39,10 @@ The `renderId` is globally unique and becomes the output folder name: `out/homeR
 `src/handlers/HomeDataHandler.ts`
 
 ```ts
-const getHomeData = async () => {
+const getHomeData = async (
+  metadata?: Record<string, unknown>,
+  { common }: { common?: Record<string, unknown> } = {},
+) => {
   return {
     status: 200,
     PageHead: {
@@ -58,6 +61,7 @@ export default getHomeData;
 - Must return `{ status: 200, ...widgetData }`
 - Each key must match a widget `id` in the sitemap
 - The value is passed to the matching widget as `props.data`
+- Streak calls the handler as `(metadata, { common })` — the sitemap's `metadata` field, and (if `CommonHandler.ts` exists) its return value. Both are optional in practice; a handler with no parameters still works
 
 ---
 
@@ -66,10 +70,10 @@ export default getHomeData;
 `src/layouts/MainLayout.tsx`
 
 ```tsx
-import { WidgetPlaceholder } from "streak/components";
+import { WidgetPlaceholder } from "streak-forge/components";
 
 const MainLayout = () => {
-  console.info("Rendering Main Layout"); // runs at build time on the server
+  console.info("Rendering Main Layout"); // runs on the server, never in the browser
   return (
     <html dir="ltr" lang="en">
       <head>
@@ -85,7 +89,7 @@ const MainLayout = () => {
 export default MainLayout;
 ```
 
-Every widget in `widgets[]` needs a matching `WidgetPlaceholder`. Both `id` and `type` must match the sitemap entry exactly. The `console.info` call runs at build time, not in the browser.
+Every widget in `widgets[]` needs a matching `WidgetPlaceholder`. Both `id` and `type` must match the sitemap entry exactly.
 
 ---
 
@@ -118,39 +122,47 @@ export default HelloBanner;
 
 ---
 
-## Step 5 — Build
+## Step 5 — Render It
+
+While developing, just run the dev server — no separate build step is needed:
 
 ```bash
-bun run build
+bun run dev
 ```
 
-This runs `streak-forge pre-build`, which processes the sitemap through 7 stages and writes:
-
-```
-out/homeRenderId/index.html
-```
+Open `http://localhost:3690/` (or whatever `url` you used). `streak-forge dev` renders that page fresh for the request: `Middleware.ts` (if present) resolves which render config to use, then `CommonHandler.ts` (if present) supplies shared data, then your data handler runs, then the layout, then each widget — and the resulting HTML is returned.
 
 ---
 
-## What the Output Contains
+## Step 6 — Build
 
-The generated HTML file contains:
+To render every page in the sitemap and write it to disk — for example, before publishing — run:
 
-- The fully rendered layout with all widget HTML injected in place of `WidgetPlaceholder` elements
-- A hidden `<script id="w-m">` element with JSON metadata listing every widget's id and asset path
-- The `app.js` IIFE — the client-side coordinator
-- Inline `<script>` tags for any `Script` components used in widgets
+```bash
+bunx streak-forge build
+```
 
-The page is complete static HTML. No framework runtime is included.
+This writes:
+
+```
+out/1.0.0/raw-content.json
+```
+
+`raw-content.json` is a JSON snapshot of the render: the page's `renderId`, `metadata`, `dataHandler`, `rootLayout`, `version`, and each widget's rendered HTML and collected styles. It's an intermediate build artifact, not a finished HTML page.
+
+> Optionally, run `bunx streak-forge pre-build` first to bundle your handlers, widgets, and layouts into `.prebuild/` — later builds then skip re-transpiling that source.
+
+Publishing this output to a live site is handled by Nexus — see the Nexus documentation for publishing/hosting details.
 
 ---
 
-## What Happens in the Browser
+## What Happens on Each Render
 
-When the page loads, `app.js`:
+For every page — whether serving a live `dev` request or writing it out during a `build` — Streak follows the same sequence:
 
-1. Records the page load time
-2. Reads widget metadata from `<script id="w-m">`
-3. Checks the `__vi` session cookie to determine `window.ftr` (first-time render)
-4. Loads widget assets sequentially, chaining callbacks
-5. Makes `gDom` helpers available on `window` for Script functions to use
+1. `Middleware.ts` (if present) runs first and may override which render config is used for the URL.
+2. `CommonHandler.ts` (if present) supplies data shared across every page.
+3. The page's own data handler runs as `(metadata, { common }) => {...}`.
+4. The layout renders, with a `WidgetPlaceholder` for each widget.
+5. Each widget renders with its slice of the handler's data as `props.data`.
+6. Styles are collected.

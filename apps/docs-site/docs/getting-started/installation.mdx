@@ -5,47 +5,94 @@ description: "How to install Streak.js and set up your development environment."
 
 # Installation
 
-Streak.js projects use the `streak-forge` CLI for development and builds. The project is configured via `streak.sitemap.json` and standard `package.json` scripts.
+Streak.js projects use the `streak-forge` CLI for development and builds.
+
+```bash
+bun add streak-forge
+```
+
+The project is configured via `streak.sitemap.json` and standard `package.json` scripts.
 
 ---
 
 ## CLI Commands
 
-There are two primary CLI commands:
+`streak-forge` has three commands: `dev`, `pre-build`, and `build`.
 
 ### streak-forge dev
 
-Starts the development server with hot-reload. Pages are rendered on request.
+Starts a live development server.
 
 ```bash
 streak-forge dev
 ```
 
+- Starts on **port 3690** by default (override with the `PORT` environment variable).
+- Loads `streak.sitemap.json` once at startup.
+- Renders each page fresh on every request — nothing is written to disk.
+- On every request, `Middleware.ts` (if present) runs first and may override which render config is used for that URL; otherwise the sitemap's own entry for the URL is used, or a 404 if there isn't one.
+- Serves files under `public/` directly (e.g. `public/images/logo.svg` → `/images/logo.svg`).
+- Watches your source files and automatically reloads the browser when they change, over a live SSE connection. `<Script>` closure-leak warnings are pushed over the same connection as a dismissible in-page banner.
+
+```
+streak v2: loaded 3 page(s) from streak.sitemap.json
+streak v2 dev server running at http://localhost:3690
+```
+
 ### streak-forge pre-build
 
-Used internally by the Nexus build pipeline. Reads the sitemap, renders all pages, and writes static HTML to `out/`. You do not need to run this command directly — Nexus runs it as part of the publish flow.
+Bundles `src/handlers`, `src/widgets`, and `src/layouts` into a `.prebuild/` cache directory.
+
+```bash
+streak-forge pre-build
+```
+
+- This is an optional optimization step — it does not produce the final site on its own.
+- It bundles every handler, widget, and layout into standalone JS under `.prebuild/`, so a later `streak-forge build` run (with `READ_FROM_PREBUILD=1`) loads already-bundled modules instead of re-parsing and re-transpiling TypeScript on every import.
+- Also copies `streak.sitemap.json`, `public/`, and `package.json` into `.prebuild/`.
+
+### streak-forge build
+
+Renders every page declared in the sitemap and writes its output to disk.
+
+```bash
+streak-forge build
+```
+
+- Reads `streak.sitemap.json`.
+- Resolves `CommonHandler.ts` (if present) once, shared across every page in the run.
+- Renders each page — running `Middleware.ts` (if present), then the page's own data handler, then the layout, then its widgets.
+- Writes `out/<url>/<version>/raw-content.json` for every page — an intermediate JSON snapshot of the render, not a final `index.html`.
+
+Publishing this output to a live site is handled by Nexus — see the Nexus documentation for publishing/hosting details.
 
 ---
 
 ## package.json Scripts
 
-A typical Streak project uses the following scripts:
+A typical Streak project uses scripts like these:
 
 ```json
 "scripts": {
   "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
   "dev:streak": "streak-forge dev",
+  "css-dev":    "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css --watch",
   "build":      "bun run css-build && streak-forge pre-build",
-  "css-build":  "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css"
+  "css-build":  "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css",
+  "start":      "python3 -m http.server 8000 --directory out"
 }
 ```
 
-| Script       | What it does                                                             |
-| ------------ | ------------------------------------------------------------------------ |
-| `dev`        | Runs CSS watch and `streak-forge dev` concurrently                       |
-| `dev:streak` | Runs the Streak dev server directly                                      |
-| `build`      | Compiles Tailwind CSS then runs `streak-forge pre-build` (used by Nexus) |
-| `css-build`  | Compiles Tailwind CSS to `public/styles/tailwind.css`                    |
+| Script | What it does |
+| --- | --- |
+| `dev` | Runs the Tailwind watcher and `streak-forge dev` concurrently |
+| `dev:streak` | Runs the Streak dev server directly |
+| `css-dev` | Watches and recompiles Tailwind CSS on change |
+| `build` | Compiles Tailwind CSS, then runs `streak-forge pre-build` |
+| `css-build` | Compiles Tailwind CSS to `public/styles/tailwind.css` |
+| `start` | Serves the `out/` directory locally for inspecting build output |
+
+> **Note:** the `build` script above only runs the optional `pre-build` bundling step — it does not render pages. To produce the `out/<url>/<version>/raw-content.json` snapshots described in [CLI Commands](#cli-commands), run `streak-forge build` directly (for example, as a separate script or a CI step).
 
 ---
 
@@ -55,15 +102,15 @@ A typical Streak project uses the following scripts:
 bun run dev
 ```
 
-The dev server renders pages on demand and reloads on file changes.
+The dev server renders pages on demand and reloads the browser on file changes.
 
 ---
 
 ## Building and Deploying
 
-Production builds are handled by **Nexus**. When you publish your site, Nexus runs the build pipeline and deploys the output based on your site configuration. You do not need to run `bun run build` locally for production.
+Run `streak-forge build` to render every page in `streak.sitemap.json` and write `out/<url>/<version>/raw-content.json` for each one.
 
-> For publishing and deployment steps, refer to the [Nexus documentation](https://nexusoneonline.com/).
+Publishing this output to a live site is handled by Nexus — see the Nexus documentation for publishing/hosting details.
 
 ---
 

@@ -1,106 +1,75 @@
 ---
 title: App Runtime
-description: "How app.js coordinates lazy loading, dynamic components, and package loading."
+description: "How Streak's client runtime registers gDom and loads lazy widgets."
 ---
 
 # App Runtime
 
-`app.js` is a tiny script injected into every generated page. It is the entire client-side runtime of Streak.js. It runs as an IIFE immediately on page load.
+Streak's client runtime is a tiny inline `<script>` injected at the end of every generated page's `<body>`, right after the `w-m` registry element. It runs immediately as the page parses — no bundler, no separate runtime file, no Web Worker. Its entire job is to register the four `gDom` helpers on `window` and then load any lazy widgets in order.
 
 ---
 
-## IIFE Structure
+## What Gets Injected
 
-```js
-((window, config) => {
-  const { lo, ve, ftrKey, size, wm, tat, dls, sc, wp } = config;
-  // lo     = "__wlt__"        window load time key
-  // ve     = "__vi"           visited cookie name
-  // ftrKey = "ftr"            first-time render flag key
-  // wm   = "w-m"              widget metadata element id
-  // dls  = "__static__"       default loading strategy
-  // sc   = "secondary-css.css"
-  // wp   = "w"                widget path prefix
-  // tat  = 1800               cookie TTL (seconds)
-  // size = 1621               reference size for perf calculation
-})(window, { ... })
+Two elements are appended just before `</body>`:
+
+```html
+<script type="application/json" id="w-m">["HelloMessage"]</script>
+<script>(function (window, opts) { /* ...runtime body, see below... */ })(window, {
+  endpoint: "/__streak/content",
+  widgetMetaId: "w-m"
+});</script>
 ```
 
+The runtime function is written as a normal, readable function and stringified into the page — the same technique the `Script` component uses for widget-authored scripts.
+
 ---
 
-## Window Functions Injected by app.js
-
-`app.js` injects the following utilities onto `window`. They are all accessible as `gDom.*` inside `Script` children functions.
+## What the Runtime Registers on window
 
 | Function | Signature | Description |
 | --- | --- | --- |
-| `onVisible` | `(el, cb, opts?)` | `IntersectionObserver` wrapper — calls `cb` when `el` enters viewport |
-| `debounce` | `(fn, delay)` | Returns a debounced version of `fn` |
-| `geById` | `(id)` | `document.getElementById` bound shorthand |
-| `stall` | `(ms)` | Returns a `Promise` that resolves after `ms` milliseconds |
-| `setCookie` | `(name, val, days)` | Sets a browser cookie |
-| `getCookie` | `(name)` | Gets a browser cookie value |
-| `loadPackage` | `(name)` | Async JS/CSS loader via the asset worker |
-| `loadAsset` | `(name, cb)` | Raw asset loader |
-| `addWidgetToBody` | `(id, cb, type)` | Widget injector |
-| `addResourceToBody` | `(url, opts, cb)` | Script/link injector |
-| `loadDynamicComponent` | `(id, cb)` | Re-injects `Dynamic` content into its placeholder |
+| `addResourceToBody` | `(src, options?, callback?)` | Appends a real `<script src>`/`<link rel=stylesheet>` tag to `document.body`; caches by `src` so repeat calls don't re-fetch |
+| `loadPackage` | `(name)` | `addResourceToBody(`/assets/${name}`, { async: true })` — loads a file from `public/assets/` |
+| `loadDynamicComponent` | `(id, callback?)` | Fetches a `Dynamic` block's content and injects it into its placeholder |
+| `addWidgetToBody` | `(id, callback?)` | Fetches a lazy widget's content and injects it into its placeholder |
+
+These are exactly the four methods documented in the [gDom API](/runtime/gdom-api) — `gDom` inside a `Script` function is literally `window` after this runtime has run.
 
 ---
 
 ## Startup Sequence
 
-**1. Record load time**
+**1. Register the four helper functions on `window`**
 
-`window["__wlt__"]` is set to `Date.now()` at the earliest possible moment to track page load timing.
+`addResourceToBody`, `loadPackage`, `loadDynamicComponent`, and `addWidgetToBody` are all assigned directly onto the `window` object passed in.
 
-**2. Inject utility functions**
+**2. Read the `w-m` widget registry**
 
-All helpers listed above are added to `window`.
+The runtime looks up the `<script id="w-m">` element by id and `JSON.parse`s its text content into an array of widget ids. If the element isn't present, it treats the list as empty.
 
-**3. Determine `window.ftr` (first-time render)**
+```ts
+const metaEl = window.document.getElementById("w-m");
+const lazyWidgetIds = metaEl ? JSON.parse(metaEl.textContent || "[]") : [];
+```
 
-- Checks for the `__vi` cookie
-- If no cookie: `ftr = true`, sets the `__vi` cookie for 30 minutes
-- Calculates a performance bucket from load time vs a reference size
-- `window.ftr === true` means this is the user's first page load in the current session
+**3. Load lazy widgets sequentially**
 
-**4. Read widget metadata**
+The runtime walks the id list one at a time, calling `addWidgetToBody(id, callback)` for the first id and only moving to the next once that widget's fetch-and-inject has completed:
 
-Reads the hidden `<script id="w-m">` element embedded in the HTML, which contains a JSON object listing every widget's id and versioned asset path.
+```ts
+const loadNext = (ids) => {
+  const [first, ...rest] = ids;
+  if (!first) return;
+  window.addWidgetToBody(first, () => loadNext(rest));
+};
+loadNext(lazyWidgetIds);
+```
 
-**5. Load widgets sequentially**
-
-Calls `addWidgetToBody` for each widget in order, chaining callbacks so each widget loads after the previous one completes.
-
-**6. Load secondary CSS**
-
-If the `w-m` metadata contains a `secondary-css` entry, loads that CSS asset.
-
-**7. Load layout scripts**
-
-If the `w-m` metadata contains `layout-scripts: true`, loads the layout-level scripts.
+That's the whole startup sequence. There's no timing/session bookkeeping, no cookies, and nothing runs on a separate thread — widgets without `loadingStrategy: "lazy"` are never touched by this runtime at all, because their HTML and `<script>` tags are already inline in the page by the time it runs.
 
 ---
 
-## window.ftr — First Time Render
+## Fetching Content
 
-```js
-const elapsed = now - window["__wlt__"];
-const bucket  = [12,20,40,80,140,200,490,800]
-                  .findIndex(t => t > elapsed);
-const ftr     = !window.getCookie("__vi");
-
-window["ftr"] = ftr;
-if (ftr) window.setCookie("__vi", "1");
-```
-
-`window.ftr` is used by widgets to decide whether to delay animations. On first load (`ftr === true`), expensive visual work can be deferred:
-
-```ts
-if (gDom.ftr) {
-  setTimeout(triggerScrollFadeLoad, 2000);
-} else {
-  triggerScrollFadeLoad();
-}
-```
+`loadDynamicComponent` and `addWidgetToBody` both fetch from the same content endpoint (`/__streak/content`), passing the current page path, a resource type (`c` for `Dynamic`, `w` for widgets), and the id as query parameters. The response is JSON: `{ html: string, scripts?: { id: string; content: string }[] }`. The runtime swaps `html` into the matching placeholder element (`[component-id][component-type]`) via `outerHTML`, then appends any `scripts` to the document, skipping anything already injected.

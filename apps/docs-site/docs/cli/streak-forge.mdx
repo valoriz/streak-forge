@@ -5,7 +5,7 @@ description: "The streak-forge CLI for development and production builds."
 
 # streak-forge
 
-`streak-forge` is the Streak.js CLI. It has two commands: `dev` for local development and `pre-build` for generating the static site.
+`streak-forge` is the Streak.js CLI. It has four commands: `dev` for local development, `validate` to check for `<Script>` closure leaks, `build` for producing your site's build output, and `pre-build` — an optional step that speeds up subsequent builds.
 
 ---
 
@@ -13,28 +13,99 @@ description: "The streak-forge CLI for development and production builds."
 
 ### streak-forge dev
 
-Starts a development server with hot-reload. Pages are rendered on request rather than written to disk.
+Starts a local development server with hot reload. Pages are rendered on request rather than written to disk.
 
 ```bash
 streak-forge dev
 ```
 
-- Renders each page when it is requested
-- Watches source files and reloads on changes
-- Runs dev-specific versions of pipeline stages 5–7 (no disk output)
-- Does not write to `out/`
+- Renders each page when it is requested — no `out/` output
+- Runs `Middleware.ts` (if present), then `CommonHandler.ts` (if present), then the page's own data handler, layout, and widgets, same as `build`
+- Watches your source files (`.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.html`, `.css`) and reloads the browser automatically over an SSE connection when something changes
+- Surfaces `<Script>` closure leaks (variables captured from outer scope that won't survive serialization to the browser) as a dismissible in-page warning banner as soon as you save the file
+
+By default the server listens on port `3690`:
+
+```bash
+streak-forge dev
+# streak v2 dev server running at http://localhost:3690
+```
+
+Override the port with the `PORT` environment variable:
+
+```bash
+PORT=4000 streak-forge dev
+```
+
+> **Note:** Set `STREAK_HMR=false` to disable the hot-reload script injection and SSE connection entirely (the file watcher still runs, but the browser won't auto-refresh).
+
+### streak-forge validate
+
+Scans your project for `<Script>` closure leaks — variables referenced inside a `Script` function that were captured from outer scope instead of passed through `options`, which silently break once the function is serialized to run in the browser.
+
+```bash
+streak-forge validate
+```
+
+- Exits `0` and prints `streak validate: no <Script> closure leaks found.` if none are found
+- Exits `1` and prints each leak's location if any are found — useful as a CI check before `build`
+
+This is the same check that powers the dismissible warning banner shown automatically while running `streak-forge dev`.
 
 ### streak-forge pre-build
 
-Reads `streak.sitemap.json`, processes every page through all 7 pipeline stages, and writes static HTML to `out/`.
+An optional optimization step. Bundles everything in `src/handlers`, `src/widgets`, and `src/layouts` into standalone JS under a `.prebuild/` cache directory, so a later `build` run doesn't have to re-parse and re-transpile TypeScript for every page.
 
 ```bash
 streak-forge pre-build
 ```
 
-- Runs all 7 pipeline stages for every sitemap entry
-- Writes `out/<renderId>/index.html` for each entry
-- `renderId` must be unique across all entries
+- Cleans and recreates the pre-build directory (`.prebuild/` by default)
+- Bundles every widget, handler, and layout with the same `<Script>` transform used everywhere else, so closure-leak handling is identical
+- Copies `public/`, your `streak.sitemap.json` file(s), and `package.json` into the pre-build directory alongside the bundled output
+
+Running `pre-build` on its own has no effect on `build` unless you also set `READ_FROM_PREBUILD=1`:
+
+```bash
+streak-forge pre-build
+READ_FROM_PREBUILD=1 streak-forge build
+```
+
+Without `READ_FROM_PREBUILD=1`, `build` ignores the `.prebuild/` cache and loads your source files directly — `pre-build` is safe to skip entirely for smaller sites.
+
+### streak-forge build
+
+Reads `streak.sitemap.json`, renders every page it lists, and writes each page's rendered output to disk.
+
+```bash
+streak-forge build
+```
+
+- Resolves `CommonHandler.ts` (if present) once, up front, and shares the result across every page's data handler as `{ common }`
+- For each sitemap entry, runs `Middleware.ts` → the page's data handler → layout → widgets → styles, and writes the result to:
+
+  ```
+  out/<url>/<version>/raw-content.json
+  ```
+
+- Continues past any single page that fails to render, logs the error, and exits with a non-zero status code if one or more pages failed
+
+`raw-content.json` is an intermediate snapshot of the rendered page (layout HTML, widget HTML, collected styles, handler data) — not final HTML. Publishing this output live is handled by Nexus — see the Nexus documentation for publishing/hosting details.
+
+---
+
+## Environment Variables
+
+| Variable | Applies to | Default | Description |
+| --- | --- | --- | --- |
+| `PORT` | `dev` | `3690` | Port the dev server listens on |
+| `STREAK_HMR` | `dev` | `true` | Set to `false` to disable hot-reload injection |
+| `STREAK_DEBUG` | `build` | `false` | Set to `true` for verbose per-page build logging |
+| `PREBUILD_DIR` | `pre-build`, `build` | `.prebuild` | Where `pre-build` writes its cache |
+| `READ_FROM_PREBUILD` | `build` | `false` (unset) | Set to `1` to make `build` load modules from `.prebuild/` instead of source |
+| `STATIC_BUILD_DIR` | `build` | `out` | Output directory for `build` |
+
+All of these can also be set in a `.env` file at your project root — it's loaded automatically.
 
 ---
 
@@ -42,13 +113,14 @@ streak-forge pre-build
 
 ```
 out/
-  homeRenderId/
-    index.html
-  aboutRenderId/
-    index.html
+  v1/
+    raw-content.json      ← the "/" page
+  about/
+    v1/
+      raw-content.json    ← the "/about" page
 ```
 
-Each directory name is the `renderId` from the sitemap entry.
+Each page gets a subdirectory named after its sitemap `url` (the root `/` page writes directly under `out/`), containing one subdirectory per `version` with `raw-content.json` inside.
 
 ---
 
@@ -58,8 +130,8 @@ Each directory name is the `renderId` from the sitemap entry.
 "scripts": {
   "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
   "dev:streak": "streak-forge dev",
-  "build":      "bun run css-build && streak-forge pre-build",
-  "start":      "python3 -m http.server 8000 --directory out"
+  "pre-build":  "streak-forge pre-build",
+  "build":      "bun run css-build && streak-forge build"
 }
 ```
 
@@ -75,8 +147,4 @@ Run build:
 bun run build
 ```
 
-Preview the built output locally:
-
-```bash
-bun run start
-```
+`pre-build` is optional — wire it into your build script (with `READ_FROM_PREBUILD=1`) once your site is large enough that build times matter. Use the dev server (`bun run dev`) to preview pages locally — `build`'s `out/` directory holds intermediate JSON, not browsable HTML, so it isn't meant to be served directly.

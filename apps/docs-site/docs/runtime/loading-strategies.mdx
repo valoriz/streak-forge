@@ -22,9 +22,9 @@ When a widget has no `loadingStrategy` field in the sitemap, both its HTML and J
 ```
 
 **Behavior:**
-- HTML is rendered at build time and included in the initial HTML payload.
-- JS (Script components) executes immediately when the browser parses the page.
-- `app.js` processes this widget first, before any lazy widgets.
+- HTML is rendered at build time and inlined directly into the page.
+- Its `Script` tags are inlined too, and execute immediately as the browser parses the page.
+- The client runtime never has to fetch this widget at all — it's not listed in the page's `w-m` registry.
 
 **Best for:** above-the-fold content, hero sections, navigation, anything the user sees immediately.
 
@@ -32,7 +32,7 @@ When a widget has no `loadingStrategy` field in the sitemap, both its HTML and J
 
 ## Lazy (`loadingStrategy: "lazy"`)
 
-The widget's HTML is still in the initial payload, but `app.js` defers loading its JS assets until after the page is interactive.
+The widget's HTML and JS are rendered at build time but held out of the initial payload. A small placeholder ships instead, and Streak's client runtime fetches and swaps in the real content right after page load.
 
 ```json
 {
@@ -43,11 +43,11 @@ The widget's HTML is still in the initial payload, but `app.js` defers loading i
 ```
 
 **Behavior:**
-- HTML is rendered at build time and present in the initial HTML.
-- JS assets are queued and loaded after all default (eager) widgets finish.
-- The user sees the widget's HTML immediately, but interactivity arrives later.
+- HTML is rendered at build/render time but stored separately, not inlined into the page.
+- A placeholder element (`component-type="w"`) ships in its place, and the widget's id is added to the page's `w-m` registry.
+- On page load, the client runtime calls `gDom.addWidgetToBody(id)` for each lazy widget id in `w-m`, in order — fetching and injecting one widget's HTML/scripts before moving to the next.
 
-**Best for:** below-the-fold sections that need HTML for SEO or first paint, but whose JS can wait.
+**Best for:** below-the-fold sections that don't need to be part of the very first paint.
 
 ---
 
@@ -56,7 +56,7 @@ The widget's HTML is still in the initial payload, but `app.js` defers loading i
 Content is removed from the initial HTML entirely. A placeholder element is rendered instead, and the content is injected on demand via `gDom.loadDynamicComponent()`.
 
 ```tsx
-import { Dynamic, Script } from "streak/components";
+import { Dynamic, Script } from "streak-forge/components";
 
 <Dynamic id="nav-submenu">
   <ul>
@@ -78,8 +78,8 @@ import { Dynamic, Script } from "streak/components";
 ```
 
 **Behavior:**
-- At build time, children are stripped from the HTML. A placeholder with `component-type="__dynamicWidgetType__"` is emitted.
-- At runtime, calling `gDom.loadDynamicComponent(id, callback)` injects the content into the placeholder.
+- At build time, children are stripped from the HTML. A placeholder with `component-type="c"` is emitted.
+- At runtime, calling `gDom.loadDynamicComponent(id, callback)` fetches and injects the content into the placeholder.
 - Nothing loads until your code explicitly triggers it.
 
 **Best for:** modals, menus, overlays, or any content that should not be in the initial HTML payload.
@@ -90,8 +90,8 @@ import { Dynamic, Script } from "streak/components";
 
 | | HTML in initial payload | JS loaded | Triggered by |
 | --- | --- | --- | --- |
-| **Default** (no `loadingStrategy`) | Yes | Immediately on page load | Automatic |
-| **Lazy** (`loadingStrategy: "lazy"`) | Yes | After page is interactive | Automatic (deferred) |
+| **Default** (no `loadingStrategy`) | Yes | Immediately, inline with the page | Automatic |
+| **Lazy** (`loadingStrategy: "lazy"`) | No — placeholder only | Fetched and injected after page load | Automatic (`w-m` registry) |
 | **Dynamic** (`<Dynamic>` component) | No | On demand | `gDom.loadDynamicComponent()` |
 
 ---
@@ -103,7 +103,7 @@ import { Dynamic, Script } from "streak/components";
 | Hero banner, primary navigation, LCP content | **Default** |
 | Footer, testimonials section, analytics scripts | **Lazy** |
 | Modal dialogs, dropdown menus, accordion panels | **Dynamic** |
-| Content that must be in the HTML for SEO | **Default** or **Lazy** |
-| Content that hurts initial page weight | **Dynamic** |
+| Content that must be in the initial HTML for SEO | **Default** |
+| Content that can arrive just after load, or only on interaction | **Lazy** or **Dynamic** |
 
 A single page can mix all three strategies. Use default for critical above-the-fold widgets, lazy for visible-but-non-urgent sections, and dynamic for content that only appears on interaction.

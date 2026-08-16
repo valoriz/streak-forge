@@ -5,7 +5,7 @@ description: "The Preload component for hinting the browser to fetch resources e
 
 # Preload
 
-`Preload` is a component from `streak/components` that renders a `<link rel="preload">` tag. It tells the browser to begin fetching a resource immediately when the HTML is parsed, before the parser discovers it deeper in the document.
+`Preload` is a component from `streak-forge/components` that renders a `<link rel="preload">` tag. It tells the browser to begin fetching a resource immediately when the HTML is parsed, before the parser discovers it deeper in the document.
 
 Use it inside a widget that renders in `<head>`.
 
@@ -14,7 +14,7 @@ Use it inside a widget that renders in `<head>`.
 ## Import
 
 ```tsx
-import { Preload } from "streak/components";
+import { Preload } from "streak-forge/components";
 ```
 
 ---
@@ -22,11 +22,11 @@ import { Preload } from "streak/components";
 ## Example
 
 ```tsx
-import { Preload } from "streak/components";
+import { Preload } from "streak-forge/components";
 
 // In a widget that renders inside <head>:
 <Preload href="/images/hero.jpg" as="image" media="(min-width: 768px)" />
-<Preload href="/styles/tailwind.css" as="style" media="" />
+<Preload href="/styles/tailwind.css" as="style" />
 ```
 
 ---
@@ -35,7 +35,7 @@ import { Preload } from "streak/components";
 
 ```html
 <link rel="preload" href="/images/hero.jpg" as="image" media="(min-width: 768px)">
-<link rel="preload" href="/styles/tailwind.css" as="style" media="">
+<link rel="preload" href="/styles/tailwind.css" as="style">
 ```
 
 ---
@@ -44,9 +44,11 @@ import { Preload } from "streak/components";
 
 | Prop | Values | Description |
 | --- | --- | --- |
-| `href` | URL string | URL of the resource to preload |
-| `as` | `"image"` · `"font"` · `"style"` · `"script"` · `"video"` | Resource type hint for the browser |
-| `media` | CSS media query string · `""` for unconditional | Restricts preload to matching media conditions |
+| `href` | URL string | Required. URL of the resource to preload |
+| `as` | `"image"` · `"font"` · `"style"` · `"script"` · `"video"` (any string is accepted) | Required. Resource type hint for the browser |
+| `...rest` | Any attribute | Any other prop passed to `Preload` (e.g. `media`, `crossorigin`, `type`) is spread onto the rendered `<link>` tag as-is |
+
+`href` and `as` are the only props read explicitly by `Preload` — every other prop you pass is forwarded straight through to the rendered `<link>` element, so any valid `<link rel="preload">` attribute works.
 
 ---
 

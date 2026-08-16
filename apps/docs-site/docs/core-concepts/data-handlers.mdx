@@ -1,6 +1,7 @@
 ---
 title: Data Handlers
-description: "How async data handlers fetch and prepare page data at build time."
+description: "How async data handlers fetch and prepare page data for a page render."
+order: 5
 ---
 
 # Data Handlers
@@ -23,7 +24,7 @@ The filename (without extension) must match the `dataHandler` field in the sitem
 
 ```ts
 // src/handlers/HomeDataHandler.ts
-const getHomeData = async () => {
+const getHomeData = async (metadata?: Record<string, unknown>, { common }: { common?: any } = {}) => {
   return {
     status: 200, // required — signals render success
     PageHead: {
@@ -31,13 +32,26 @@ const getHomeData = async () => {
       title: "Hello",
     },
     HelloBanner: {
-      heading: "Hello World",
+      heading: common?.branding?.tagline ?? "Hello World",
     },
   };
 };
 
 export default getHomeData;
 ```
+
+---
+
+## Signature: `(metadata, { common })`
+
+A data handler is always called with two arguments:
+
+| Argument | Type | Where it comes from |
+| --- | --- | --- |
+| `metadata` | `object` | The resolved `RenderConfig`'s own `metadata` field — the same object declared in the sitemap entry (or returned by `Middleware.ts`) for this page. |
+| `{ common }` | `object` | `common` is whatever `CommonHandler.ts` returned, made available to every page's data handler. `undefined` if the app has no `CommonHandler.ts`. |
+
+`common` is intended for data shared across many pages — branding, navigation, site settings — so it doesn't have to be fetched again by every page's own handler. See [Common Handler](/core-concepts/common-handler.html) for what it is and how it's produced.
 
 ---
 
@@ -48,7 +62,7 @@ export default getHomeData;
 - Each top-level key (other than `status`) must match a widget `id` in the sitemap
 - The value under each key is passed to the matching widget as `props.data`
 - It is async — you can `await` any database, CMS, or API call here
-- There is no implicit error handling — if it throws, the page fails to build
+- There is no implicit error handling — if it throws, the page fails to render
 
 ---
 

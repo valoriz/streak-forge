@@ -1,91 +1,64 @@
 ---
 title: create-streak-app
-description: "The create-streak-app scaffolding tool for new Streak.js projects."
+description: "The create-streak-app CLI for scaffolding new Streak.js projects."
 ---
 
-# Project Setup and package.json Scripts
+# create-streak-app
 
-A Streak.js project is configured through `package.json` scripts. The key scripts are `dev`, `build`, `css-build`, and `start`.
-
----
-
-## package.json Scripts
-
-```json
-"scripts": {
-  "dev":        "concurrently ... \"bun run css-dev\" \"bun run dev:streak\"",
-  "dev:streak": "streak-forge dev",
-  "build":      "bun run css-build && streak-forge pre-build",
-  "css-build":  "tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css",
-  "start":      "python3 -m http.server 8000 --directory out"
-}
-```
+`create-streak-app` is a standalone scaffolding CLI that creates a new Streak.js project from a starter template. It clones a template repository, installs dependencies, and gets a working project ready to run.
 
 ---
 
-## Script Descriptions
+## Usage
 
-### dev
-
-Runs two processes concurrently using `concurrently`:
-
-1. `css-dev` — watches Tailwind CSS input and rebuilds on changes
-2. `dev:streak` — runs `streak-forge dev` (the Streak development server)
+Run it with your package manager's "create" shorthand — no separate install step needed:
 
 ```bash
-bun run dev
+bunx create-streak-app
 ```
-
-### dev:streak
-
-Runs the Streak development server directly, without the CSS watcher.
 
 ```bash
-bun run dev:streak
+npx create-streak-app
 ```
 
-### build
+The CLI walks you through an interactive prompt flow:
 
-Compiles Tailwind CSS first, then runs the full Streak build:
-
-```bash
-bun run css-build && streak-forge pre-build
-```
-
-The CSS must be compiled before the build so that `public/styles/tailwind.css` exists when pages are rendered.
-
-```bash
-bun run build
-```
-
-### css-build
-
-Compiles Tailwind CSS from `./src/common/styles/input.css` and writes the output to `./public/styles/tailwind.css`.
-
-```bash
-tailwindcss -i ./src/common/styles/input.css -o ./public/styles/tailwind.css
-```
-
-### start
-
-Serves the `out/` directory on port 8000 using Python's built-in HTTP server. Use this to preview the production build locally.
-
-```bash
-python3 -m http.server 8000 --directory out
-```
-
-Navigate to port 8000 in your browser.
+1. Confirms it's OK to proceed
+2. Checks that Git is available (required — it's used to clone the template) and exits with an error if it isn't
+3. Checks that Bun is available; if it isn't, it attempts to install Bun automatically (`curl -fsSL https://bun.sh/install | sh` on macOS/Linux) before continuing
+4. Asks for a project name (letters, numbers, `-`, and `_` only; defaults to `my-streak-app` if left blank). The name must not already exist as a folder in the current directory
+5. Clones the template repository into that folder
+6. Runs `bun install`, then installs `streak-forge` into the new project with `bun add streak-forge`
+7. Updates the generated `package.json`'s `name` field to match your project name
 
 ---
 
-## Build Output
+## What Gets Scaffolded
 
-After `bun run build`, static HTML is written to:
+The project is scaffolded from a Git template repository — currently [`valoriz/hello-streak-app`](https://github.com/valoriz/hello-streak-app) — cloned with `git clone --depth 1`. The `.git` directory from the clone is removed afterward, so the new project starts with no git history of its own.
 
+> **Note:** Whatever the template repository contains is what you get — source layout (`src/handlers`, `src/widgets`, `src/layouts`), `streak.sitemap.json`, and `public/` all come from the template itself, not from `create-streak-app`. Check the template repository directly for its current contents.
+
+---
+
+## After Scaffolding
+
+```bash
+cd my-streak-app
+bun dev
 ```
-out/
-  <renderId>/
-    index.html
+
+or
+
+```bash
+bun start
 ```
 
-One directory per sitemap entry, named after its `renderId`.
+Dependencies (including `streak-forge`) are already installed by the time the CLI finishes, so you can start developing immediately.
+
+---
+
+## Requirements
+
+- **Git** — required. The CLI exits immediately if `git --version` fails.
+- **Bun** — the CLI attempts to install it for you if missing, but a working internet connection and permission to run the Bun install script are required for that to succeed. You can also install Bun yourself beforehand from [bun.sh](https://bun.sh).

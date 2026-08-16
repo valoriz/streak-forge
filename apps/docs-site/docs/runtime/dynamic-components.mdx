@@ -5,19 +5,22 @@ description: "Loading and injecting deferred content on demand with loadDynamicC
 
 # Dynamic Components
 
-The `Dynamic` component strips its children from the initial HTML at build time. At runtime, `gDom.loadDynamicComponent()` re-injects the content into the placeholder element on demand.
+The `Dynamic` component strips its children from the initial HTML at build time. At runtime, `gDom.loadDynamicComponent()` fetches that content and injects it into the placeholder element on demand.
 
 ---
 
 ## Build-Time Behavior
 
-When the renderer encounters `<Dynamic id="my-panel">...</Dynamic>`:
+When the renderer encounters `<Dynamic id="my-panel">...</Dynamic>` inside a widget's rendered output:
 
-1. The child content is stripped from the output HTML
-2. A placeholder element is emitted with these attributes:
-   - `component-type="__dynamicWidgetType__"`
+1. Any `<script>` tags inside it are extracted and kept alongside the content.
+2. The child content (and its extracted scripts) is stored separately, keyed by the current page and the id, so it can be fetched later.
+3. The `<Dynamic>` element itself is replaced with a placeholder `<div>`:
+   - `component-placeholder` — marker attribute
+   - `component-type="c"` — resource type for dynamic content
    - `component-id="my-panel"`
-   - `component-placeholder` (marker attribute)
+
+This stripping happens regardless of whether the parent widget is eager or `loadingStrategy: "lazy"` — so `<Dynamic>` works correctly even nested inside a lazy widget. Once the lazy widget's own HTML is injected client-side, the placeholder for its nested `Dynamic` block comes along with it and remains fetchable.
 
 The initial HTML contains the placeholder but not the child content.
 
@@ -28,10 +31,10 @@ The initial HTML contains the placeholder but not the child content.
 ### gDom.loadDynamicComponent
 
 ```ts
-gDom.loadDynamicComponent(id: string, cb: (el: HTMLElement) => void): void
+gDom.loadDynamicComponent(id: string, callback?: () => void): void
 ```
 
-Re-injects the previously stripped HTML into the placeholder element identified by `id`, then calls `cb` with the injected element.
+Fetches the stored content for `id` from the content endpoint, replaces the matching placeholder element's `outerHTML` with the returned `html`, appends any bundled `<script>` tags to the document, and calls `callback` once finished. If content for that `id` was already injected earlier on the page, the call is a no-op and `callback` fires immediately.
 
 ---
 
@@ -61,16 +64,13 @@ Re-injects the previously stripped HTML into the placeholder element identified 
 
 ---
 
-## Placeholder Attribute Constants
+## Placeholder Attributes
 
-Streak uses these internal constants for the placeholder attributes:
-
-| Constant | Value |
+| Attribute | Value |
 | --- | --- |
-| `DYNAMIC_COMPONENT_KEY_TYPE` | `"component-type"` |
-| `DYNAMIC_COMPONENT_KEY_ID` | `"component-id"` |
-| `component-placeholder` | Marker attribute |
-| `__dynamicWidgetType__` | Value of `component-type` for `Dynamic` placeholders |
+| `component-placeholder` | Marker attribute, no value |
+| `component-type` | `"c"` for `Dynamic` content (`"w"` is used for lazy widget placeholders) |
+| `component-id` | The `id` prop passed to `Dynamic` |
 
 ---
 
@@ -85,4 +85,4 @@ Streak uses these internal constants for the placeholder attributes:
 
 ## Relationship to lazy
 
-`Dynamic` removes content from the initial HTML entirely. `loadingStrategy: "lazy"` keeps the HTML in the initial payload but defers JS loading. They are complementary, not interchangeable.
+Both `Dynamic` and `loadingStrategy: "lazy"` keep content out of the initial HTML and use the same placeholder-and-fetch mechanism under the hood. The difference is *when* the fetch happens: a lazy widget is fetched automatically on page load (sequentially, via the `w-m` registry), while `Dynamic` content is only fetched when your own code explicitly calls `loadDynamicComponent`. They are complementary, not interchangeable.

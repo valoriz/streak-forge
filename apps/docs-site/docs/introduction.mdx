@@ -5,7 +5,7 @@ description: "What Streak.js is, its design philosophy, and how it works at a hi
 
 # Introduction
 
-Streak.js is a static site generator that pre-renders pages to plain HTML at build time. Nothing ships to the browser except the generated HTML and a tiny client-side coordinator (`app.js`) that handles lazy loading, dynamic components, and package loading.
+Streak.js is a static site generator that renders React components to plain HTML using per-page data handlers. In development, the dev server renders full HTML for every request. In a full build, each page is rendered and written to disk as a JSON snapshot — nothing about how that snapshot becomes a hosted site is part of Streak.js itself.
 
 ---
 
@@ -13,61 +13,61 @@ Streak.js is a static site generator that pre-renders pages to plain HTML at bui
 
 Understanding what Streak does _not_ do is as important as understanding what it does.
 
-- **No hydration** — nothing runs in the browser after page load. The output is complete static HTML.
+- **No hydration** — nothing re-renders in the browser after the page loads. The output is plain HTML.
 - **No virtual DOM in the browser** — DOM mutations happen via plain JS in `Script` functions.
-- **No routing** — Streak generates static files. Routing is handled by the web server (Netlify edge function, nginx, etc.).
-- **No state management** — Widgets are pure render functions. State lives in the DOM and Script closures.
-- **No CSS-in-JS** — All styling is Tailwind utility classes compiled at build time.
-- **No code splitting** — Each page is one HTML file. JS is loaded progressively via `app.js` and the asset worker.
+- **No routing** — Streak resolves one render config per URL (from the sitemap, or from `Middleware.ts`). Anything beyond that — redirects, catch-all routes on a live server, etc. — is your host's job.
+- **No state management** — widgets are pure render functions. State lives in the DOM and in `Script` closures.
+- **No CSS-in-JS** — styling is compiled ahead of time (Tailwind, plain CSS, whatever you choose) and linked from the layout.
+- **No client-side framework runtime** — the only browser-side surface is a small helper object (`gDom`) that a `Script` function can call to do things like load a third-party package or inject deferred content. It does not manage components or state.
 
 ---
 
 ## Design Philosophy
 
-TSX components serve as build-time templates. Once the HTML is generated, the browser receives pure static HTML. A small runtime (`app.js`) enables progressive features like lazy widgets, dynamic components, and third-party JS loading — but it never re-renders components.
+TSX components are build-time (or request-time) templates, not client-side components. A data handler supplies plain data, a layout arranges `WidgetPlaceholder` slots, and widgets render into those slots — all on the server. The browser receives the result as-is. A small set of `gDom` helpers (`loadPackage`, `loadDynamicComponent`, `addWidgetToBody`, `addResourceToBody`) enables a few progressive-enhancement features — lazy-loaded widgets, deferred `Dynamic` content, third-party packages — but nothing re-renders components or re-runs your data handler in the browser.
 
 ---
 
 ## Complete Mental Model
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  streak.sitemap.json                                             │
-│  { url, renderId, dataHandler, rootLayout, widgets[] }           │
-└──────┬──────────────────────┬───────────────────────────────────┘
-       │                      │
-       ▼                      ▼
-┌─────────────┐     ┌──────────────────┐
-│ DataHandler │     │ Layout (TSX)      │
-│ async fn    │     │ returns full HTML │
-│ returns {}  │     │ with Placeholders │
-└──────┬──────┘     └────────┬─────────┘
-       │                     │
-       └──────────┬──────────┘
-                  ▼
-          Streak Renderer
-          ─────────────
-          for each widget in widgets[]:
-            1. find src/widgets/<type>.tsx
-            2. render TSX component with { data: handlerData[id] }
-            3. render to HTML string
-            4. replace WidgetPlaceholder in layout HTML
-                  │
-                  ▼
-         out/<renderId>/index.html
-         ─────────────────────────
-         Complete static HTML file
-         + <script id="w-m">{json}</script>   ← widget registry
-         + <script>app.js IIFE</script>        ← client coordinator
-         + <script>((fn)(window,opts))</script> ← each Script widget
-                  │
-                  ▼
-         Browser loads page
-         ─────────────────
-         app.js reads w-m → loads widgets sequentially
-         Dynamic content → injected via loadDynamicComponent
-         Third-party JS → loaded via loadPackage (asset worker)
-         window.ftr     → true on first visit (30-min session cookie)
+streak.sitemap.json
+  [{ url, renderConfig: { renderId, metadata, dataHandler,
+                           rootLayout, widgets[], version } }]
+        │
+        ▼
+Middleware.ts  (optional, auto-discovered)
+  Runs first for the requested/built url. Returning nothing means
+  "use the sitemap's own entry for this url (or 404 if there is
+  none)"; returning a render config overrides it — this is what lets
+  a url that isn't in the sitemap at all still resolve to a page.
+        │
+        ▼
+CommonHandler.ts  (optional, auto-discovered)
+  Shared data fetched and passed into every page's data handler as
+  { common }.
+        │
+        ▼
+<dataHandler>.ts
+  (metadata, { common }) => ({ status: 200, WidgetId: {...}, ... })
+        │
+        ▼
+<rootLayout>.tsx
+  Renders the full <html> document, with a WidgetPlaceholder for
+  each widget declared in widgets[].
+        │
+        ▼
+each widget in widgets[]
+  src/widgets/<type>.tsx renders with props.data taken from the
+  handler's output, replacing its WidgetPlaceholder in the layout.
+        │
+        ▼
+styles collected
+        │
+        ├── dev ─────────► full HTML returned for that one request
+        │
+        └── build ───────► out/<url>/<version>/raw-content.json
+                            written for every page in the sitemap
 ```
 
 ---
@@ -76,9 +76,11 @@ TSX components serve as build-time templates. Once the HTML is generated, the br
 
 | File | Purpose |
 | --- | --- |
-| `streak.sitemap.json` | Declares every page, its layout, data handler, and widgets |
-| `src/handlers/*.ts` | Async data providers for each page |
-| `src/layouts/*.tsx` | Full HTML document structure with WidgetPlaceholders |
-| `src/widgets/*.tsx` | Stateless TSX components rendered at build time |
-| `public/assets/` | Static JS/CSS files loaded via the asset worker |
-| `out/<renderId>/index.html` | Generated static output |
+| `streak.sitemap.json` | Declares every page: its URL, layout, data handler, and widgets |
+| `src/handlers/Middleware.ts` | Optional. Runs first on every page resolution; can override the render config used for a URL |
+| `src/handlers/CommonHandler.ts` | Optional. Shared data fetched once and passed to every data handler as `{ common }` |
+| `src/handlers/*.ts` | Per-page data handlers — async functions returning widget data |
+| `src/layouts/*.tsx` | Full HTML document structure, laid out with `WidgetPlaceholder`s |
+| `src/widgets/*.tsx` | Stateless TSX components rendered per page |
+| `public/` | Static files served as-is (images, compiled CSS, packages for `loadPackage`) |
+| `out/<url>/<version>/raw-content.json` | Per-page JSON snapshot written by `streak-forge build` |

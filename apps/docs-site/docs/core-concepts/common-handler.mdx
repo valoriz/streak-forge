@@ -1,0 +1,114 @@
+---
+title: Common Handler
+description: "Sharing data across every page's data handler with the reserved CommonHandler.ts file."
+order: 4
+---
+
+# Common Handler
+
+`CommonHandler.ts` is a reserved, auto-discovered filename in `src/handlers/`. If it exists, Streak calls it once before any page's own data handler runs, and passes its return value into every page's data handler as `common`.
+
+It's entirely optional — if the file doesn't exist, this step is a silent no-op and `common` is `undefined` everywhere.
+
+---
+
+## Location
+
+```
+src/handlers/CommonHandler.ts
+```
+
+Unlike a page data handler, `CommonHandler` isn't referenced anywhere in `streak.sitemap.json` — it's picked up automatically by filename.
+
+---
+
+## Example
+
+```ts
+// src/handlers/CommonHandler.ts
+// Called once for the whole build (shared across every page), but fresh on
+// every single `dev` render (never cached) — so put API calls here that are
+// the same across pages (site branding, nav, etc.) to avoid every page's own
+// handler repeating them.
+//
+// Its return value is passed into every other handler as the `common`
+// argument: `export default async (metadata, { common }) => {...}`.
+
+const getCommonData = async () => {
+  console.info("[CommonHandler] fetching shared site data...");
+
+  return {
+    branding: {
+      logoSrc: "/images/streak-logo.svg",
+      logoAlt: "Streak.js",
+      tagline: "The React static site generator.",
+    },
+    nav: {
+      links: [
+        { label: "Home", href: "/" },
+        { label: "Docs", href: "#" },
+        { label: "GitHub", href: "#" },
+      ],
+    },
+  };
+};
+
+export default getCommonData;
+```
+
+A page's data handler then reads it off `common`:
+
+```ts
+// src/handlers/HomeDataHandler.ts
+const getHomeData = async (metadata?: Record<string, unknown>, { common }: { common?: any } = {}) => {
+  return {
+    status: 200,
+    HelloFooter: {
+      logoSrc: common?.branding?.logoSrc ?? "/images/streak-logo.svg",
+      logoAlt: common?.branding?.logoAlt ?? "Streak.js",
+      tagline: common?.branding?.tagline ?? "The React static site generator.",
+      year: new Date().getFullYear(),
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+---
+
+## Rules
+
+- Must be the **default export**
+- Called with **no arguments** — unlike a page data handler, `CommonHandler` doesn't receive `metadata` or `common`; it has nothing upstream of it
+- Its return value can be anything — there's no required shape, no `status` field. Whatever it returns is exactly what shows up as `common`
+- If the file doesn't exist, every data handler simply receives `common: undefined`
+
+---
+
+## When It Runs
+
+| Mode | Behavior |
+| --- | --- |
+| `streak-forge build` | Called **once** for the entire build. The same result is reused for every page's data handler. |
+| `streak-forge dev` | Called fresh on **every** request — never cached. |
+
+The build-time caching exists because a build can render many pages, and a lot of "common" data — site branding, navigation, global settings — is identical across all of them. Without `CommonHandler`, every page's own data handler would have to fetch that data itself, multiplying redundant API calls by the number of pages in the site. Centralizing it in `CommonHandler` means it's fetched exactly once per build no matter how many pages depend on it.
+
+In `dev`, it's re-run on every request instead, so changes to `CommonHandler.ts` (or whatever it fetches) show up immediately without needing a cache-busting step.
+
+---
+
+## How Its Output Reaches Other Handlers
+
+`CommonHandler`'s return value becomes the `common` property of the second argument passed to every page data handler:
+
+```ts
+export default async (metadata, { common }) => {
+  // common === whatever CommonHandler.ts returned
+};
+```
+
+See [Data Handlers](/core-concepts/data-handlers.html) for the full data handler signature, and [Rendering Pipeline](/core-concepts/rendering-pipeline.html) for where this fits relative to `Middleware.ts` and the page's own handler.
+
+> Note: `CommonHandler` has no knowledge of which page is being rendered — it can't branch on `url` or `metadata`. If you need per-page logic, that belongs in the page's own data handler, or in [Middleware](/core-concepts/middleware.html).

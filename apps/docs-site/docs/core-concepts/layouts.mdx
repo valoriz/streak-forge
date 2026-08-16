@@ -1,6 +1,7 @@
 ---
 title: Layouts
 description: "Creating full HTML document layouts with WidgetPlaceholder slots."
+order: 6
 ---
 
 # Layouts
@@ -23,10 +24,10 @@ The filename (without extension) must match the `rootLayout` field in the sitema
 
 ```tsx
 // src/layouts/MainLayout.tsx
-import { WidgetPlaceholder } from "streak/components";
+import { WidgetPlaceholder } from "streak-forge/components";
 
 const MainLayout = () => {
-  console.info("Rendering Main Layout"); // runs at build time on the server
+  console.info("Rendering Main Layout"); // runs on the server, each time the page renders
   return (
     <html dir="ltr" lang="en">
       <head>
@@ -51,20 +52,20 @@ export default MainLayout;
 - Must return the full HTML document — `<html>`, `<head>`, `<body>`
 - Every widget in `streak.sitemap.json` `widgets[]` needs a matching `WidgetPlaceholder` here
 - `id` and `type` on `WidgetPlaceholder` must both be present and must match the sitemap entry exactly
-- `console.info` inside a layout runs at build time, not in the browser
-- The layout is rendered **once per build** — it is not re-rendered per request
+- `console.info` inside a layout runs on the server, not in the browser
+- The layout renders once per page render — in `streak-forge build` that's once per sitemap entry; in `streak-forge dev` it renders again on every matching request
 
 ---
 
 ## WidgetPlaceholder
 
-`WidgetPlaceholder` from `streak/components` marks where a widget's HTML will be injected.
+`WidgetPlaceholder` from `streak-forge/components` marks where a widget's HTML will be injected.
 
 ```tsx
 <WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
 ```
 
-At build time, Streak replaces this element with the fully rendered HTML of the matching widget. The `id` links it to the handler data; the `type` links it to the widget file.
+When the page renders, Streak replaces this element with the fully rendered HTML of the matching widget. The `id` links it to the handler data; the `type` links it to the widget file.
 
 ---
 

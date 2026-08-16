@@ -1,0 +1,22 @@
+---
+title: Publishing
+description: "How Streak.js build output becomes a live site."
+---
+
+# Publishing
+
+`streak-forge build` produces its output locally:
+
+```
+out/<url>/<version>/raw-content.json
+```
+
+This is a rendered snapshot of each page — layout, widgets, styles, and handler data — not final HTML.
+
+---
+
+## Going Live
+
+Taking that output live — hosting, CDN, and publishing — is handled by **Nexus**. See the [Nexus documentation](https://nexusoneonline.com/) for publishing and hosting details.
+
+> **Note:** Files in your project's `public/` directory are served under `/` (for example, `public/favicon.ico` is available at `/favicon.ico`).

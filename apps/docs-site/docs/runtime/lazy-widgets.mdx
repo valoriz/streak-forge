@@ -1,11 +1,11 @@
 ---
 title: Lazy Widgets
-description: "How lazy-loaded widgets defer JS execution until after page interactive."
+description: "How lazy-loaded widgets defer HTML and JS until after page load."
 ---
 
 # Lazy Widgets
 
-`loadingStrategy: "lazy"` is an optional field on a widget entry in `streak.sitemap.json`. When set, the widget's HTML is still rendered at build time and included in the initial HTML payload, but `app.js` defers loading the widget's JS assets until after the page is interactive.
+`loadingStrategy: "lazy"` is an optional field on a widget entry in `streak.sitemap.json`. When set, the widget's HTML and scripts are rendered at build/render time but held back from the initial page — a small placeholder ships instead, and Streak's client runtime fetches and injects the real content on page load.
 
 ---
 
@@ -23,9 +23,10 @@ description: "How lazy-loaded widgets defer JS execution until after page intera
 
 ## What "lazy" Does
 
-- The widget's HTML is rendered at build time and is present in `out/<renderId>/index.html`
-- The `w-m` metadata script marks this widget as lazy
-- `app.js` processes lazy widgets after all eager (non-lazy) widgets have finished loading
+- The widget's HTML and any `<script>` tags inside it are rendered normally, but instead of being inlined into the page they're stored separately, keyed by page and widget id.
+- The widget's `WidgetPlaceholder` slot in the layout is replaced with a small placeholder `<div component-placeholder component-type="w" component-id="HelloMessage">` rather than the widget's real markup.
+- The widget's id is appended to the page's `w-m` registry — a plain JSON array embedded near the end of `<body>`.
+- The client runtime reads `w-m` on page load and calls `gDom.addWidgetToBody(id, callback)` for each id in order, fetching that widget's stored HTML/scripts and swapping them into the placeholder.
 
 ---
 
@@ -33,27 +34,20 @@ description: "How lazy-loaded widgets defer JS execution until after page intera
 
 | | HTML in initial payload | JS loaded |
 | --- | --- | --- |
-| No `loadingStrategy` | Yes | Immediately on page load |
-| `loadingStrategy: "lazy"` | Yes | After page is interactive |
-| `Dynamic` component | No — stripped at build time | On demand via `loadDynamicComponent` |
+| No `loadingStrategy` | Yes — inlined at build time | Immediately, inline with the page |
+| `loadingStrategy: "lazy"` | No — placeholder only | Fetched and injected after page load |
+| `Dynamic` component | No — stripped at build time | On demand via `gDom.loadDynamicComponent()` |
 
-`lazy` and `Dynamic` solve different problems. Use `lazy` when the HTML should be visible from the start but the JS can wait. Use `Dynamic` when the HTML itself should not be in the initial payload.
+`lazy` and `Dynamic` solve different problems. Use `lazy` when a widget can wait until just after the page loads. Use `Dynamic` when content should not load until your own code decides to trigger it.
 
 ---
 
-## app.js Behavior
+## Loading Order
 
-`app.js` loads widgets sequentially by chaining callbacks. Widgets without `loadingStrategy` are loaded first, in order. Widgets marked `"lazy"` are queued and loaded after the eager set completes.
+Widgets without `loadingStrategy` are never touched by the client runtime — they're already part of the initial HTML by the time the browser parses it. Only the ids of `"lazy"` widgets end up in `w-m`, and the runtime loads them strictly in the order they appear in that array, one at a time (each widget's fetch must finish before the next one starts):
 
-The `w-m` metadata embedded in the page HTML identifies which widgets are lazy:
-
-```json
-{
-  "w": [
-    { "id": "HelloBanner",  "v": "abc123" },
-    { "id": "HelloMessage", "v": "def456" }
-  ]
-}
+```html
+<script type="application/json" id="w-m">["HelloMessage", "Testimonials"]</script>
 ```
 
-The renderer adds the necessary metadata flags; you only need to set `"loadingStrategy": "lazy"` in the sitemap.
+You only need to set `"loadingStrategy": "lazy"` in the sitemap — Streak handles building the `w-m` array and generating the placeholder for you.

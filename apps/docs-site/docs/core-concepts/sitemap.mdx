@@ -1,6 +1,7 @@
 ---
 title: Sitemap
 description: "How streak.sitemap.json defines every page, layout, and widget in your site."
+order: 1
 ---
 
 # Sitemap
@@ -54,12 +55,12 @@ streak.sitemap.json   ← project root
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `renderId` | string | Unique ID; the output folder name inside `out/` |
-| `metadata` | object | Arbitrary bag passed through to the renderer |
+| `renderId` | string | Unique ID for this render config |
+| `metadata` | object | Arbitrary bag passed through to the page's data handler as its first argument |
 | `dataHandler` | string | Filename (without extension) in `src/handlers/` |
 | `rootLayout` | string | Filename (without extension) in `src/layouts/` |
 | `widgets[]` | array | Ordered list of widgets to place on this page |
-| `version` | string | Opaque version string, ignored by the renderer |
+| `version` | string | Version string; forms part of this entry's output path (`out/<url>/<version>/raw-content.json`) |
 
 ### Widget entry fields
 
@@ -73,11 +74,13 @@ streak.sitemap.json   ← project root
 
 ## renderId Uniqueness
 
-`renderId` must be globally unique across all sitemap entries. Streak uses it as the output directory name:
+`renderId` must be globally unique across all sitemap entries. `streak-forge build` writes each entry's rendered output to a path based on its `url` and `version`:
 
 ```
-out/<renderId>/index.html
+out/<url>/<version>/raw-content.json
 ```
+
+This file is an intermediate snapshot of the rendered page — not final HTML. Turning it into a deployable site is handled by Nexus; see the Nexus documentation.
 
 If two entries share the same `renderId`, one will overwrite the other.
 
@@ -115,7 +118,8 @@ All lookups are by filename without extension.
       "renderId": "homeRenderId",
       "dataHandler": "HomeDataHandler",
       "rootLayout": "MainLayout",
-      "widgets": []
+      "widgets": [],
+      "version": "1.0.0"
     }
   },
   {
@@ -124,10 +128,11 @@ All lookups are by filename without extension.
       "renderId": "aboutRenderId",
       "dataHandler": "AboutDataHandler",
       "rootLayout": "MainLayout",
-      "widgets": []
+      "widgets": [],
+      "version": "1.0.0"
     }
   }
 ]
 ```
 
-Each entry produces one output file: `out/homeRenderId/index.html` and `out/aboutRenderId/index.html`.
+`streak-forge build` produces one `out/<url>/<version>/raw-content.json` file per entry — for example, the `/about` entry above writes `out/about/1.0.0/raw-content.json`.

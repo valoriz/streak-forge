@@ -6,10 +6,10 @@ order: 4
 
 # Components API
 
-Streak ships four built-in components. All are imported from `streak/components`:
+Streak ships four built-in components. All are imported from `streak-forge/components`:
 
 ```tsx
-import { WidgetPlaceholder, Script, Dynamic, Preload } from "streak/components";
+import { WidgetPlaceholder, Script, Dynamic, Preload } from "streak-forge/components";
 ```
 
 ---
@@ -24,7 +24,8 @@ Marks the position in a layout where a widget's rendered HTML will be injected a
 | --- | --- | --- | --- |
 | `id` | string | Yes | Must match the widget `id` in the sitemap and the handler return key |
 | `type` | string | Yes | Must match the widget filename in `src/widgets/` (case-sensitive) |
-| `dummy` | boolean | No | Used inside `Dynamic` content where a placeholder is needed without a widget binding |
+
+`WidgetPlaceholder` throws at render time if either prop is missing.
 
 ### Usage
 
@@ -48,6 +49,11 @@ export default MainLayout;
 
 Every widget in the sitemap `widgets[]` array must have a corresponding `WidgetPlaceholder` in the layout. The `id` and `type` values must match exactly.
 
+### At Build Time
+
+- A widget with no `loadingStrategy` (the default) has its placeholder replaced directly with its rendered HTML — it ships inline in the page.
+- A widget with `loadingStrategy: "lazy"` has its placeholder replaced with a small placeholder `<div component-placeholder component-type="w" component-id="<id>">` instead. Its HTML is stored separately and fetched by the client runtime after page load. See [Lazy Widgets](/runtime/lazy-widgets).
+
 ---
 
 ## Script
@@ -60,6 +66,7 @@ Serializes a function body to a string at build time and emits it as an inline `
 | --- | --- | --- | --- |
 | `id` | string | Yes | Must be unique on the page |
 | `options` | object | No | Plain JSON-serializable object passed as the second IIFE argument |
+| `nonce` | string | No | CSP nonce forwarded to the rendered `<script nonce>` attribute |
 | `children` | function | Yes | Function body to serialize — receives `(gDom, options)` |
 
 ### Usage
@@ -86,8 +93,8 @@ The rendered output is an IIFE:
 | --- | --- |
 | No closures | The function is converted with `.toString()`. Outer-scope variables are not captured. |
 | No imports | ES module imports inside the function body will not work. Use `gDom.loadPackage()` instead. |
-| Options must be JSON-serializable | The `options` object is passed through `JSON.stringify`. Functions, `undefined`, and circular references are dropped. |
-| `gDom` is `window` | The first argument is `window` extended with Streak helpers (`loadPackage`, `loadDynamicComponent`, `onVisible`, etc.). |
+| Options must be JSON-serializable | The `options` object is passed through `JSON.stringify`; any literal `</script` sequence in it is escaped so it can't break out of the inline tag. |
+| `gDom` is `window` | The first argument is `window` extended with the Streak client runtime helpers (`addResourceToBody`, `loadPackage`, `loadDynamicComponent`, `addWidgetToBody`). |
 
 ---
 
@@ -100,7 +107,7 @@ Strips its children from the initial HTML at build time. The content is injected
 | Prop | Type | Required | Description |
 | --- | --- | --- | --- |
 | `id` | string | Yes | Identifier used by `loadDynamicComponent()` to find and inject this content |
-| `children` | JSX | Yes | The content to defer — removed from initial HTML, injected on demand |
+| `children` | JSX | No | The content to defer — removed from initial HTML, injected on demand |
 
 ### Usage
 
@@ -128,17 +135,17 @@ Strips its children from the initial HTML at build time. The content is injected
 
 ### How It Works
 
-1. **Build time:** children are stripped. A placeholder element is emitted with `component-type="__dynamicWidgetType__"` and `component-id="<id>"`.
-2. **Runtime:** `gDom.loadDynamicComponent(id, callback)` finds the placeholder, injects the original HTML, and calls `callback`.
+1. **Build time:** children are stripped and stored for later retrieval. A placeholder `<div>` is emitted with `component-placeholder`, `component-type="c"`, and `component-id="<id>"`.
+2. **Runtime:** `gDom.loadDynamicComponent(id, callback)` fetches the stored HTML, replaces the placeholder's `outerHTML` with it, injects any associated `<script>` tags, and calls `callback`.
 
 ### Dynamic vs Lazy Comparison
 
 | | HTML in initial payload | JS loaded | Triggered by |
 | --- | --- | --- | --- |
-| `loadingStrategy: "lazy"` | Yes | After page is interactive | Automatic |
+| `loadingStrategy: "lazy"` | No — placeholder only | Fetched and injected after page load | Automatic |
 | `<Dynamic>` | No | On demand | `gDom.loadDynamicComponent()` |
 
-Use lazy when the HTML should be visible immediately but JS can wait. Use Dynamic when the HTML itself should be excluded from the initial payload.
+Use lazy when a widget can wait until just after the page loads, but should still load automatically without any user interaction. Use Dynamic when content should only load in response to your own code — e.g. on click.
 
 ---
 
@@ -151,8 +158,8 @@ Renders a `<link rel="preload">` tag. Tells the browser to begin fetching a reso
 | Prop | Type | Required | Description |
 | --- | --- | --- | --- |
 | `href` | string | Yes | URL of the resource to preload |
-| `as` | `"image"` \| `"font"` \| `"style"` \| `"script"` \| `"video"` | Yes | Resource type hint for the browser |
-| `media` | string | No | CSS media query string; use `""` for unconditional preload |
+| `as` | string | Yes | Resource type hint for the browser — commonly `"image"`, `"font"`, `"style"`, `"script"`, `"video"`, but any value is passed through as-is |
+| `...rest` | any | No | Any other prop (e.g. `media`, `crossorigin`, `type`) is spread directly onto the rendered `<link>` tag |
 
 ### Usage
 
@@ -160,15 +167,15 @@ Use `Preload` inside a widget that renders in `<head>`:
 
 ```tsx
 <Preload href="/images/hero.jpg" as="image" media="(min-width: 768px)" />
-<Preload href="/styles/tailwind.css" as="style" media="" />
-<Preload href="/assets/fonts/inter.woff2" as="font" />
+<Preload href="/styles/tailwind.css" as="style" />
+<Preload href="/assets/fonts/inter.woff2" as="font" crossorigin="anonymous" />
 ```
 
 ### Rendered Output
 
 ```html
 <link rel="preload" href="/images/hero.jpg" as="image" media="(min-width: 768px)">
-<link rel="preload" href="/styles/tailwind.css" as="style" media="">
+<link rel="preload" href="/styles/tailwind.css" as="style">
 ```
 
 ### When to Use

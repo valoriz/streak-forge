@@ -5,14 +5,14 @@ description: "The Dynamic component for deferring content from the initial HTML 
 
 # Dynamic
 
-`Dynamic` is a component from `streak/components` that strips its children from the initial HTML payload at build time. The content is injected into the DOM on demand via `gDom.loadDynamicComponent()`.
+`Dynamic` is a component from `streak-forge/components` that strips its children from the initial HTML payload at build time. The content is injected into the DOM on demand via `gDom.loadDynamicComponent()`.
 
 ---
 
 ## Import
 
 ```tsx
-import { Dynamic } from "streak/components";
+import { Dynamic } from "streak-forge/components";
 ```
 
 ---
@@ -20,7 +20,7 @@ import { Dynamic } from "streak/components";
 ## Example
 
 ```tsx
-import { Dynamic } from "streak/components";
+import { Dynamic } from "streak-forge/components";
 
 <Dynamic id="my-panel">
   <div>This content is deferred</div>
@@ -31,12 +31,13 @@ import { Dynamic } from "streak/components";
 
 ## What It Does
 
-**At build time:** the content inside `Dynamic` is stripped from the initial HTML. The element is rendered as a placeholder with two attributes:
+**At build time:** the content inside `Dynamic` is stripped out and stored separately so it can be fetched later. The element is rendered as a placeholder `<div>` with three attributes:
 
-- `component-type="__dynamicWidgetType__"`
-- `component-id="my-panel"`
+- `component-placeholder` — marker attribute
+- `component-type="c"` — the resource type for a `Dynamic` block
+- `component-id="my-panel"` — the `id` prop passed to `Dynamic`
 
-**At runtime:** calling `gDom.loadDynamicComponent("my-panel", callback)` re-injects the original content into the placeholder element and calls the callback when done.
+**At runtime:** calling `gDom.loadDynamicComponent("my-panel", callback)` fetches the stripped content and replaces the placeholder element's `outerHTML` with it, then calls `callback` once the swap is done. Any `<script>` tags that were inside the `Dynamic` block are appended to the document alongside it.
 
 ---
 
@@ -67,9 +68,9 @@ import { Dynamic } from "streak/components";
 
 | Attribute | Value |
 | --- | --- |
-| `component-type` | `"__dynamicWidgetType__"` |
-| `component-id` | The `id` prop passed to `Dynamic` |
 | `component-placeholder` | Present as a marker |
+| `component-type` | `"c"` |
+| `component-id` | The `id` prop passed to `Dynamic` |
 
 ---
 
@@ -89,5 +90,5 @@ import { Dynamic } from "streak/components";
 | | HTML in initial payload | JS loaded |
 | --- | --- | --- |
 | No `loadingStrategy` | Yes | Immediately |
-| `loadingStrategy: "lazy"` | Yes | After page is interactive |
+| `loadingStrategy: "lazy"` | No — placeholder only | Fetched and injected after page load |
 | `Dynamic` | **No** | On demand via `loadDynamicComponent` |
