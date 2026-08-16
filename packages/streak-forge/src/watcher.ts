@@ -42,7 +42,7 @@ export const startWatcher = () => {
 
   const onChange = (filePath: string) => {
     if (!WATCHED_EXTENSIONS.test(filePath)) return;
-    console.info(`streak v2: change detected - ${filePath}`);
+    console.info(`streak-forge: change detected - ${filePath}`);
     invalidateModule(filePath);
     checkScriptClosures(filePath);
     broadcastReload();
@@ -51,7 +51,7 @@ export const startWatcher = () => {
   watcher
     .on("change", onChange)
     .on("add", onChange)
-    .on("error", (err) => console.error("streak v2: watcher error", err));
+    .on("error", (err) => console.error("streak-forge: watcher error", err));
 
   return watcher;
 };

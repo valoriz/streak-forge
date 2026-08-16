@@ -169,7 +169,7 @@ const servePublicFile = async (pathname: string): Promise<Response | null> => {
 export const startDevServer = async () => {
   const pages = await loadSitemap(config.targetSrc);
   console.info(
-    `streak v2: loaded ${pages.size} page(s) from streak.sitemap.json`,
+    `streak-forge: loaded ${pages.size} page(s) from streak.sitemap.json`,
   );
 
   onClosureLeak(broadcastScriptWarning);
@@ -210,7 +210,7 @@ export const startDevServer = async () => {
 
         return new Response("Not Found", { status: 404 });
       } catch (err) {
-        console.error("streak v2: request handler error", err);
+        console.error("streak-forge: request handler error", err);
         return new Response(
           `Internal Server Error: ${(err as Error).message}`,
           { status: 500 },
@@ -218,13 +218,13 @@ export const startDevServer = async () => {
       }
     },
     error: (err) => {
-      console.error("streak v2: server error", err);
+      console.error("streak-forge: server error", err);
       return new Response("Internal Server Error", { status: 500 });
     },
   });
 
   console.info(
-    `streak v2 dev server running at http://localhost:${server.port}`,
+    `streak-forge dev server running at http://localhost:${server.port}`,
   );
   return server;
 };

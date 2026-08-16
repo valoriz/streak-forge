@@ -47,7 +47,7 @@ switch (command) {
     break;
   }
   default:
-    console.info(`streak-forge v2 - unknown command: ${command ?? ""}`);
+    console.info(`streak-forge: unknown command: ${command ?? ""}`);
     console.info(
       "Usage: streak-forge dev | streak-forge validate | streak-forge pre-build | streak-forge build | streak-forge dev-build",
     );
