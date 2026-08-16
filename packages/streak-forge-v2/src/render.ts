@@ -95,6 +95,12 @@ export const render = async (
     : defaultDirs();
 
   const raw = await buildPageData(renderConfig, dirs, styleDirs, progress);
+  // Reports render completion the same way every other stage does (a real
+  // {currentTime, timeTook} entry) instead of a bespoke top-level field, so
+  // external consumers that only special-case startTime/totalTime and treat
+  // every other key as a stage object (see run-prebuild-v3.ts) handle it
+  // correctly without needing to know about it.
+  progress.updateProgress("complete", { stage: "complete" });
 
   return {
     renderedPage: [

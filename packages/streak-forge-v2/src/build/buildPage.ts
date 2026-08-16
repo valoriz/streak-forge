@@ -69,6 +69,11 @@ export const buildPageData = async (
   let notFound: boolean | undefined;
   if (renderConfig.dataHandler) {
     const handlerModule = await importFromDir(handlerDir, renderConfig.dataHandler);
+    // Fired the instant the handler call begins (not just on completion) so a
+    // consumer watching the progress stream can tell "started N ms ago, still
+    // running" apart from "hasn't started yet" - the only stage that can
+    // genuinely hang on external I/O, unlike layout/widgets/styles.
+    progress?.updateProgress("dataHandlerStart", { stage: "dataHandlerStart" });
     const response = (await withHandlerTimeoutWarning(handlerModule.default(), renderConfig.dataHandler)) || {};
     if (response.notFound) notFound = true;
     dataHandlerOut = filterHandlerResponse(response, widgetIds);
