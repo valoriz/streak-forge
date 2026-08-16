@@ -1,9 +1,8 @@
-import path from "path";
-import config from "../config";
 import { importFromDir } from "../moduleLoader";
 import { renderComponent } from "../jsxRender";
-import { collectStyles } from "./styleExtract";
-import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR } from "../constants";
+import { collectStyles, type StyleCollectDirs } from "./styleExtract";
+import { withHandlerTimeoutWarning } from "./handlerTimeoutWarning";
+import type { Progress } from "./progress";
 import type { RenderConfig, WidgetProps } from "../types";
 
 export interface WidgetOut {
@@ -27,12 +26,6 @@ export interface RawContent {
   completeStyle: string;
 }
 
-// Build mode resolves modules from the pre-bundled cache (when `pre-build`
-// has been run and READ_FROM_PREBUILD=1) instead of raw source, so a build
-// never re-parses/re-transpiles TS - it just loads what pre-build already
-// bundled. Falls back to source if the cache isn't there.
-const resolveDir = (category: string, srcDir: string): string => (config.readFromPrebuild ? path.join(config.preBuildDir, category) : srcDir);
-
 // Handler responses often carry fields with no widget attached (a `status`
 // code, scratch data, etc.) - only `common` and per-widget-id keys are part
 // of the documented dataHandlerOut contract, so anything else is dropped
@@ -46,33 +39,45 @@ const filterHandlerResponse = (response: Record<string, any>, widgetIds: string[
   return filtered;
 };
 
+export interface BuildPageDirs {
+  handlerDir: string;
+  widgetsDir: string;
+  layoutsDir: string;
+}
+
 /**
  * Stage-1 build render for one page: renders the layout and every widget to
  * raw HTML (no placeholder substitution, no dynamic/script extraction, no
  * eager/lazy split - that's all deferred to whatever finalizes this later),
  * and collects (without stripping) any <style>/<link rel=stylesheet> content
- * into completeStyle. This "raw content" snapshot is what `build` writes to
- * disk and `dev-build` POSTs to a remote optimizer.
+ * into completeStyle (no purge for now - see purgeStyles.ts, currently
+ * unwired). This "raw content" snapshot is what `build` writes to disk and
+ * `dev-build` POSTs to a remote optimizer. `dirs`/`styleDirs` are resolved by
+ * the caller (see render.ts) - this function has no opinion on prebuild
+ * caches or cwd, so it works equally for local commands and external callers.
  */
-export const buildPageData = async (renderConfig: RenderConfig): Promise<RawContent> => {
-  const handlerDir = resolveDir(HANDLERS_DIR, config.srcDir.handlerDir);
-  const layoutsDir = resolveDir(LAYOUTS_DIR, config.srcDir.layoutsDir);
-  const widgetsDir = resolveDir(WIDGETS_DIR, config.srcDir.widgetsDir);
-  const styleDirs = { publicDir: config.srcDir.publicDir, layoutsDir: config.srcDir.layoutsDir };
-
+export const buildPageData = async (
+  renderConfig: RenderConfig,
+  dirs: BuildPageDirs,
+  styleDirs: StyleCollectDirs,
+  progress?: Progress,
+): Promise<RawContent> => {
+  const { handlerDir, widgetsDir, layoutsDir } = dirs;
   const widgetIds = renderConfig.widgets.map((w) => w.id);
 
   let dataHandlerOut: Record<string, any> = {};
   let notFound: boolean | undefined;
   if (renderConfig.dataHandler) {
     const handlerModule = await importFromDir(handlerDir, renderConfig.dataHandler);
-    const response = (await handlerModule.default()) || {};
+    const response = (await withHandlerTimeoutWarning(handlerModule.default(), renderConfig.dataHandler)) || {};
     if (response.notFound) notFound = true;
     dataHandlerOut = filterHandlerResponse(response, widgetIds);
   }
+  progress?.updateProgress("dataHandler", { stage: "dataHandler" });
 
   const layoutModule = await importFromDir(layoutsDir, renderConfig.rootLayout);
   const rootLayoutOut = await renderComponent(layoutModule.default, renderConfig.metadata || {});
+  progress?.updateProgress("layout", { stage: "layout" });
 
   const widgets: WidgetOut[] = await Promise.all(
     renderConfig.widgets.map(async (w) => {
@@ -83,8 +88,11 @@ export const buildPageData = async (renderConfig: RenderConfig): Promise<RawCont
       return { id: w.id, type: w.type, loadingStrategy: w.loadingStrategy, out, sOut };
     }),
   );
+  progress?.updateProgress("widgets", { stage: "widgets" });
 
   const styles = [...collectStyles(rootLayoutOut, styleDirs), ...widgets.flatMap((w) => collectStyles(w.out, styleDirs))];
+  const completeStyle = styles.join("\n");
+  progress?.updateProgress("styles", { stage: "styles" });
 
   return {
     renderId: renderConfig.renderId,
@@ -96,6 +104,6 @@ export const buildPageData = async (renderConfig: RenderConfig): Promise<RawCont
     widgets,
     dataHandlerOut,
     rootLayoutOut,
-    completeStyle: styles.join("\n"),
+    completeStyle,
   };
 };

@@ -2,12 +2,12 @@ import fs from "fs";
 import path from "path";
 import config from "../config";
 import { loadSitemap } from "../sitemap";
-import { buildPageData } from "./buildPage";
+import { render } from "../render";
 
-const writeJson = (filePath: string, data: unknown): void => {
+const writeFile = (filePath: string, content: string): void => {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data), "utf-8");
+  fs.writeFileSync(filePath, content, "utf-8");
 };
 
 /** Renders every sitemap page and saves its raw content snapshot as JSON. */
@@ -20,10 +20,11 @@ export const runBuild = async (): Promise<void> => {
   for (const [url, page] of pages) {
     console.info(`streak-forge: building ${url}`);
     try {
-      const data = await buildPageData(page.renderConfig);
+      const { renderedPage } = await render(page.renderConfig);
+      const file = renderedPage[0]!;
       const pageDir = path.join(config.staticBuildDir, url);
-      const outputPath = path.join(pageDir, data.version, "raw-content.json");
-      writeJson(outputPath, data);
+      const outputPath = path.join(pageDir, file.path);
+      writeFile(outputPath, file.content);
       console.info(`streak-forge: wrote ${outputPath}`);
     } catch (err) {
       failures += 1;

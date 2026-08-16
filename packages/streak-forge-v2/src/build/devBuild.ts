@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import config from "../config";
 import { loadSitemap } from "../sitemap";
-import { buildPageData } from "./buildPage";
+import { render } from "../render";
 
 interface SavedFile {
   path?: string;
@@ -133,7 +133,8 @@ export const runDevBuild = async (): Promise<void> => {
   for (const [url, page] of pages) {
     console.info(`streak-forge: building ${url}`);
     try {
-      const rawContent = await buildPageData(page.renderConfig);
+      const { renderedPage } = await render(page.renderConfig);
+      const rawContent = JSON.parse(renderedPage[0]!.content);
       const payload = { ...rawContent, buildId, siteId, packageVersion };
 
       const res = await fetch(buildEndpoint, { method: "POST", headers, body: JSON.stringify(payload) });

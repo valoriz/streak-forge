@@ -33,3 +33,9 @@ export const WIDGET_LOADING_STRATEGIES = {
 export const WIDGET_META_ID = "w-m";
 export const HMR_ENDPOINT = "/__streak_hmr";
 export const CONTENT_ENDPOINT = "/__streak/content";
+
+// Data handler timing thresholds (ms): a warning once it's been pending this
+// long, then escalating errors repeating from this point on - same idea as
+// the legacy pageDataHandler module's DATA_HANDLER_THRESHOLD.
+export const DATA_HANDLER_WARNING_THRESHOLD = 1000;
+export const DATA_HANDLER_ERROR_THRESHOLD = 2000;

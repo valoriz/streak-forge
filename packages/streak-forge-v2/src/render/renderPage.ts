@@ -4,6 +4,7 @@ import { renderComponent } from "../jsxRender";
 import { assemblePage } from "./postProcess";
 import type { WidgetForAssembly } from "./postProcess";
 import { buildClientScript } from "./clientRuntime";
+import { withHandlerTimeoutWarning } from "../build/handlerTimeoutWarning";
 import type { RenderConfig, WidgetProps } from "../types";
 
 export const renderPage = async (
@@ -18,7 +19,11 @@ export const renderPage = async (
       srcDir.handlerDir,
       renderConfig.dataHandler,
     );
-    dataMap = (await handlerModule.default()) || {};
+    dataMap =
+      (await withHandlerTimeoutWarning(
+        handlerModule.default(),
+        renderConfig.dataHandler,
+      )) || {};
   }
 
   const layoutModule = await importFromDir(

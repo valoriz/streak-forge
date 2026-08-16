@@ -8,6 +8,7 @@ const result = await Bun.build({
     "./src/components/index.tsx",
     "./src/jsx/jsx-runtime.ts",
     "./src/jsx/jsx-dev-runtime.ts",
+    "./src/render.ts",
   ],
   outdir: "./dist",
   target: "bun",

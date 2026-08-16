@@ -19,6 +19,10 @@
     "./jsx-dev-runtime": {
       "types": "./dist/src/jsx/jsx-dev-runtime.d.ts",
       "import": "./dist/src/jsx/jsx-dev-runtime.js"
+    },
+    "./core": {
+      "types": "./dist/src/render.d.ts",
+      "import": "./dist/src/render.js"
     }
   },
   "files": ["dist/**/*.js", "dist/**/*.d.ts"],
