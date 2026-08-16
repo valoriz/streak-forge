@@ -64,7 +64,19 @@ bun run test
 
 `create-streak-app` currently has no automated tests configured (`packages/create-streak-app` test script is a placeholder, unchanged from the original monorepo).
 
-## Documentation Site
+## Documentation
+
+Full framework documentation is published at **[docs.streakjs.com](https://docs.streakjs.com/)** — installation, CLI reference, core concepts (sitemap, data handlers, `CommonHandler`, `Middleware`, layouts, widgets), and the `streak-forge/components` API.
+
+The docs site's own source lives in this repo at `apps/docs-site` (see below) if you're contributing to the documentation itself.
+
+## Deployment (Private)
+
+`streak-forge build` produces an intermediate JSON snapshot locally. Turning that into a hosted, live site is handled by **Nexus**, the Streak cloud build and deployment system — internal/private tooling, not part of this repository.
+
+> See the [Nexus documentation](https://docs.nexusoneonline.com/) for publishing and deployment details.
+
+## Documentation Site (Contributing)
 
 ```bash
 cd apps/docs-site

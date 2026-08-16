@@ -49,7 +49,7 @@ Key properties:
 - **Data flows through handlers, not props drilling** — an optional `Middleware.ts`, an optional `CommonHandler.ts`, and a per-page data handler run in that order before anything renders (see [§14](#14-the-render-pipeline))
 - **Two runtime modes**:
   - `streak-forge dev` — a live server that renders every request fresh, with hot reload
-  - `streak-forge build` — renders every page in `streak.sitemap.json` once and writes an intermediate JSON snapshot per page to `out/`. Publishing this output live is handled by **Nexus** — see the Nexus documentation for details.
+  - `streak-forge build` — renders every page in `streak.sitemap.json` once and writes an intermediate JSON snapshot per page to `out/`. Publishing this output live is handled by **Nexus** — see the [Nexus documentation](https://docs.nexusoneonline.com/) for details.
 - **Progressive enhancement** — client interactivity is opt-in via the `Script` component
 
 The CLI tool is `streak-forge`. The npm package is also named **`streak-forge`** (not `streak`), and components are imported from **`"streak-forge/components"`**.
@@ -815,7 +815,7 @@ There is no fixed multi-stage "build pipeline" module chain in v2 — rendering 
 7. None of the `dev` post-processing above runs. The raw layout HTML and each widget's raw HTML/skeleton HTML — **`<widget>`/`<dynamic>`/`<script>`/`<preload>` marker tags still embedded, unprocessed** — plus the collected `completeStyle` string, are bundled into one JSON object (a `RawContent` snapshot: `{ renderId, metadata, dataHandler, rootLayout, version, notFound?, widgets[], dataHandlerOut, rootLayoutOut, completeStyle }`).
 8. That JSON is written to **`out/<url>/<version>/raw-content.json`**.
 
-Publishing this raw snapshot as a live site — turning it into finished, optimized HTML, hosting it, routing it — is handled by **Nexus**. See the Nexus documentation for details; it's out of scope for this reference.
+Publishing this raw snapshot as a live site — turning it into finished, optimized HTML, hosting it, routing it — is handled by **Nexus**. See the [Nexus documentation](https://docs.nexusoneonline.com/) for details; it's out of scope for this reference.
 
 ---
 
@@ -933,7 +933,7 @@ This cache is **only** consulted when `READ_FROM_PREBUILD=1` is set — otherwis
 - Resolves `CommonHandler` **once**, shared across every page
 - For each sitemap page: resolves `Middleware`, runs the (possibly middleware-overridden) render pipeline, writes `out/<url>/<version>/raw-content.json`
 - A single page failing is logged and counted, not fatal to the whole run — the process exits with code 1 only if at least one page failed
-- Publishing this output live is handled by Nexus — see the Nexus documentation for details
+- Publishing this output live is handled by Nexus — see the [Nexus documentation](https://docs.nexusoneonline.com/) for details
 
 #### `streak-forge validate`
 
@@ -1819,4 +1819,4 @@ Exit code `0` = pass, `1` = one or more errors found (warnings don't fail the ru
 
 ---
 
-*This document describes streak-forge v2 (`packages/streak-forge-v2`), verified directly against source. `streak-forge/core` (the `render()` entry point) is an internal contract, not a documented public API. Publishing a `build` snapshot into a live site is handled by Nexus — see the Nexus documentation for details.*
+*This document describes streak-forge v2 (`packages/streak-forge-v2`), verified directly against source. `streak-forge/core` (the `render()` entry point) is an internal contract, not a documented public API. Publishing a `build` snapshot into a live site is handled by Nexus — see the [Nexus documentation](https://docs.nexusoneonline.com/) for details.*

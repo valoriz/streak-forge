@@ -52,9 +52,9 @@ streak-forge build       # render every page, write raw-content.json per page
 
 ## Deployment
 
-`streak-forge build` produces an intermediate `raw-content.json` snapshot per page. Taking that output live is handled by **Nexus**, the Streak cloud build and deployment system.
+`streak-forge build` produces an intermediate `raw-content.json` snapshot per page. Taking that output live is handled by **Nexus**, the Streak cloud build and deployment system (private/internal).
 
-> Refer to the [Nexus documentation](https://nexusoneonline.com/) for publishing and deployment details.
+> Refer to the [Nexus documentation](https://docs.nexusoneonline.com/) for publishing and deployment details.
 
 ---
 
