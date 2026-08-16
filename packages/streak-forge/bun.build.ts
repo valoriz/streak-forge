@@ -1,39 +1,40 @@
 import fs from "fs";
-import path from "path";
-import Bun from "bun";
 
-const customEndPoints: string[] = [];
+const isProduction = process.env.NODE_ENV === "production";
 
-const buildDir = "./dist";
-
-await Bun.build({
-  entrypoints: ["./cli/main.js", "./src/index.ts", "./src/server.ts", "./src/components/index.tsx", ...customEndPoints],
-  outdir: buildDir,
+const result = await Bun.build({
+  entrypoints: [
+    "./cli/main.ts",
+    "./src/components/index.tsx",
+    "./src/jsx/jsx-runtime.ts",
+    "./src/jsx/jsx-dev-runtime.ts",
+    "./src/render.ts",
+  ],
+  outdir: "./dist",
   target: "bun",
-  external: ["tailwindcss", "postcss", "autoprefixer", "cssnano", "node-html-parser", "esbuild"],
-  define: {
-    __dirname: path.join(import.meta.dirname, buildDir),
-    __filename: import.meta.filename,
+  minify: isProduction,
+  sourcemap: isProduction ? "none" : "inline",
+  // Real runtime deps of the consuming app, not something to inline - keeps
+  // the shipped bundle small and lets normal semver/dedupe rules apply.
+  external: ["typescript", "chokidar", "dotenv", "node-html-parser"],
+  naming: {
+    entry: "[dir]/[name].js",
   },
-  minify: true,
-  sourcemap: process.env.NODE_ENV === "development" ? "inline" : "none",
 });
 
-try {
-  // copy the public directory to the build directory
-  const publicDir = path.join(import.meta.dirname, "public");
-  const buildPublicDir = path.join(import.meta.dirname, buildDir, "public");
-
-  // add a folder exists check
-  if (fs.existsSync(publicDir)) {
-    fs.cpSync(publicDir, buildPublicDir, {
-      recursive: true,
-      filter: (src) => {
-        // Exclude the node_modules directory
-        return !src.includes("node_modules");
-      },
-    });
-  }
-} catch (error) {
-  console.warn(error);
+if (!result.success) {
+  for (const log of result.logs) console.error(log);
+  throw new Error("streak-forge-v2 build failed");
 }
+
+for (const artifact of result.outputs) {
+  console.info(`built: ${artifact.path}`);
+}
+
+// cli/main.ts needs a working shebang once bundled (Bun.build strips it).
+const cliOut = "./dist/cli/main.js";
+const cliContents = fs.readFileSync(cliOut, "utf-8");
+if (!cliContents.startsWith("#!/usr/bin/env bun")) {
+  fs.writeFileSync(cliOut, `#!/usr/bin/env bun\n${cliContents}`);
+}
+fs.chmodSync(cliOut, 0o755);

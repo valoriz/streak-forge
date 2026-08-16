@@ -1,103 +1,45 @@
 {
-  "version": "3.2.4-beta.0",
-  "name": "streak-forge-legacy",
-  "author": "indrajithc",
-  "main": "./dist/index.js",
-  "devDependencies": {
-    "@eslint/js": "^9.29.0",
-    "@types/bcrypt": "^5.0.2",
-    "@types/bun": "^1.2.21",
-    "@types/cheerio": "^1.0.0",
-    "@types/jsdom": "^21.1.7",
-    "@types/terser": "^3.12.0",
-    "@typescript-eslint/eslint-plugin": "^8.34.1",
-    "@typescript-eslint/parser": "^8.34.1",
-    "cpx2": "^8.0.0",
-    "cross-env": "^7.0.3",
-    "eslint": "^9.29.0",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-prettier": "^5.5.0",
-    "eslint-plugin-unused-imports": "^4.1.4",
-    "prettier": "^3.5.3",
-    "tsup": "^8.5.1",
-    "typescript-eslint": "^8.34.1"
-  },
-  "peerDependencies": {
-    "@types/react": "^19.1.12",
-    "@types/react-dom": "^19.1.9",
-    "autoprefixer": "^10.4.21",
-    "cssnano": "^7.1.0",
-    "postcss": "^8.4.47",
-    "typescript": "^5"
-  },
-  "bin": {
-    "streak-forge-legacy": "./dist/cli/main.js"
-  },
-  "description": "A performance-first static site builder. Build",
-  "files": [
-    "dist/**/*.js",
-    "dist/**/*.d.ts",
-    "dist/**/*.d.cts",
-    "template/**/*",
-    "README.md",
-    "LICENSE"
-  ],
-  "keywords": [
-    "static-site",
-    "builder",
-    "GUI",
-    "performance",
-    "bun",
-    "visual-editor",
-    "streak",
-    "streak-gui",
-    "streakgui",
-    "streak-cli",
-    "streak-js"
-  ],
-  "license": "Apache-2.0",
-  "private": false,
-  "scripts": {
-    "clean": "rm -rf dist build && echo '✅ Cleaned build artifacts.'",
-    "dev": "cross-env NODE_ENV=development bun --watch ./src/dev-server.ts",
-    "build:types": "tsup --config tsup.config.ts",
-    "build:js": "cross-env NODE_ENV=production bun bun.build.ts",
-    "build": "bun run build:js && bun run build:types",
-    "start": "cross-env NODE_ENV=production bun dist/src/index.js",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "format": "prettier --write .",
-    "t-dev": "./cli/main.js dev",
-    "t-build": "./cli/main.js build",
-    "t-pre-build": "./cli/main.js pre-build"
-  },
+  "name": "streak-forge",
+  "version": "0.1.0-v2.2",
+  "description": "streak-forge v2 (rewrite in progress) - stage 1: dev server only",
   "type": "module",
-  "types": "./dist/index.d.ts",
-  "dependencies": {
-    "@clack/prompts": "^0.11.0",
-    "@fullhuman/postcss-purgecss": "^7.0.2",
-    "bun": "^1.2.21",
-    "chokidar": "^5.0.0",
-    "cssnano": "^7.1.0",
-    "dotenv": "^17.2.2",
-    "esbuild": "^0.27.0",
-    "node-html-parser": "^7.0.1",
-    "nodemon": "^3.1.10",
-    "postcss": "^8.5.6",
-    "postcss-nesting": "^13.0.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "terser": "^5.43.1"
+  "private": true,
+  "bin": {
+    "streak-forge": "./dist/cli/main.js"
   },
   "exports": {
     "./components": {
-      "import": "./dist/src/components/index.js",
-      "types": "./dist/src/components/index.d.cts"
+      "types": "./dist/src/components/index.d.ts",
+      "import": "./dist/src/components/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/src/jsx/jsx-runtime.d.ts",
+      "import": "./dist/src/jsx/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/src/jsx/jsx-dev-runtime.d.ts",
+      "import": "./dist/src/jsx/jsx-dev-runtime.js"
     },
     "./core": {
-      "import": "./dist/src/index.js",
-      "types": "./dist/src/index.d.cts"
+      "types": "./dist/src/render.d.ts",
+      "import": "./dist/src/render.js"
     }
+  },
+  "files": ["dist/**/*.js", "dist/**/*.d.ts"],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:js": "bun bun.build.ts",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run clean && bun run build:js && bun run build:types",
+    "dev": "echo 'run `streak-forge dev` from a consumer app instead'"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "dotenv": "^17.2.2",
+    "node-html-parser": "^7.0.1",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21"
   }
 }
