@@ -276,7 +276,16 @@ export const scriptTransformPlugin: Bun.BunPlugin = {
     // matching, so every re-import after the first silently skips this
     // transform (and the closure-leak check) and falls through to Bun's
     // default loader instead.
-    build.onLoad({ filter: /\.(tsx|jsx|ts|js)(\?.*)?$/ }, (args) => {
+    //
+    // The leading `(?!.*node_modules)` is load-bearing: without it this
+    // filter matches *any* .ts/.tsx/.js/.jsx file the process ever imports,
+    // including third-party packages' own internals deep in node_modules -
+    // forcing e.g. a CJS bundle through compileToJs corrupts Bun's CJS/ESM
+    // interop detection for it (confirmed: rxjs's CJS entrypoint started
+    // throwing "Export named 'X' not found" once this transform touched it).
+    // Only the consuming app's own widgets/handlers/layouts/scripts should
+    // ever go through this - none of those live under node_modules.
+    build.onLoad({ filter: /^(?!.*node_modules).*\.(tsx|jsx|ts|js)(\?.*)?$/ }, (args) => {
       const filePath = args.path.split("?")[0]!;
       const source = readFileSync(filePath, "utf-8");
 

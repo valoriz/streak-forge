@@ -52,9 +52,23 @@ export const Script = (props: ScriptProps) => {
   const { id, nonce, children, options } = props;
   const fnSource =
     typeof children === "string" ? children : children.toString();
-  const optionsArg = options
-    ? `,${escapeForInlineScript(JSON.stringify(options))}`
-    : "";
+
+  let optionsArg = "";
+  if (options) {
+    // JSON.stringify returns undefined (not a string) for values it can't
+    // represent - a function, a symbol, or an object whose toJSON() returns
+    // undefined - anywhere inside options. Left unguarded this surfaces as a
+    // confusing internal crash ("undefined is not an object") deep inside
+    // this framework file instead of pointing back at the actual widget.
+    const json = JSON.stringify(options);
+    if (json === undefined) {
+      throw new Error(
+        `<Script id="${id}">'s "options" prop must be JSON-serializable - it contains a value (e.g. a function or symbol) that JSON.stringify can't represent.`,
+      );
+    }
+    optionsArg = `,${escapeForInlineScript(json)}`;
+  }
+
   const __html = `((${fnSource})(window${optionsArg}));`;
   return createElement(customTags.SCRIPT, {
     id,
