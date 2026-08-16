@@ -25,3 +25,12 @@ export const importFromDir = async (
 
 export const resolvedPath = (dir: string, name: string): string =>
   path.resolve(resolveInDir(dir, name));
+
+export const moduleExistsInDir = (dir: string, name: string): boolean => {
+  try {
+    resolveInDir(dir, name);
+    return true;
+  } catch {
+    return false;
+  }
+};

@@ -39,3 +39,8 @@ export const CONTENT_ENDPOINT = "/__streak/content";
 // the legacy pageDataHandler module's DATA_HANDLER_THRESHOLD.
 export const DATA_HANDLER_WARNING_THRESHOLD = 1000;
 export const DATA_HANDLER_ERROR_THRESHOLD = 2000;
+
+// Reserved, auto-discovered handler filename: called once per build (shared
+// across every page) and on every dev render (uncached), its output is
+// passed into every other data handler as { common }.
+export const COMMON_HANDLER_NAME = "CommonHandler";

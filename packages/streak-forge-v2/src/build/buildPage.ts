@@ -61,6 +61,7 @@ export const buildPageData = async (
   dirs: BuildPageDirs,
   styleDirs: StyleCollectDirs,
   progress?: Progress,
+  common?: Record<string, any>,
 ): Promise<RawContent> => {
   const { handlerDir, widgetsDir, layoutsDir } = dirs;
   const widgetIds = renderConfig.widgets.map((w) => w.id);
@@ -74,7 +75,7 @@ export const buildPageData = async (
     // running" apart from "hasn't started yet" - the only stage that can
     // genuinely hang on external I/O, unlike layout/widgets/styles.
     progress?.updateProgress("dataHandlerStart", { stage: "dataHandlerStart" });
-    const response = (await withHandlerTimeoutWarning(handlerModule.default(), renderConfig.dataHandler)) || {};
+    const response = (await withHandlerTimeoutWarning(handlerModule.default(renderConfig.metadata, { common }), renderConfig.dataHandler)) || {};
     if (response.notFound) notFound = true;
     dataHandlerOut = filterHandlerResponse(response, widgetIds);
   }

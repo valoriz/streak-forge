@@ -5,6 +5,7 @@ import { assemblePage } from "./postProcess";
 import type { WidgetForAssembly } from "./postProcess";
 import { buildClientScript } from "./clientRuntime";
 import { withHandlerTimeoutWarning } from "../build/handlerTimeoutWarning";
+import { getCommonHandlerData } from "../build/commonHandler";
 import type { RenderConfig, WidgetProps } from "../types";
 
 export const renderPage = async (
@@ -15,13 +16,17 @@ export const renderPage = async (
 
   let dataMap: Record<string, any> = {};
   if (renderConfig.dataHandler) {
+    // Fetched fresh on every render (no caching, unlike the once-per-build
+    // behavior in buildPage.ts) - dev is a live server, so this should never
+    // serve stale common data.
+    const common = await getCommonHandlerData(srcDir.handlerDir);
     const handlerModule = await importFromDir(
       srcDir.handlerDir,
       renderConfig.dataHandler,
     );
     dataMap =
       (await withHandlerTimeoutWarning(
-        handlerModule.default(),
+        handlerModule.default(renderConfig.metadata, { common }),
         renderConfig.dataHandler,
       )) || {};
   }

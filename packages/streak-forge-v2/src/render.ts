@@ -3,6 +3,7 @@ import config from "./config";
 import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR } from "./constants";
 import { buildPageData, type BuildPageDirs } from "./build/buildPage";
 import { Progress, type ProgressMetaInfo } from "./build/progress";
+import { getCommonHandlerData } from "./build/commonHandler";
 import type { StyleCollectDirs } from "./build/styleExtract";
 import type { RenderConfig } from "./types";
 
@@ -28,6 +29,12 @@ export interface RenderOptions {
   // (renderPage.ts) that this function doesn't touch either way.
   isBuild?: boolean;
   handlerOptions?: HandlerOptions;
+  // Result of the reserved CommonHandler.ts, threaded into every page data
+  // handler as { common }. Omit to have render() resolve it itself (calling
+  // CommonHandler once per render() call); pass it explicitly (even as
+  // undefined, e.g. from build.ts's once-per-build pre-fetch) to skip that -
+  // see the "common" in options check below.
+  common?: Record<string, any>;
 }
 
 export interface RenderedPageFile {
@@ -52,7 +59,7 @@ export interface RenderResponse {
 const resolveDir = (category: string, srcDir: string): string =>
   config.readFromPrebuild ? path.join(config.preBuildDir, category) : srcDir;
 
-const defaultDirs = (): {
+export const defaultDirs = (): {
   dirs: BuildPageDirs;
   styleDirs: StyleCollectDirs;
 } => ({
@@ -94,7 +101,23 @@ export const render = async (
       }
     : defaultDirs();
 
-  const raw = await buildPageData(renderConfig, dirs, styleDirs, progress);
+  // build.ts/devBuild.ts always pass an explicit `common` key (even when its
+  // value is undefined - no CommonHandler.ts present) after resolving it once
+  // up front; anything that doesn't mention the key at all (e.g. the external
+  // streak-forge-build consumer) gets it auto-resolved here instead, once per
+  // render() call.
+  const common =
+    options && "common" in options
+      ? options.common
+      : await getCommonHandlerData(dirs.handlerDir);
+
+  const raw = await buildPageData(
+    renderConfig,
+    dirs,
+    styleDirs,
+    progress,
+    common,
+  );
   // Reports render completion the same way every other stage does (a real
   // {currentTime, timeTook} entry) instead of a bespoke top-level field, so
   // external consumers that only special-case startTime/totalTime and treat
