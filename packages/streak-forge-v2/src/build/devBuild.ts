@@ -141,7 +141,7 @@ export const runDevBuild = async (): Promise<void> => {
   for (const [url, page] of pages) {
     console.info(`streak-forge: building ${url}`);
     try {
-      const { renderedPage } = await render(page.renderConfig, { common });
+      const { renderedPage } = await render(page.renderConfig, { common, url });
       const rawContent = JSON.parse(renderedPage[0]!.content);
       const payload = { ...rawContent, buildId, siteId, packageVersion };
 

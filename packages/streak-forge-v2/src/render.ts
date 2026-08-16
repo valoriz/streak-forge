@@ -4,6 +4,7 @@ import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR } from "./constants";
 import { buildPageData, type BuildPageDirs } from "./build/buildPage";
 import { Progress, type ProgressMetaInfo } from "./build/progress";
 import { getCommonHandlerData } from "./build/commonHandler";
+import { resolveMiddleware } from "./build/middleware";
 import type { StyleCollectDirs } from "./build/styleExtract";
 import type { RenderConfig } from "./types";
 
@@ -35,6 +36,12 @@ export interface RenderOptions {
   // undefined, e.g. from build.ts's once-per-build pre-fetch) to skip that -
   // see the "common" in options check below.
   common?: Record<string, any>;
+  // The sitemap-declared URL for this page. When provided, the reserved
+  // Middleware.ts (if present) runs first and may return a different
+  // RenderConfig to render instead. Only our own build.ts/devBuild.ts pass
+  // this - the external streak-forge-build consumer never mentions it, so
+  // this feature is inert for that fixed contract.
+  url?: string;
 }
 
 export interface RenderedPageFile {
@@ -101,6 +108,22 @@ export const render = async (
       }
     : defaultDirs();
 
+  // Middleware.ts (if present) runs first and may swap in a different
+  // RenderConfig entirely - undefined means "skip, use the sitemap's own
+  // config". Only runs when the caller supplies a url (our own build.ts/
+  // devBuild.ts do; the external consumer never does, so this is inert for
+  // that fixed contract).
+  let effectiveRenderConfig = renderConfig;
+  if (options?.url !== undefined) {
+    progress.updateProgress("middlewareStart", { stage: "middlewareStart" });
+    const middlewareConfig = await resolveMiddleware(
+      dirs.handlerDir,
+      options.url,
+    );
+    progress.updateProgress("middleware", { stage: "middleware" });
+    if (middlewareConfig) effectiveRenderConfig = middlewareConfig;
+  }
+
   // build.ts/devBuild.ts always pass an explicit `common` key (even when its
   // value is undefined - no CommonHandler.ts present) after resolving it once
   // up front; anything that doesn't mention the key at all (e.g. the external
@@ -112,7 +135,7 @@ export const render = async (
       : await getCommonHandlerData(dirs.handlerDir);
 
   const raw = await buildPageData(
-    renderConfig,
+    effectiveRenderConfig,
     dirs,
     styleDirs,
     progress,
@@ -128,8 +151,8 @@ export const render = async (
   return {
     renderedPage: [
       {
-        id: renderConfig.renderId,
-        path: path.join(renderConfig.version, "raw-content.json"),
+        id: effectiveRenderConfig.renderId,
+        path: path.join(effectiveRenderConfig.version, "raw-content.json"),
         content: JSON.stringify(raw),
         type: "application/json",
       },

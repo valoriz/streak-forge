@@ -44,3 +44,8 @@ export const DATA_HANDLER_ERROR_THRESHOLD = 2000;
 // across every page) and on every dev render (uncached), its output is
 // passed into every other data handler as { common }.
 export const COMMON_HANDLER_NAME = "CommonHandler";
+
+// Reserved, auto-discovered handler filename: runs before every page
+// resolution (dev requests and each build/dev-build page) and may return a
+// RenderConfig to render instead of the normal one - undefined means "skip".
+export const MIDDLEWARE_NAME = "Middleware";

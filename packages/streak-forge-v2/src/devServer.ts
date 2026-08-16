@@ -4,6 +4,7 @@ import config from "./config";
 import { loadSitemap } from "./sitemap";
 import { renderPage } from "./render/renderPage";
 import { getContent } from "./render/contentStore";
+import { resolveMiddleware } from "./build/middleware";
 import { onClosureLeak } from "./build/scriptTransform";
 import type { ClosureLeak } from "./build/scriptTransform";
 import { CONTENT_ENDPOINT, HMR_ENDPOINT, resourceTypes } from "./constants";
@@ -187,8 +188,18 @@ export const startDevServer = async () => {
         if (url.pathname === CONTENT_ENDPOINT) return handleContentRequest(url);
 
         const page: StreakSitemapItem | undefined = pages.get(url.pathname);
-        if (page) {
-          const html = await renderPage(page.url, page.renderConfig);
+        // Middleware.ts (if present) runs on every request first - undefined
+        // means "skip, use the sitemap's own config" (or 404 if there isn't
+        // one either); returning a RenderConfig overrides it, enabling pages
+        // for URLs that aren't statically listed at all.
+        const middlewareConfig = await resolveMiddleware(
+          config.srcDir.handlerDir,
+          url.pathname,
+          req,
+        );
+        const renderConfig = middlewareConfig ?? page?.renderConfig;
+        if (renderConfig) {
+          const html = await renderPage(url.pathname, renderConfig);
           return new Response(injectHmr(html), {
             headers: { "Content-Type": "text/html" },
           });

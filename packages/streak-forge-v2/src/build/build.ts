@@ -28,7 +28,7 @@ export const runBuild = async (): Promise<void> => {
   for (const [url, page] of pages) {
     console.info(`streak-forge: building ${url}`);
     try {
-      const { renderedPage } = await render(page.renderConfig, { common });
+      const { renderedPage } = await render(page.renderConfig, { common, url });
       const file = renderedPage[0]!;
       const pageDir = path.join(config.staticBuildDir, url);
       const outputPath = path.join(pageDir, file.path);
