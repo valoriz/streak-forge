@@ -6,7 +6,10 @@ node_modules
 
 # build output
 dist
-build
+# not a bare "build" - that also matches src/build/ (real source, e.g.
+# packages/streak-forge-v2/src/build/), only package-root build output dirs
+packages/*/build
+apps/*/build
 out
 .cache
 .build
@@ -40,3 +43,6 @@ logs
 
 # packaged tarballs
 packages/**/streak*.tgz
+
+# local test-app clone (keeps its own git history, not a submodule of this repo)
+apps/hello-streak-app
