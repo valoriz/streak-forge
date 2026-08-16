@@ -4,6 +4,7 @@ import config from "../config";
 import { loadSitemap } from "../sitemap";
 import { render, defaultDirs } from "../render";
 import { getCommonHandlerData } from "./commonHandler";
+import { debugLog } from "./debugLog";
 
 interface SavedFile {
   path?: string;
@@ -107,7 +108,7 @@ export const runDevBuild = async (): Promise<void> => {
     fs.cpSync(config.srcDir.publicDir, config.staticBuildDir, { recursive: true });
   }
 
-  console.info("streak-forge: fetching common scripts...");
+  debugLog("streak-forge: fetching common scripts...");
   try {
     const res = await fetch(`${buildEndpoint}?type=commonScripts`, {
       method: "POST",
@@ -118,7 +119,7 @@ export const runDevBuild = async (): Promise<void> => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${json.error ?? JSON.stringify(json)}`);
     if (json.success && json.data) {
       saveFiles(config.staticBuildDir, json.data);
-      console.info("streak-forge: common scripts saved.");
+      debugLog("streak-forge: common scripts saved.");
     } else {
       console.error("streak-forge: common scripts response invalid:", json.error ?? "unknown");
     }
@@ -127,19 +128,20 @@ export const runDevBuild = async (): Promise<void> => {
   }
 
   const pages = await loadSitemap(config.targetSrc);
-  console.info(`streak-forge: building ${pages.size} page(s) via remote optimizer...`);
+  debugLog(`streak-forge: building ${pages.size} page(s) via remote optimizer...`);
 
   // CommonHandler.ts (if present) is resolved once here and shared across
   // every page below - not per page - to avoid repeating whatever API calls
   // it makes.
   const { dirs } = defaultDirs();
-  console.info("streak-forge: fetching common handler data...");
+  debugLog("streak-forge: fetching common handler data...");
   const common = await getCommonHandlerData(dirs.handlerDir);
 
   let failures = 0;
 
   for (const [url, page] of pages) {
-    console.info(`streak-forge: building ${url}`);
+    debugLog(`streak-forge: building ${url}`);
+    const pageStart = Date.now();
     try {
       const { renderedPage } = await render(page.renderConfig, { common, url });
       const rawContent = JSON.parse(renderedPage[0]!.content);
@@ -154,13 +156,14 @@ export const runDevBuild = async (): Promise<void> => {
 
       const pageDir = path.join(config.staticBuildDir, url);
       saveFiles(pageDir, json.data?.renderedPage ?? []);
-      console.info(`streak-forge: done ${url}`);
+      debugLog(`streak-forge: done ${url}`);
+      debugLog(`streak-forge: ${url} took ${Date.now() - pageStart}ms to render`);
     } catch (err) {
       failures += 1;
       console.error(`streak-forge: failed to build ${url}:`, (err as Error).message);
     }
   }
 
-  console.info(`streak-forge: dev-build complete (${pages.size - failures}/${pages.size} page(s) succeeded).`);
+  debugLog(`streak-forge: dev-build complete (${pages.size - failures}/${pages.size} page(s) succeeded).`);
   if (failures > 0) process.exitCode = 1;
 };
