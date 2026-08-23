@@ -16,7 +16,7 @@ const result = await Bun.build({
   sourcemap: isProduction ? "none" : "inline",
   // Real runtime deps of the consuming app, not something to inline - keeps
   // the shipped bundle small and lets normal semver/dedupe rules apply.
-  external: ["typescript", "chokidar", "dotenv", "node-html-parser"],
+  external: ["typescript", "chokidar", "dotenv", "node-html-parser", "terser"],
   naming: {
     entry: "[dir]/[name].js",
   },
