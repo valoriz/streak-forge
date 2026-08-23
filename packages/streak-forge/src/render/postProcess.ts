@@ -4,6 +4,8 @@ import {
   placeholderAttrs,
   resourceTypes,
   WIDGET_LOADING_STRATEGIES,
+  SCRIPT_OPTS_ATTR,
+  OPTS_PLACEHOLDER,
 } from "../constants";
 import { putContent } from "./contentStore";
 import type { ScriptItem } from "../types";
@@ -15,8 +17,21 @@ const extractScripts = (
   const scripts: ScriptItem[] = [];
   root.querySelectorAll(customTags.SCRIPT).forEach((el) => {
     const id = el.getAttribute("id");
-    const content = el.innerHTML;
+    let content = el.innerHTML;
     if (id && content && !seenIds.has(id)) {
+      // <Script>'s minified template is shared/cached across every instance
+      // of the same widget script (see MINIFY_TEMPLATE_CACHE in
+      // components/index.tsx) and only carries the literal OPTS_PLACEHOLDER
+      // - the real per-render options JSON travels alongside it on
+      // SCRIPT_OPTS_ATTR instead. Nothing downstream of this function (the
+      // dev server's live-serving path) ever sees that attribute again, so
+      // it has to be resolved into real JS right here, before content is
+      // handed off - otherwise the browser executes a bare, undefined
+      // identifier and throws.
+      const opts = el.getAttribute(SCRIPT_OPTS_ATTR);
+      if (opts && content.includes(OPTS_PLACEHOLDER)) {
+        content = content.replaceAll(OPTS_PLACEHOLDER, opts);
+      }
       scripts.push({ id, content });
       seenIds.add(id);
     }

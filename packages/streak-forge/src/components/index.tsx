@@ -1,7 +1,7 @@
 import { minify_sync } from "terser";
 import { createElement } from "../jsx/element";
 import type { VNodeChild } from "../jsx/types";
-import { customTags } from "../constants";
+import { customTags, SCRIPT_OPTS_ATTR, OPTS_PLACEHOLDER } from "../constants";
 
 export interface WidgetPlaceholderProps {
   id: string;
@@ -42,15 +42,16 @@ export interface ScriptProps {
   options?: Record<string, any>;
 }
 
-// Marks where the per-render options data goes in the minified template
-// below — a bare (undeclared) identifier reference, not a string literal, so
-// terser's minifier leaves it completely untouched (it only renames variables
-// it can prove are locally declared) regardless of how it mangles everything
-// else around it. The optimization stage (streak-distiller-v2) substitutes
-// this for the real, page-specific options JSON with a plain string replace —
-// no minification needed there at all. See MINIFY_TEMPLATE_CACHE below for why
-// this split exists.
-const OPTS_PLACEHOLDER = "__SF_OPTS__";
+// OPTS_PLACEHOLDER marks where the per-render options data goes in the
+// minified template below — a bare (undeclared) identifier reference, not a
+// string literal, so terser's minifier leaves it completely untouched (it
+// only renames variables it can prove are locally declared) regardless of
+// how it mangles everything else around it. Whoever serves this script
+// (postProcess.ts for dev, streak-distiller for a real build) substitutes it
+// for the real, page-specific options JSON with a plain string replace — no
+// minification needed there at all. See MINIFY_TEMPLATE_CACHE below for why
+// this split exists. Both constants live in ../constants so postProcess.ts
+// can do that substitution without duplicating the literal here.
 
 // `fnSource` (the widget's authored Script logic) is a compile-time constant
 // per widget component — scriptTransform.ts bakes it in once, before any
@@ -107,12 +108,12 @@ export const Script = (props: ScriptProps) => {
   return createElement(customTags.SCRIPT, {
     id,
     nonce,
-    // Read by the optimization stage to substitute OPTS_PLACEHOLDER for this
-    // page's actual data — a plain HTML attribute (not inlined into the
-    // script content), so it goes through the framework's normal, already-
-    // correct attribute escaping (renderToString.ts's escapeAttr) rather than
-    // needing its own bespoke escaping here.
-    "data-sf-opts": optionsJson,
+    // Read by whoever substitutes OPTS_PLACEHOLDER for this page's actual
+    // data (postProcess.ts / streak-distiller) — a plain HTML attribute (not
+    // inlined into the script content), so it goes through the framework's
+    // normal, already-correct attribute escaping (renderToString.ts's
+    // escapeAttr) rather than needing its own bespoke escaping here.
+    [SCRIPT_OPTS_ATTR]: optionsJson,
     dangerouslySetInnerHTML: { __html },
   });
 };

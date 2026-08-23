@@ -30,6 +30,16 @@ export const WIDGET_LOADING_STRATEGIES = {
   LAZY: "lazy",
 } as const;
 
+// <Script>'s options bridge. The minified template embeds OPTS_PLACEHOLDER
+// verbatim (shared/cached across every instance of the same widget script -
+// see MINIFY_TEMPLATE_CACHE in components/index.tsx); the actual per-render
+// JSON lives alongside it on SCRIPT_OPTS_ATTR. Something has to substitute
+// one for the other before a browser ever executes the script - postProcess
+// (dev/live-serving path) does it here; streak-distiller does the same
+// substitution for the build path, working from the untouched raw output.
+export const SCRIPT_OPTS_ATTR = "data-sf-opts";
+export const OPTS_PLACEHOLDER = "__SF_OPTS__";
+
 export const WIDGET_META_ID = "w-m";
 export const HMR_ENDPOINT = "/__streak_hmr";
 export const CONTENT_ENDPOINT = "/__streak/content";
