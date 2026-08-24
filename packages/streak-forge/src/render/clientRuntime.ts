@@ -66,6 +66,67 @@ const coreRuntime = (
     });
   };
 
+  // Generic window-level utility globals - mirrors the same functions
+  // streak-distiller injects into every distilled build (getAppScript in
+  // prepareForSiteOnlyOnce/index.ts). A widget's <Script> block can't tell
+  // whether it's running under `streak-forge dev` or a distilled production
+  // build, so it has to be able to call these in both. Only the plain
+  // utilities are mirrored here - widget-loading/hydration (addWidgetToBody,
+  // hydratePage, the SPA router) already has its own dev-appropriate
+  // implementation above/below, fetching from CONTENT_ENDPOINT instead of
+  // distiller's versioned static JSON paths.
+  win.geById = win.document.getElementById.bind(win.document);
+
+  win.debounce = function (func: (...args: any[]) => void, delay: number) {
+    let timer: ReturnType<typeof setTimeout>;
+    return function (this: unknown, ...args: any[]) {
+      clearTimeout(timer);
+      timer = setTimeout(() => func.apply(this, args), delay);
+    };
+  };
+
+  win.onVisible = function (
+    target: Element,
+    callback: (isIntersecting: boolean, target: Element, metadata: any) => void,
+    options?: { onlyOnce?: boolean },
+    metadata?: any,
+  ) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          callback(entry.isIntersecting, entry.target, metadata);
+          if (options?.onlyOnce) observer.disconnect();
+        });
+      },
+      { root: null, rootMargin: "0px", threshold: 0.1 },
+    );
+    observer.observe(target);
+  };
+
+  win.stall = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+  win.setCookie = function (name: string, value: string, days?: number) {
+    let expires = "";
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+      expires = `; expires=${date.toUTCString()}`;
+    }
+    win.document.cookie = `${name}=${value || ""}${expires}; path=/`;
+  };
+
+  win.getCookie = function (name: string): string | null {
+    const nameEQ = `${name}=`;
+    const ca = win.document.cookie.split(";");
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === " ") c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+  };
+
   const applyContent = (
     type: string,
     id: string,

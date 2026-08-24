@@ -9,6 +9,14 @@ import type { StyleCollectDirs } from "./build/styleExtract";
 import type { RenderConfig } from "./types";
 
 export type { RenderConfig } from "./types";
+// Re-exported so external build systems (e.g. streak-forge-build) can
+// pre-fetch CommonHandler.ts's output once per batch/process and pass it
+// into every render() call via `options.common` - avoiding a redundant
+// CommonHandler call per page (see the "common" in options check below).
+export { getCommonHandlerData } from "./build/commonHandler";
+// Re-exported so external callers can type their own onProgress callback
+// against RenderOptions's actual metaInfo shape instead of widening it.
+export type { ProgressMetaInfo } from "./build/progress";
 
 export interface HandlerOptions {
   srcDir: {

@@ -73,8 +73,14 @@ export const renderPage = async (
   const trailingScripts = assembled.trailingScripts
     .map((s) => `<script id="${s.id}">${s.content}</script>`)
     .join("");
+  // Core runtime FIRST — it defines the window-level helpers (geById,
+  // loadDynamicComponent, addWidgetToBody, debounce, onVisible, ...) that a
+  // widget's own trailing script may call synchronously at its top level.
+  // Plain inline <script> tags execute in document order, so if a widget
+  // script ran first it would call an undefined function - this ordering is
+  // what guarantees the runtime is always ready before any widget script runs.
   const bodyExtra =
-    trailingScripts + buildClientScript(assembled.lazyWidgetIds);
+    buildClientScript(assembled.lazyWidgetIds) + trailingScripts;
   doc = doc.includes("</body>")
     ? doc.replace("</body>", `${bodyExtra}</body>`)
     : doc + bodyExtra;
