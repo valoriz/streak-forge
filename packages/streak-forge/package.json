@@ -1,6 +1,6 @@
 {
   "name": "streak-forge",
-  "version": "4.1.5",
+  "version": "4.1.6-beta.0",
   "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
   "author": "indrajithc",
   "license": "Apache-2.0",
@@ -47,7 +47,12 @@
       "import": "./dist/src/render.js"
     }
   },
-  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "LICENSE"],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "clean": "rm -rf dist",
     "build:js": "bun bun.build.ts",
