@@ -43,6 +43,3 @@ logs
 
 # packaged tarballs
 packages/**/streak*.tgz
-
-# local test-app clone (keeps its own git history, not a submodule of this repo)
-apps/hello-streak-app
