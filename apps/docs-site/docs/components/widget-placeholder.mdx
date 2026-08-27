@@ -1,0 +1,82 @@
+---
+title: WidgetPlaceholder
+description: "The WidgetPlaceholder component for marking widget injection slots in layouts."
+---
+
+# WidgetPlaceholder
+
+`WidgetPlaceholder` is a build-time component from `streak-forge/components` used inside layouts. It marks the position where a widget's rendered HTML will be injected.
+
+---
+
+## Import
+
+```tsx
+import { WidgetPlaceholder } from "streak-forge/components";
+```
+
+---
+
+## Usage
+
+```tsx
+<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />
+```
+
+Both props are required — `WidgetPlaceholder` throws at render time if either is missing:
+
+| Prop | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | Must match the widget `id` in the sitemap and the handler return key |
+| `type` | string | Must match the widget filename in `src/widgets/` (case-sensitive) |
+
+---
+
+## How It Works at Build Time
+
+At build/render time:
+
+1. The layout JSX is rendered to an HTML string, with each `WidgetPlaceholder` emitted as a `<widget id="..." type="...">` marker tag.
+2. Each widget in `widgets[]` is rendered to its own HTML fragment.
+3. For a widget with no `loadingStrategy` (or `loadingStrategy` other than `"lazy"`), its marker is replaced directly with the widget's rendered HTML — it ships inline in the page.
+4. For a widget with `loadingStrategy: "lazy"`, its marker is replaced with a placeholder `<div>` (`component-placeholder component-type="w" component-id="<id>">`) instead, and its HTML/scripts are stored for the client runtime to fetch on demand.
+
+The `<widget>` marker tag itself never appears in the final output — it's always replaced by either the real HTML or a lazy placeholder.
+
+---
+
+## w-m Widget Registry
+
+After all widgets are assembled, the page also contains a hidden registry element:
+
+```html
+<script type="application/json" id="w-m">["HelloMessage"]</script>
+```
+
+`w-m` holds a plain JSON array of the ids of every **lazy** widget on the page (widgets with no `loadingStrategy` are not listed here — they're already inline in the HTML). Streak's client runtime reads this array on page load and fetches each lazy widget's HTML in order, one after another.
+
+---
+
+## Example Layout Usage
+
+```tsx
+import { WidgetPlaceholder } from "streak-forge/components";
+
+const MainLayout = () => {
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body>
+        <WidgetPlaceholder id="HelloBanner"  type="HelloBanner"  />
+        <WidgetPlaceholder id="HelloMessage" type="HelloMessage" />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+Every widget declared in `streak.sitemap.json` `widgets[]` must have a corresponding `WidgetPlaceholder` in the layout. The `id` and `type` values must match exactly.

@@ -1,0 +1,127 @@
+---
+title: Data Handlers
+description: "How async data handlers fetch and prepare page data for a page render."
+order: 5
+---
+
+# Data Handlers
+
+A data handler is an async function, default-exported, in `src/handlers/`. It is called by the renderer before any JSX runs, and returns a plain object whose keys correspond to widget ids.
+
+---
+
+## Location
+
+```
+src/handlers/HomeDataHandler.ts
+```
+
+The filename (without extension) must match the `dataHandler` field in the sitemap.
+
+---
+
+## Example
+
+```ts
+// src/handlers/HomeDataHandler.ts
+const getHomeData = async (metadata?: Record<string, unknown>, { common }: { common?: any } = {}) => {
+  return {
+    status: 200, // required — signals render success
+    PageHead: {
+      // key = widget id from sitemap
+      title: "Hello",
+    },
+    HelloBanner: {
+      heading: common?.branding?.tagline ?? "Hello World",
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+---
+
+## Signature: `(metadata, { common })`
+
+A data handler is always called with two arguments:
+
+| Argument | Type | Where it comes from |
+| --- | --- | --- |
+| `metadata` | `object` | The resolved `RenderConfig`'s own `metadata` field — the same object declared in the sitemap entry (or returned by `Middleware.ts`) for this page. |
+| `{ common }` | `object` | `common` is whatever `CommonHandler.ts` returned, made available to every page's data handler. `undefined` if the app has no `CommonHandler.ts`. |
+
+`common` is intended for data shared across many pages — branding, navigation, site settings — so it doesn't have to be fetched again by every page's own handler. See [Common Handler](/core-concepts/common-handler.html) for what it is and how it's produced.
+
+---
+
+## Rules
+
+- Must be the **default export**
+- Must return `{ status: 200, ...widgetData }`
+- Each top-level key (other than `status`) must match a widget `id` in the sitemap
+- The value under each key is passed to the matching widget as `props.data`
+- It is async — you can `await` any database, CMS, or API call here
+- There is no implicit error handling — if it throws, the page fails to render
+
+---
+
+## Data Flow
+
+```
+handler returns { status: 200, HelloBanner: { heading: "Hello" } }
+        ↓
+Streak renderer matches by widget id
+        ↓
+HelloBanner widget receives { data: { heading: "Hello" } }
+        ↓
+props.data.heading === "Hello"
+```
+
+---
+
+## Fetching External Data
+
+Because handlers are async, they can call any external service:
+
+```ts
+const getHomeData = async () => {
+  const articles = await fetch("https://cms.example.com/api/articles").then((r) => r.json());
+
+  return {
+    status: 200,
+    ArticleList: {
+      items: articles,
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+---
+
+## Widget Data Mapping
+
+Sitemap widget id:
+
+```json
+{ "id": "HelloBanner", "type": "HelloBanner" }
+```
+
+Handler return key:
+
+```ts
+HelloBanner: {
+  heading: "Hello World";
+}
+```
+
+Widget receives:
+
+```ts
+props.data === { heading: "Hello World" };
+props.data.heading === "Hello World";
+```
+
+If the handler does not return a key for a widget, the widget receives `{ data: undefined }`. Always use optional chaining (`?.`) and nullish coalescing (`??`) in widgets to handle this case safely.

@@ -1,0 +1,94 @@
+---
+title: Quick Start
+description: Get a Streak.js site running in under 5 minutes.
+order: 1
+---
+
+# Quick Start
+
+Get a Streak.js site running in under 5 minutes.
+
+---
+
+## Prerequisites
+
+- **Bun >= 1.0** — Streak.js uses Bun as its runtime and package manager. Install it from [bun.sh](https://bun.sh).
+- **Git** — required to scaffold a new project.
+
+---
+
+## Create a New Project
+
+Scaffold a new project with `create-streak-app`:
+
+```bash
+bunx create-streak-app
+```
+
+It prompts you for a project name, clones the [hello-streak-app](https://github.com/valoriz/hello-streak-app) reference template into that folder, runs `bun install`, and adds `streak-forge` to it.
+
+```bash
+cd my-app
+```
+
+> **Note:** Prefer to explore the reference project directly instead of scaffolding a copy? See [Hello Streak App](/getting-started/hello-streak-app.html).
+
+---
+
+## Project Structure
+
+```
+my-app/
+  src/
+    handlers/       ← async data providers (one per page), plus optional
+                       Middleware.ts and CommonHandler.ts
+    layouts/        ← full HTML document templates with WidgetPlaceholders
+    widgets/        ← stateless TSX components rendered per page
+  public/
+    assets/         ← JS/CSS files served as static files (e.g. for loadPackage)
+    styles/         ← compiled Tailwind CSS
+  out/              ← build output (created by `streak-forge build`)
+  streak.sitemap.json
+  tsconfig.json
+  package.json
+```
+
+---
+
+## Start the Dev Server
+
+```bash
+bun run dev
+```
+
+The dev server starts on **port 3690** by default. It renders each page fresh on every request and reloads the browser automatically on file changes.
+
+---
+
+## Build
+
+```bash
+bunx streak-forge build
+```
+
+Reads `streak.sitemap.json` and renders every page, writing a JSON snapshot to `out/<url>/<version>/raw-content.json` for each one. This is an intermediate build artifact, not a finished `index.html`.
+
+Publishing this output to a live site is handled by Nexus — see the Nexus documentation for publishing/hosting details.
+
+> Optionally, run `bunx streak-forge pre-build` first. It bundles your handlers, widgets, and layouts into a `.prebuild/` cache so later builds skip re-transpiling that source — it's a speed optimization, not the step that produces the site.
+
+---
+
+## Adding a New Page — Quick Checklist
+
+Adding a page to a Streak site requires four files and one sitemap entry. Here is the minimum checklist:
+
+1. **Sitemap entry** — add a new object to `streak.sitemap.json` with `url` and a `renderConfig` (`renderId`, `dataHandler`, `rootLayout`, `widgets[]`, `version`).
+
+2. **Data handler** — create `src/handlers/MyPageDataHandler.ts`. Default-export an async function `(metadata, { common }) => {...}` that returns `{ status: 200, WidgetId: { ... } }`.
+
+3. **Layout** — reuse an existing layout or create a new one in `src/layouts/`. Add a `<WidgetPlaceholder id="WidgetId" type="WidgetType" />` for every widget.
+
+4. **Widget** — create `src/widgets/MyWidget.tsx`. Default-export a function that receives `props.data` and returns JSX.
+
+5. **Verify** — run `bun run dev` and navigate to the new URL on port 3690.

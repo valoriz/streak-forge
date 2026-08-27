@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["src/components/index.tsx", "src/jsx/jsx-runtime.ts", "src/jsx/jsx-dev-runtime.ts", "src/jsx/types.ts", "src/jsx/element.ts", "src/render.ts"]
+}

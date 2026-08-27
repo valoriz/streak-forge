@@ -1,0 +1,68 @@
+{
+  "name": "streak-forge",
+  "version": "4.1.5",
+  "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
+  "author": "indrajithc",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "streak-forge": "./dist/cli/main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valoriz/streak-forge.git",
+    "directory": "packages/streak-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/valoriz/streak-forge/issues"
+  },
+  "homepage": "https://docs.streakjs.com/",
+  "keywords": [
+    "static-site",
+    "static-site-generator",
+    "ssg",
+    "bun",
+    "streak",
+    "streak-js",
+    "streak-forge"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    "./components": {
+      "types": "./dist/src/components/index.d.ts",
+      "import": "./dist/src/components/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/src/jsx/jsx-runtime.d.ts",
+      "import": "./dist/src/jsx/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/src/jsx/jsx-dev-runtime.d.ts",
+      "import": "./dist/src/jsx/jsx-dev-runtime.js"
+    },
+    "./core": {
+      "types": "./dist/src/render.d.ts",
+      "import": "./dist/src/render.js"
+    }
+  },
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "README.md", "LICENSE"],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:js": "bun bun.build.ts",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run clean && bun run build:js && bun run build:types",
+    "dev": "echo 'run `streak-forge dev` from a consumer app instead'"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "dotenv": "^17.2.2",
+    "node-html-parser": "^7.0.1",
+    "terser": "^5.43.1",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21"
+  }
+}

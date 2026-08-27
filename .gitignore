@@ -1,0 +1,48 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+.npm
+
+# build output
+dist
+# not a bare "build" - that also matches src/build/ (real source, e.g.
+# packages/streak-forge-v2/src/build/), only package-root build output dirs
+packages/*/build
+apps/*/build
+out
+.cache
+.build
+
+# env files
+.env
+.env.*.local
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# testing
+coverage
+*.lcov
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+
+# misc
+.DS_Store
+.idea
+.eslintcache
+
+# packaged tarballs
+packages/**/streak*.tgz
+
+# local test-app clone (keeps its own git history, not a submodule of this repo)
+apps/hello-streak-app

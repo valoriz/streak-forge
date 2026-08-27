@@ -1,0 +1,61 @@
+---
+title: Public Assets
+description: "Serving static files from the public/ directory."
+---
+
+# Public Assets
+
+The `public/assets/` directory is where JS and CSS files are placed for runtime loading via `gDom.loadPackage()`. `loadPackage` fetches files from this directory at the `/assets/` URL path by inserting a real `<script src>` or `<link rel="stylesheet">` tag into the page.
+
+---
+
+## Directory Structure
+
+```
+public/
+  assets/
+    js/
+      motion.js
+      lenis.min.js
+    css/
+      theme.css
+  styles/
+    tailwind.css    ← compiled at build time by css-build script
+```
+
+---
+
+## Path Convention
+
+`loadPackage` always prepends `/assets/` to the path you pass it. A file at `public/assets/js/motion.js` is fetched as `/assets/js/motion.js`:
+
+```ts
+gDom.loadPackage("js/motion.js")
+// → fetches /assets/js/motion.js
+// → file must be at public/assets/js/motion.js
+```
+
+---
+
+## What Goes in public/assets/
+
+Place any JS or CSS library that should be loaded on demand at runtime:
+
+- Animation libraries (e.g. `motion.js`)
+- Scroll libraries (e.g. `lenis.min.js`)
+- Any other third-party script that widgets load via `gDom.loadPackage()`
+
+---
+
+## What Does NOT Go in public/assets/
+
+- Tailwind CSS — this is compiled by the `css-build` script and written to `public/styles/tailwind.css`, then linked directly from layouts
+- Images and fonts — these are placed in other subdirectories under `public/` and referenced by their direct URL path, not via `loadPackage`
+
+---
+
+## Serving in Development
+
+In dev mode (`streak-forge dev`) the `public/` directory is served as static files. The `/assets/` path maps directly to `public/assets/`.
+
+In production, the static host or CDN must serve `public/assets/` at the `/assets/` path. `loadPackage` calls will fail to load packages if this path mapping is not preserved.

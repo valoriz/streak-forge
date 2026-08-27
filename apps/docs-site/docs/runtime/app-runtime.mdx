@@ -1,0 +1,75 @@
+---
+title: App Runtime
+description: "How Streak's client runtime registers gDom and loads lazy widgets."
+---
+
+# App Runtime
+
+Streak's client runtime is a tiny inline `<script>` injected at the end of every generated page's `<body>`, right after the `w-m` registry element. It runs immediately as the page parses — no bundler, no separate runtime file, no Web Worker. Its entire job is to register the four `gDom` helpers on `window` and then load any lazy widgets in order.
+
+---
+
+## What Gets Injected
+
+Two elements are appended just before `</body>`:
+
+```html
+<script type="application/json" id="w-m">["HelloMessage"]</script>
+<script>(function (window, opts) { /* ...runtime body, see below... */ })(window, {
+  endpoint: "/__streak/content",
+  widgetMetaId: "w-m"
+});</script>
+```
+
+The runtime function is written as a normal, readable function and stringified into the page — the same technique the `Script` component uses for widget-authored scripts.
+
+---
+
+## What the Runtime Registers on window
+
+| Function | Signature | Description |
+| --- | --- | --- |
+| `addResourceToBody` | `(src, options?, callback?)` | Appends a real `<script src>`/`<link rel=stylesheet>` tag to `document.body`; caches by `src` so repeat calls don't re-fetch |
+| `loadPackage` | `(name)` | `addResourceToBody(`/assets/${name}`, { async: true })` — loads a file from `public/assets/` |
+| `loadDynamicComponent` | `(id, callback?)` | Fetches a `Dynamic` block's content and injects it into its placeholder |
+| `addWidgetToBody` | `(id, callback?)` | Fetches a lazy widget's content and injects it into its placeholder |
+
+These are exactly the four methods documented in the [gDom API](/runtime/gdom-api) — `gDom` inside a `Script` function is literally `window` after this runtime has run.
+
+---
+
+## Startup Sequence
+
+**1. Register the four helper functions on `window`**
+
+`addResourceToBody`, `loadPackage`, `loadDynamicComponent`, and `addWidgetToBody` are all assigned directly onto the `window` object passed in.
+
+**2. Read the `w-m` widget registry**
+
+The runtime looks up the `<script id="w-m">` element by id and `JSON.parse`s its text content into an array of widget ids. If the element isn't present, it treats the list as empty.
+
+```ts
+const metaEl = window.document.getElementById("w-m");
+const lazyWidgetIds = metaEl ? JSON.parse(metaEl.textContent || "[]") : [];
+```
+
+**3. Load lazy widgets sequentially**
+
+The runtime walks the id list one at a time, calling `addWidgetToBody(id, callback)` for the first id and only moving to the next once that widget's fetch-and-inject has completed:
+
+```ts
+const loadNext = (ids) => {
+  const [first, ...rest] = ids;
+  if (!first) return;
+  window.addWidgetToBody(first, () => loadNext(rest));
+};
+loadNext(lazyWidgetIds);
+```
+
+That's the whole startup sequence. There's no timing/session bookkeeping, no cookies, and nothing runs on a separate thread — widgets without `loadingStrategy: "lazy"` are never touched by this runtime at all, because their HTML and `<script>` tags are already inline in the page by the time it runs.
+
+---
+
+## Fetching Content
+
+`loadDynamicComponent` and `addWidgetToBody` both fetch from the same content endpoint (`/__streak/content`), passing the current page path, a resource type (`c` for `Dynamic`, `w` for widgets), and the id as query parameters. The response is JSON: `{ html: string, scripts?: { id: string; content: string }[] }`. The runtime swaps `html` into the matching placeholder element (`[component-id][component-type]`) via `outerHTML`, then appends any `scripts` to the document, skipping anything already injected.

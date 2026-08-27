@@ -1,0 +1,88 @@
+---
+title: Dynamic Components
+description: "Loading and injecting deferred content on demand with loadDynamicComponent."
+---
+
+# Dynamic Components
+
+The `Dynamic` component strips its children from the initial HTML at build time. At runtime, `gDom.loadDynamicComponent()` fetches that content and injects it into the placeholder element on demand.
+
+---
+
+## Build-Time Behavior
+
+When the renderer encounters `<Dynamic id="my-panel">...</Dynamic>` inside a widget's rendered output:
+
+1. Any `<script>` tags inside it are extracted and kept alongside the content.
+2. The child content (and its extracted scripts) is stored separately, keyed by the current page and the id, so it can be fetched later.
+3. The `<Dynamic>` element itself is replaced with a placeholder `<div>`:
+   - `component-placeholder` — marker attribute
+   - `component-type="c"` — resource type for dynamic content
+   - `component-id="my-panel"`
+
+This stripping happens regardless of whether the parent widget is eager or `loadingStrategy: "lazy"` — so `<Dynamic>` works correctly even nested inside a lazy widget. Once the lazy widget's own HTML is injected client-side, the placeholder for its nested `Dynamic` block comes along with it and remains fetchable.
+
+The initial HTML contains the placeholder but not the child content.
+
+---
+
+## Runtime API
+
+### gDom.loadDynamicComponent
+
+```ts
+gDom.loadDynamicComponent(id: string, callback?: () => void): void
+```
+
+Fetches the stored content for `id` from the content endpoint, replaces the matching placeholder element's `outerHTML` with the returned `html`, appends any bundled `<script>` tags to the document, and calls `callback` once finished. If content for that `id` was already injected earlier on the page, the call is a no-op and `callback` fires immediately.
+
+---
+
+## Full Pattern
+
+`Dynamic` is always paired with a `Script` that triggers the injection at the right moment:
+
+```tsx
+<Dynamic id="nav-submenu">
+  <ul>
+    <li>Item A</li>
+    <li>Item B</li>
+  </ul>
+</Dynamic>
+
+<Script id="nav-submenu-trigger">
+  {(gDom: any) => {
+    document.getElementById("nav-btn")
+      .addEventListener("click", () => {
+        gDom.loadDynamicComponent("nav-submenu", () => {
+          console.info("submenu injected into DOM");
+        });
+      });
+  }}
+</Script>
+```
+
+---
+
+## Placeholder Attributes
+
+| Attribute | Value |
+| --- | --- |
+| `component-placeholder` | Marker attribute, no value |
+| `component-type` | `"c"` for `Dynamic` content (`"w"` is used for lazy widget placeholders) |
+| `component-id` | The `id` prop passed to `Dynamic` |
+
+---
+
+## Use Cases
+
+- Navigation submenus that should not be in the initial HTML
+- Modal content loaded only when the modal is opened
+- Below-the-fold sections injected after the user scrolls
+- Any HTML that would bloat the initial payload unnecessarily
+
+---
+
+## Relationship to lazy
+
+Both `Dynamic` and `loadingStrategy: "lazy"` keep content out of the initial HTML and use the same placeholder-and-fetch mechanism under the hood. The difference is *when* the fetch happens: a lazy widget is fetched automatically on page load (sequentially, via the `w-m` registry), while `Dynamic` content is only fetched when your own code explicitly calls `loadDynamicComponent`. They are complementary, not interchangeable.

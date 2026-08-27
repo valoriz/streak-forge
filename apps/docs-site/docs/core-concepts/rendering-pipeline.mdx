@@ -1,0 +1,111 @@
+---
+title: Rendering Pipeline
+description: "How Streak resolves and renders a single page, from Middleware to the final style collection."
+order: 2
+---
+
+# Rendering Pipeline
+
+When `streak-forge build` renders a page — or `streak-forge dev` resolves an incoming request — it runs the same fixed sequence of steps. Two of the steps are optional, auto-discovered handler files; the rest always run.
+
+---
+
+## The Steps
+
+| Step | Runs | What it does |
+| --- | --- | --- |
+| 1 | `Middleware.ts` (optional) | Called with `(url, req?)`. May return a different `RenderConfig` to render instead of the sitemap's own — or `undefined` to fall through. |
+| 2 | `CommonHandler.ts` (optional) | Called with no arguments. Returns data shared across every page's data handler. |
+| 3 | Page data handler | Called as `(metadata, { common })`. Returns `{ status, ...widgetData }`. |
+| 4 | Layout render | Renders the page's layout to a full HTML document with `WidgetPlaceholder` slots. |
+| 5 | Widget render | Each widget renders with `{ data: widgetData[id] }` and is injected into its placeholder. |
+| 6 | Style collection | `<style>` and `<link rel="stylesheet">` output from the layout and widgets is gathered. |
+
+---
+
+## Step 1 — Middleware
+
+If `src/handlers/Middleware.ts` exists, it runs first, for every page resolution attempt. It receives the URL being resolved (and, in `streak-forge dev`, the live `Request`) and can return a `RenderConfig` to render in place of whatever the sitemap says for that URL — including URLs that aren't in `streak.sitemap.json` at all. Returning `undefined` means "use the sitemap's normal config for this URL, or 404 if there's no static entry either."
+
+If the file doesn't exist, this step is a silent no-op and the sitemap's own config is used.
+
+See [Middleware](/core-concepts/middleware.html) for the full behavior and an example.
+
+---
+
+## Step 2 — CommonHandler
+
+If `src/handlers/CommonHandler.ts` exists, it runs next, before any page's own data handler. It takes no arguments and returns a plain object made available to every page's data handler as the `common` property of its second argument.
+
+In `streak-forge build`, `CommonHandler` is called **once** for the whole build and its result is shared across every page — useful for data that's identical across the site (branding, navigation, etc.), so it isn't re-fetched by every page's own handler. In `streak-forge dev`, it's called fresh on **every** request — never cached — so edits to it show up immediately.
+
+If the file doesn't exist, this step is a silent no-op and `common` is `undefined`.
+
+See [Common Handler](/core-concepts/common-handler.html) for the full behavior and an example.
+
+---
+
+## Step 3 — Page Data Handler
+
+The page's own data handler (referenced by `dataHandler` in the resolved `RenderConfig`) runs next, as `(metadata, { common })`:
+
+- `metadata` is the `metadata` field from the resolved `RenderConfig`
+- `common` is whatever `CommonHandler` returned (`undefined` if there's no `CommonHandler.ts`)
+
+It must return `{ status: 200, ...widgetData }`, one key per widget `id`. See [Data Handlers](/core-concepts/data-handlers.html).
+
+---
+
+## Step 4 — Layout Render
+
+The layout named by `rootLayout` renders to a full HTML document — `<html>`, `<head>`, `<body>` — with a `WidgetPlaceholder` for every widget in `widgets[]`. See [Layouts](/core-concepts/layouts.html).
+
+---
+
+## Step 5 — Widget Render
+
+For each entry in `widgets[]`, Streak renders the matching widget component with `{ data: widgetData[id] }` as props and substitutes the rendered HTML into that widget's `WidgetPlaceholder` in the layout. See [Widgets](/core-concepts/widgets.html).
+
+---
+
+## Step 6 — Style Collection
+
+Finally, `<style>` tags and `<link rel="stylesheet">` references produced by the layout and its widgets are collected for the finished page.
+
+---
+
+## Flow
+
+```
+Incoming URL
+        ↓
+Middleware.ts (optional)      ← (url, req?) → RenderConfig | undefined
+        ↓  undefined → fall through to the sitemap entry (or 404)
+Resolved RenderConfig
+        ↓
+CommonHandler.ts (optional)   ← () → shared data, reused across the build / fresh per dev request
+        ↓
+Page data handler             ← (metadata, { common }) → { status, ...widgetData }
+        ↓
+Layout render                 ← full <html> document with WidgetPlaceholder slots
+        ↓
+Widget render (per widget)    ← props = { data: widgetData[id] }, injected into its placeholder
+        ↓
+Style collection              ← <style> / <link rel="stylesheet"> gathered
+```
+
+---
+
+## Output
+
+`streak-forge build` renders every entry in `streak.sitemap.json` and writes the result to:
+
+```
+out/<url>/<version>/raw-content.json
+```
+
+This is an intermediate snapshot of the rendered page — not final HTML. Turning it into a deployable site is handled by Nexus; see the Nexus documentation.
+
+`streak-forge dev` runs the same steps per request and serves the result directly over HTTP with hot-reload — it does not write to `out/`.
+
+> Note: Before `build` or `dev` can render anything, `streak-forge pre-build` bundles your source into a `.prebuild/` cache (with optional optimization). Rendering reads from that cache.

@@ -1,0 +1,102 @@
+---
+title: GDOM Reference
+description: "Complete API listing of all gDom helper functions and properties."
+---
+
+# gDom Reference
+
+Complete listing of every property and method available on `gDom` inside `Script` children functions. `gDom` is `window` extended with exactly four helpers registered by Streak's client runtime — a single inline script injected at the end of every generated page. There is no Web Worker, no cookie/session state, and no DOM-utility grab bag; this is the entire surface.
+
+---
+
+## Resource Loading
+
+### addResourceToBody
+
+```ts
+addResourceToBody(
+  src: string,
+  options?: { async?: boolean },
+  callback?: () => void,
+): void
+```
+
+Inserts a real `<script src="...">` (for a `.js` URL) or `<link rel="stylesheet" href="...">` (for a `.css` URL) into `document.body`. Calls `callback` once loaded.
+
+Requests are cached by `src` in an in-flight/loaded promise map: calling this twice for the same `src` never appends a second tag or re-fetches — it just re-runs `callback` once the existing load resolves (or immediately if already loaded).
+
+```ts
+gDom.addResourceToBody("/assets/css/theme.css", undefined, () => {
+  console.info("theme.css applied");
+});
+```
+
+### loadPackage
+
+```ts
+loadPackage(name: string): Promise<void>
+```
+
+Loads a JS or CSS file from `public/assets/` by calling `addResourceToBody(`/assets/${name}`, { async: true })` under the hood. `name` is relative to `/assets/`. Returns a `Promise` that resolves once the resource has loaded.
+
+```ts
+await gDom.loadPackage("js/motion.js");
+```
+
+---
+
+## Dynamic Content
+
+### loadDynamicComponent
+
+```ts
+loadDynamicComponent(id: string, callback?: () => void): void
+```
+
+Fetches the content of a `<Dynamic id>` block from the content endpoint and replaces its placeholder element's `outerHTML` with the result. Injects any bundled `<script>` tags. Calls `callback` when done.
+
+```ts
+gDom.loadDynamicComponent("my-panel", () => {
+  console.info("panel ready");
+});
+```
+
+### addWidgetToBody
+
+```ts
+addWidgetToBody(id: string, callback?: () => void): void
+```
+
+Same fetch-and-swap mechanism as `loadDynamicComponent`, targeting a lazy widget's placeholder instead of a `Dynamic` block. Called automatically by the client runtime on page load, once per id in the `w-m` registry, chained sequentially.
+
+```ts
+gDom.addWidgetToBody("HelloMessage", () => {
+  console.info("widget ready");
+});
+```
+
+---
+
+## w-m Registry
+
+```html
+<script type="application/json" id="w-m">["HelloMessage"]</script>
+```
+
+A plain JSON array of lazy widget ids, read once on startup. Not a `gDom` method, but the data every fresh page load feeds into `addWidgetToBody`.
+
+---
+
+## Not Part of gDom
+
+The following do **not** exist on `gDom` — if you're looking for them, they're either not needed or handled differently:
+
+| Not real | What to use instead |
+| --- | --- |
+| `onVisible` | Use a plain `IntersectionObserver` inside your `Script` body |
+| `debounce` | Write your own inline, or load one via `loadPackage` |
+| `geById` | `document.getElementById` |
+| `stall` | `new Promise(r => setTimeout(r, ms))` |
+| `setCookie` / `getCookie` | Standard `document.cookie` handling |
+| `ftr` / first-time-render flag | Not tracked by the runtime |
+| `loadAsset`, `assetLoader`, Web Worker asset pipeline | `loadPackage` / `addResourceToBody` — there is no worker |

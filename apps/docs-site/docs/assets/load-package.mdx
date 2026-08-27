@@ -1,0 +1,97 @@
+---
+title: loadPackage
+description: "Using loadPackage to load third-party libraries at runtime."
+---
+
+# loadPackage
+
+`gDom.loadPackage()` is the runtime API for loading third-party JS or CSS files from `public/assets/`. It's a thin wrapper around `gDom.addResourceToBody` that inserts a real `<script src>` or `<link rel="stylesheet">` tag directly into `document.body` — there is no Web Worker or background fetch pipeline involved. It returns a `Promise` that resolves once the tag has loaded.
+
+---
+
+## Signature
+
+```ts
+gDom.loadPackage(name: string): Promise<void>
+```
+
+---
+
+## Usage
+
+```ts
+await gDom.loadPackage("js/motion.js");
+const { animate, inView, scroll, stagger, spring } = gDom.Motion;
+```
+
+```ts
+await gDom.loadPackage("js/lenis.min.js");
+const lenis = new gDom.Lenis();
+```
+
+---
+
+## How It Works
+
+`loadPackage` is effectively:
+
+```ts
+win.loadPackage = function (name) {
+  return new Promise((resolve, reject) => {
+    win.addResourceToBody(`/assets/${name}`, { async: true }, () => resolve());
+  });
+};
+```
+
+It prepends `/assets/` to `name` and hands off to `addResourceToBody`, which picks the right tag based on the file extension — a `<script src>` for `.js`, a `<link rel="stylesheet">` for `.css` — appends it to `document.body`, and resolves the promise once the browser fires the `load` event.
+
+---
+
+## File Location Rule
+
+The `name` argument is relative to `/assets/`:
+
+| `loadPackage` call | File fetched from server | File must be at |
+| --- | --- | --- |
+| `loadPackage("js/motion.js")` | `/assets/js/motion.js` | `public/assets/js/motion.js` |
+| `loadPackage("js/lenis.min.js")` | `/assets/js/lenis.min.js` | `public/assets/js/lenis.min.js` |
+| `loadPackage("css/theme.css")` | `/assets/css/theme.css` | `public/assets/css/theme.css` |
+
+Commit any file you plan to `loadPackage` to `public/assets/` in git — these are static files served as-is, not bundled by Streak's build.
+
+---
+
+## Caching
+
+`addResourceToBody` caches in-flight and completed loads in a promise map keyed by the resolved URL (`/assets/<name>`). Calling `loadPackage` for the same path a second time — from the same widget or a different one — reuses that promise instead of appending a second `<script>`/`<link>` tag or re-fetching the file over the network. It is safe to call `loadPackage` for the same asset from multiple widgets on the same page.
+
+---
+
+## After Loading
+
+When a JS file is loaded, it executes immediately, just like any `<script src>` tag. If the library assigns itself to `window`, it is accessible via `gDom` right after the `await`:
+
+```ts
+await gDom.loadPackage("js/motion.js");
+// gDom.Motion is now available, because motion.js set window.Motion
+const { animate } = gDom.Motion;
+animate("#el", { opacity: [0, 1] }, { duration: 0.4 });
+```
+
+This depends entirely on the library itself attaching a global — `loadPackage` does not do any module wrapping or namespacing on your behalf.
+
+---
+
+## Inside a Script Component
+
+`loadPackage` is called inside a `Script` children function, where `gDom` is the first argument:
+
+```tsx
+<Script id="animate-on-load">
+  {async (gDom: any) => {
+    await gDom.loadPackage("js/motion.js");
+    const { animate } = gDom.Motion;
+    animate("#hero", { opacity: [0, 1] }, { duration: 0.6 });
+  }}
+</Script>
+```

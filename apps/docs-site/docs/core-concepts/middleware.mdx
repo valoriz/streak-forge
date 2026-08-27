@@ -1,0 +1,126 @@
+---
+title: Middleware
+description: "Overriding or dynamically resolving a page's render config with the reserved Middleware.ts file."
+order: 3
+---
+
+# Middleware
+
+`Middleware.ts` is a reserved, auto-discovered filename in `src/handlers/`. If it exists, Streak calls it first, before anything else, whenever it needs to resolve a URL to a page. It can return a `RenderConfig` to render instead of whatever `streak.sitemap.json` says for that URL — or `undefined` to fall through to normal resolution.
+
+It's entirely optional — if the file doesn't exist, this step is a silent no-op and every URL resolves exactly as `streak.sitemap.json` describes.
+
+> Note: This is a publicly documented app feature for controlling routing inside your own project. It has nothing to do with the internal build-and-hosting system — deploying and hosting the finished site is handled by Nexus, see the Nexus documentation.
+
+---
+
+## Location
+
+```
+src/handlers/Middleware.ts
+```
+
+Like `CommonHandler.ts`, `Middleware.ts` isn't referenced anywhere in `streak.sitemap.json` — it's picked up automatically by filename.
+
+---
+
+## Signature: `(url, req?)`
+
+```ts
+const resolveMiddleware = async (url: string, req?: Request) => {
+  // return undefined, or a RenderConfig object shaped like a sitemap
+  // entry's `renderConfig` field
+};
+
+export default resolveMiddleware;
+```
+
+| Argument | Type | Notes |
+| --- | --- | --- |
+| `url` | `string` | The URL being resolved. |
+| `req` | `Request \| undefined` | The live incoming request — only present in `streak-forge dev`. In a build, `Middleware` is called once per sitemap page with just that page's `url`; there is no live request, so `req` is `undefined`. |
+
+Return `undefined` to mean "skip — use the normal `streak.sitemap.json` entry for this URL, or 404 if there isn't one." Return a `RenderConfig` object to render that instead.
+
+---
+
+## When It Runs
+
+Middleware runs first on every page resolution attempt:
+
+- In `streak-forge dev`, on every incoming request, before anything else.
+- In `streak-forge build`, once per sitemap page, called with that page's `url` (no `req`).
+
+Because it can return a completely different `RenderConfig`, it's the mechanism that lets a URL that isn't listed in `streak.sitemap.json` at all still resolve to a real, fully rendered page — "any route"-style dynamic routing — or let a URL that *is* listed be overridden to use a different page's render config entirely.
+
+---
+
+## Example
+
+Based on a working example: mapping specific trigger URLs to another page's existing render config, by reading `streak.sitemap.json` directly.
+
+```ts
+// src/handlers/Middleware.ts
+import { readFileSync } from "fs";
+import { join } from "path";
+
+// Same shape as a streak.sitemap.json entry — see the Sitemap page for the
+// full renderConfig field reference.
+interface SitemapEntry {
+  url: string;
+  renderConfig: Record<string, unknown>;
+}
+
+// Cached at module scope — read once, reused for every call.
+let sitemapCache: SitemapEntry[] | undefined;
+const loadSitemap = (): SitemapEntry[] => {
+  if (!sitemapCache) {
+    const sitemapPath = join(import.meta.dir, "../../streak.sitemap.json");
+    sitemapCache = JSON.parse(readFileSync(sitemapPath, "utf-8")) as SitemapEntry[];
+  }
+  return sitemapCache;
+};
+
+// Maps a trigger URL -> the streak.sitemap.json url whose render config it
+// should use instead. Two different kinds of route, same mechanism:
+//   "/page-2"       — a real, already-listed sitemap URL, overridden here
+//   "/dynamic/test" — not in streak.sitemap.json at all ("any route")
+const routeMap: Record<string, string> = {
+  "/page-2": "/",
+  "/dynamic/test": "/",
+};
+
+const resolveMiddleware = async (url: string, _req?: Request) => {
+  const targetUrl = routeMap[url];
+  if (!targetUrl) return undefined;
+
+  const targetEntry = loadSitemap().find((entry) => entry.url === targetUrl);
+  if (!targetEntry) return undefined;
+
+  return targetEntry.renderConfig;
+};
+
+export default resolveMiddleware;
+```
+
+With this in place:
+
+- `/page-2` renders using the `/` entry's `renderConfig`, even though `/page-2` also has its own listed entry — Middleware's return value wins.
+- `/dynamic/test` renders using the `/` entry's `renderConfig`, even though `/dynamic/test` doesn't appear in `streak.sitemap.json` at all.
+- Any other URL falls through (`Middleware` returns `undefined`) and resolves normally.
+
+---
+
+## Rules
+
+- Must be the **default export**
+- Must be `async` (or return a `Promise`)
+- Return `undefined` to fall through to normal sitemap resolution
+- Return a full `RenderConfig` object to render that instead
+- If the file doesn't exist, every URL resolves exactly as `streak.sitemap.json` describes
+
+---
+
+## Where It Fits
+
+Middleware is the very first step in resolving a page — it runs before `CommonHandler.ts` and before the page's own data handler. See [Rendering Pipeline](/core-concepts/rendering-pipeline.html) for the full sequence, and [Common Handler](/core-concepts/common-handler.html) for the step that runs right after it.

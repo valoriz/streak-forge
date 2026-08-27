@@ -1,0 +1,85 @@
+---
+title: Hello Streak App
+description: "Get started with Streak.js using the hello-streak-app reference project on GitHub."
+order: 0
+---
+
+# Hello Streak App
+
+**hello-streak-app** is the real, working reference implementation of a Streak.js project — the same template `create-streak-app` scaffolds from. Clone it directly, or use `bunx create-streak-app` to get your own copy.
+
+**Repository:** [https://github.com/valoriz/hello-streak-app](https://github.com/valoriz/hello-streak-app)
+
+---
+
+## Prerequisites
+
+- **Bun ≥ 1.2** — install from [bun.sh](https://bun.sh)
+
+---
+
+## Local Development
+
+Clone the repo, install dependencies, and start the dev server:
+
+```bash
+git clone https://github.com/valoriz/hello-streak-app.git
+cd hello-streak-app
+bun install
+bun run dev
+```
+
+The dev server starts on **port 3690**. Pages are rendered on request and the browser reloads automatically on file changes.
+
+---
+
+## Project Structure
+
+```
+hello-streak-app/
+  src/
+    handlers/
+      HomeDataHandler.ts   ← data provider, reused by all three pages
+      CommonHandler.ts     ← shared branding/nav data, passed as { common }
+      Middleware.ts        ← overrides the render config for /page-2 and
+                              resolves /dynamic/test, a url not in the sitemap
+    layouts/
+      MainLayout.tsx        ← full HTML document wrapper
+    widgets/                ← stateless TSX components (nav, banner, features, ...)
+  public/
+    assets/                 ← static JS, e.g. Motion.js for loadPackage
+    styles/                 ← compiled Tailwind CSS
+  streak.sitemap.json        ← page registry — single source of truth
+  package.json
+```
+
+---
+
+## What the App Demonstrates
+
+- **`Preload`** — resource hinting in `PageHead` and `HelloBanner`
+- **`Script`** — client interactivity via serialized IIFEs
+- **`Dynamic`** — deferred DOM injection, used in a few widgets
+- **`loadPackage`** — loading third-party JS (Motion.js) from `public/assets/`
+- **Lazy widgets** — most widgets on the home page use `loadingStrategy: "lazy"`
+- **`Middleware.ts`** — overrides the render config for `/page-2` and resolves `/dynamic/test`, a URL that isn't in the sitemap at all
+- **`CommonHandler.ts`** — branding and nav data shared across every page's handler
+
+---
+
+## Building
+
+```bash
+bun run build            # compiles Tailwind, then bundles handlers/widgets/layouts into .prebuild/
+bunx streak-forge build  # renders every page, writing out/<url>/<version>/raw-content.json
+```
+
+Publishing this output live is handled by Nexus — see the Nexus documentation.
+
+---
+
+## Next Steps
+
+- [Project Structure](/getting-started/project-structure.html) — understand the layout in detail
+- [Core Concepts: Widgets](/core-concepts/widgets.html) — how widgets work
+- [Create a Project](/getting-started/create-a-project.html) — build a project from scratch

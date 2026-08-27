@@ -1,0 +1,41 @@
+---
+title: Removing a Page from Your Site
+description: How to mark a page as not found in its data handler.
+order: 10
+---
+
+# Removing a Page from Your Site
+
+When you no longer want a page to be live, you do not need to delete any files. You can mark it as "not found" in its data handler, and the build output will reflect that.
+
+---
+
+## How to Remove a Page
+
+Open the data handler for the page you want to remove and return `notFound: true`:
+
+```ts
+export default async function handler(metadata, { common }) {
+  return {
+    notFound: true,
+  };
+}
+```
+
+That is the only change needed. You do not need to remove the page from your sitemap or touch any other file.
+
+---
+
+## What Happens Next
+
+During `streak-forge build`, the page's `notFound` flag is included in its rendered output. Publishing this output live — including whether and how a not-found page is taken down from your live site — is handled by Nexus. See the Nexus documentation for publishing/hosting details.
+
+---
+
+## When to Use This
+
+- A blog post or landing page that you want to take down permanently.
+- A campaign page that has ended.
+- Any page that should no longer be publicly accessible.
+
+You can safely delete a removed page's handler, widget, and layout files from your project at any time once you've confirmed it's no longer needed — or leave them in place if you think you might bring the page back later.

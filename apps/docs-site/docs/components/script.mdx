@@ -1,0 +1,107 @@
+---
+title: Script
+description: "The Script component for injecting client-side JavaScript into static pages."
+---
+
+# Script
+
+`Script` is a component from `streak-forge/components` that serializes a function body to a string at build time and emits it as an inline `<script>` tag that executes as an IIFE in the browser.
+
+---
+
+## Import
+
+```tsx
+import { Script } from "streak-forge/components";
+```
+
+---
+
+## Example
+
+```tsx
+import { Script } from "streak-forge/components";
+
+<Script id="my-script" options={{ color: "#818cf8", delay: 800 }}>
+  {(gDom: any, options: any) => {
+    // This function body is serialized to a string at build time.
+    // It executes in the browser as an IIFE.
+    // gDom === window (plus the Streak-injected helpers)
+    // options === the plain object passed to the options prop
+    document.getElementById("el").style.color = options.color;
+  }}
+</Script>;
+```
+
+---
+
+## How It Works Internally
+
+The `Script` component implementation:
+
+```tsx
+export const Script = (props: ScriptProps) => {
+  const { id, nonce, children, options } = props;
+  const fnSource =
+    typeof children === "string" ? children : children.toString();
+  const optionsArg = options ? `,${escapeForInlineScript(JSON.stringify(options))}` : "";
+  const __html = `((${fnSource})(window${optionsArg}));`;
+  return createElement("script", { id, nonce, dangerouslySetInnerHTML: { __html } });
+};
+```
+
+The `children` function is converted to a string with `.toString()` and wrapped in an IIFE:
+
+```js
+((function (gDom, options) {
+  document.getElementById("el").style.color = options.color;
+})(window, { "color": "#818cf8", "delay": 800 }));
+```
+
+A build-time transform rewrites `children` from a live function into its already-serialized source string before the dev server ever imports the widget file — by the time `Script` runs, `children` is typically already a string. If `options` is provided, it is `JSON.stringify`'d and any literal `</script` sequence inside it is escaped so it can't break out of the inline `<script>` tag.
+
+---
+
+## Props
+
+| Prop       | Type     | Required | Description                                                            |
+| ---------- | -------- | -------- | ---------------------------------------------------------------------- |
+| `id`       | string   | Yes      | Must be unique on the page                                             |
+| `options`  | object   | No       | Plain object serialized to JSON and passed as the second IIFE argument |
+| `nonce`    | string   | No       | CSP nonce forwarded to the rendered `<script nonce>` attribute         |
+| `children` | function | Yes      | The function body to serialize — receives `(gDom, options)`            |
+
+---
+
+## gDom
+
+Inside the children function, `gDom` is `window` extended with the helpers Streak's client runtime injects: `addResourceToBody`, `loadPackage`, `loadDynamicComponent`, and `addWidgetToBody`. The full interface is documented in the Runtime section under the `gDom` reference page.
+
+---
+
+## Critical Rules
+
+**No closures.** The function body is serialized with `.toString()`. Any variable from the outer scope at build time is not available at runtime.
+
+```tsx
+// WRONG — outerVar is not available in the browser
+const outerVar = "hello";
+<Script id="s">
+  {(gDom: any) => {
+    console.log(outerVar); // undefined at runtime
+  }}
+</Script>
+
+// CORRECT — pass values through options
+<Script id="s" options={{ message: "hello" }}>
+  {(gDom: any, options: any) => {
+    console.log(options.message); // "hello"
+  }}
+</Script>
+```
+
+**No imports.** The function body is a plain string. ES module imports inside it will not work. Load third-party packages using `gDom.loadPackage()` instead.
+
+**`id` is required** and must be unique on the page.
+
+**`options` must be JSON-serializable** — it is passed through `JSON.stringify`.

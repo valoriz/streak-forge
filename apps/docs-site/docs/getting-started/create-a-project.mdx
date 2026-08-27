@@ -1,0 +1,175 @@
+---
+title: Create a Project
+description: "Step-by-step guide to creating a new Streak.js project from scratch."
+---
+
+# Create a Project
+
+A Streak.js project requires four things:
+
+1. `streak.sitemap.json` — declares pages
+2. A data handler in `src/handlers/`
+3. A layout in `src/layouts/`
+4. At least one widget in `src/widgets/`
+
+This guide walks through creating each one from scratch.
+
+---
+
+## Step 1 — Create streak.sitemap.json
+
+The sitemap is the single entry point for the build. Place it at the project root.
+
+```json
+[
+  {
+    "url": "/",
+    "renderConfig": {
+      "renderId": "homeRenderId",
+      "metadata": {},
+      "dataHandler": "HomeDataHandler",
+      "rootLayout": "MainLayout",
+      "widgets": [
+        { "id": "PageHead",     "type": "PageHead" },
+        { "id": "HelloBanner",  "type": "HelloBanner" },
+        { "id": "HelloMessage", "type": "HelloMessage", "loadingStrategy": "lazy" }
+      ],
+      "version": "1.0.0"
+    }
+  }
+]
+```
+
+`renderId` must be globally unique across the sitemap — it identifies this page's render config. The output path for a full build is derived from `url` and `version` instead (see Step 6).
+
+---
+
+## Step 2 — Create the Data Handler
+
+Create `src/handlers/HomeDataHandler.ts`. The filename must match `dataHandler` in the sitemap (without extension).
+
+```ts
+// src/handlers/HomeDataHandler.ts
+interface CommonData {
+  branding?: { logoSrc?: string };
+}
+
+const getHomeData = async (
+  metadata?: Record<string, unknown>,
+  { common }: { common?: CommonData } = {},
+) => {
+  return {
+    status: 200,             // required — signals render success
+    PageHead: {               // key matches widget id from sitemap
+      title: "Hello",
+    },
+    HelloBanner: {
+      heading: "Hello World",
+    },
+  };
+};
+
+export default getHomeData;
+```
+
+Rules:
+- Must be the default export
+- Must return `{ status: 200, ...widgetData }`
+- Each top-level key must match a widget `id` in the sitemap
+- The value under each key is passed to the matching widget as `props.data`
+- It is async — you can `await` any database, CMS, or API call here
+- Streak calls the handler as `(metadata, { common })` — the sitemap's `metadata` field and (if `CommonHandler.ts` exists) its return value. Both arguments are optional in practice; a handler that ignores them still works
+
+---
+
+## Step 3 — Create the Layout
+
+Create `src/layouts/MainLayout.tsx`. The filename must match `rootLayout` in the sitemap (without extension).
+
+```tsx
+// src/layouts/MainLayout.tsx
+import { WidgetPlaceholder } from "streak-forge/components";
+
+const MainLayout = () => {
+  return (
+    <html dir="ltr" lang="en">
+      <head>
+        <WidgetPlaceholder id="PageHead" type="PageHead" />
+      </head>
+      <body>
+        <WidgetPlaceholder id="HelloBanner"  type="HelloBanner"  />
+        <WidgetPlaceholder id="HelloMessage" type="HelloMessage" />
+      </body>
+    </html>
+  );
+};
+
+export default MainLayout;
+```
+
+Rules:
+- Must be the default export
+- Must return the full HTML document — `<html>`, `<head>`, `<body>`
+- Every widget in the sitemap's `widgets[]` needs a matching `WidgetPlaceholder` here
+- `id` and `type` on `WidgetPlaceholder` must match the sitemap entry exactly
+
+---
+
+## Step 4 — Create Widgets
+
+Create `src/widgets/HelloBanner.tsx`. The filename must exactly match the `type` field in the sitemap (case-sensitive).
+
+```tsx
+// src/widgets/HelloBanner.tsx
+type HelloBannerProps = {
+  data?: {
+    heading?: string;
+  };
+};
+
+const HelloBanner = (props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello World";
+  return (
+    <section>
+      <h1>{heading}</h1>
+    </section>
+  );
+};
+
+export default HelloBanner;
+```
+
+Rules:
+- Must be the default export
+- Data arrives as `props.data` — always use optional chaining (`?.`) and fallbacks (`??`)
+- Widgets are stateless — no `useState`, no `useEffect`
+
+---
+
+## Step 5 — Run the Dev Server
+
+```bash
+bun run dev
+```
+
+Open `http://localhost:3690/` — the dev server renders the page for that request, no build needed.
+
+---
+
+## Step 6 — Build
+
+```bash
+bunx streak-forge build
+```
+
+Output is written to:
+
+```
+out/1.0.0/raw-content.json
+```
+
+(for the root `/` page's `version: "1.0.0"` — a different `url`/`version` writes to a different path under `out/`). This file is a JSON snapshot of the render — the layout, per-widget rendered HTML, and metadata — not a browsable HTML page by itself.
+
+> Optionally run `bunx streak-forge pre-build` first to bundle handlers, widgets, and layouts into `.prebuild/`, speeding up later builds.
+
+Publishing this output to a live site is handled by Nexus — see the Nexus documentation for publishing/hosting details.

@@ -1,0 +1,64 @@
+---
+title: create-streak-app
+description: "The create-streak-app CLI for scaffolding new Streak.js projects."
+---
+
+# create-streak-app
+
+`create-streak-app` is a standalone scaffolding CLI that creates a new Streak.js project from a starter template. It clones a template repository, installs dependencies, and gets a working project ready to run.
+
+---
+
+## Usage
+
+Run it with your package manager's "create" shorthand — no separate install step needed:
+
+```bash
+bunx create-streak-app
+```
+
+```bash
+npx create-streak-app
+```
+
+The CLI walks you through an interactive prompt flow:
+
+1. Confirms it's OK to proceed
+2. Checks that Git is available (required — it's used to clone the template) and exits with an error if it isn't
+3. Checks that Bun is available; if it isn't, it attempts to install Bun automatically (`curl -fsSL https://bun.sh/install | sh` on macOS/Linux) before continuing
+4. Asks for a project name (letters, numbers, `-`, and `_` only; defaults to `my-streak-app` if left blank). The name must not already exist as a folder in the current directory
+5. Clones the template repository into that folder
+6. Runs `bun install`, then installs `streak-forge` into the new project with `bun add streak-forge`
+7. Updates the generated `package.json`'s `name` field to match your project name
+
+---
+
+## What Gets Scaffolded
+
+The project is scaffolded from a Git template repository — currently [`valoriz/hello-streak-app`](https://github.com/valoriz/hello-streak-app) — cloned with `git clone --depth 1`. The `.git` directory from the clone is removed afterward, so the new project starts with no git history of its own.
+
+> **Note:** Whatever the template repository contains is what you get — source layout (`src/handlers`, `src/widgets`, `src/layouts`), `streak.sitemap.json`, and `public/` all come from the template itself, not from `create-streak-app`. Check the template repository directly for its current contents.
+
+---
+
+## After Scaffolding
+
+```bash
+cd my-streak-app
+bun dev
+```
+
+or
+
+```bash
+bun start
+```
+
+Dependencies (including `streak-forge`) are already installed by the time the CLI finishes, so you can start developing immediately.
+
+---
+
+## Requirements
+
+- **Git** — required. The CLI exits immediately if `git --version` fails.
+- **Bun** — the CLI attempts to install it for you if missing, but a working internet connection and permission to run the Bun install script are required for that to succeed. You can also install Bun yourself beforehand from [bun.sh](https://bun.sh).

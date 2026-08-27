@@ -1,0 +1,53 @@
+---
+title: Lazy Widgets
+description: "How lazy-loaded widgets defer HTML and JS until after page load."
+---
+
+# Lazy Widgets
+
+`loadingStrategy: "lazy"` is an optional field on a widget entry in `streak.sitemap.json`. When set, the widget's HTML and scripts are rendered at build/render time but held back from the initial page — a small placeholder ships instead, and Streak's client runtime fetches and injects the real content on page load.
+
+---
+
+## How to Declare a Lazy Widget
+
+```json
+{
+  "id": "HelloMessage",
+  "type": "HelloMessage",
+  "loadingStrategy": "lazy"
+}
+```
+
+---
+
+## What "lazy" Does
+
+- The widget's HTML and any `<script>` tags inside it are rendered normally, but instead of being inlined into the page they're stored separately, keyed by page and widget id.
+- The widget's `WidgetPlaceholder` slot in the layout is replaced with a small placeholder `<div component-placeholder component-type="w" component-id="HelloMessage">` rather than the widget's real markup.
+- The widget's id is appended to the page's `w-m` registry — a plain JSON array embedded near the end of `<body>`.
+- The client runtime reads `w-m` on page load and calls `gDom.addWidgetToBody(id, callback)` for each id in order, fetching that widget's stored HTML/scripts and swapping them into the placeholder.
+
+---
+
+## Comparison: lazy vs Dynamic vs default
+
+| | HTML in initial payload | JS loaded |
+| --- | --- | --- |
+| No `loadingStrategy` | Yes — inlined at build time | Immediately, inline with the page |
+| `loadingStrategy: "lazy"` | No — placeholder only | Fetched and injected after page load |
+| `Dynamic` component | No — stripped at build time | On demand via `gDom.loadDynamicComponent()` |
+
+`lazy` and `Dynamic` solve different problems. Use `lazy` when a widget can wait until just after the page loads. Use `Dynamic` when content should not load until your own code decides to trigger it.
+
+---
+
+## Loading Order
+
+Widgets without `loadingStrategy` are never touched by the client runtime — they're already part of the initial HTML by the time the browser parses it. Only the ids of `"lazy"` widgets end up in `w-m`, and the runtime loads them strictly in the order they appear in that array, one at a time (each widget's fetch must finish before the next one starts):
+
+```html
+<script type="application/json" id="w-m">["HelloMessage", "Testimonials"]</script>
+```
+
+You only need to set `"loadingStrategy": "lazy"` in the sitemap — Streak handles building the `w-m` array and generating the placeholder for you.

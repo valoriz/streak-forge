@@ -1,0 +1,117 @@
+---
+title: GDOM API
+description: "The gDom browser API — Streak's window extensions for Script functions."
+---
+
+# gDom — The Extended Window
+
+Inside every `Script` children function, the first argument (`gDom`) is `window` extended with a small set of helpers Streak's client runtime registers on startup. It is not a separate object — it is literally `window`.
+
+The entire client runtime is a single inline script injected at the end of every generated page. It registers four functions on `window` and then walks a list of lazy widget ids, loading each one in turn. There is no Web Worker involved anywhere in this pipeline — every fetch and DOM insertion happens directly on the main thread.
+
+---
+
+## Full Interface
+
+```ts
+interface GDom extends Window {
+  addResourceToBody: (
+    src: string,
+    options?: { async?: boolean },
+    callback?: () => void,
+  ) => void;
+  loadPackage: (name: string) => Promise<void>;
+  loadDynamicComponent: (id: string, callback?: () => void) => void;
+  addWidgetToBody: (id: string, callback?: () => void) => void;
+}
+```
+
+---
+
+## Method Reference
+
+### addResourceToBody
+
+```ts
+addResourceToBody(
+  src: string,
+  options?: { async?: boolean },
+  callback?: () => void,
+): void
+```
+
+Appends a real `<script src="...">` (if `src` ends in `.js`) or `<link rel="stylesheet" href="...">` (if `src` ends in `.css`) directly to `document.body`. `callback` fires once the tag has loaded.
+
+In-flight and already-loaded requests are cached in a promise map keyed by `src` — calling `addResourceToBody` again with the same `src` reuses that promise instead of appending a second tag or re-fetching, and still calls the new `callback` once it resolves.
+
+```ts
+gDom.addResourceToBody("/assets/js/motion.js", { async: true }, () => {
+  console.info("motion.js loaded");
+});
+```
+
+---
+
+### loadPackage
+
+```ts
+loadPackage(name: string): Promise<void>
+```
+
+Loads a JS or CSS file from `public/assets/`. Internally this is just `addResourceToBody(`/assets/${name}`, { async: true })` — `name` is resolved relative to `/assets/`, so `"js/motion.js"` fetches `/assets/js/motion.js`.
+
+Because it's built on `addResourceToBody`, repeat calls for the same path reuse the cached promise rather than re-fetching.
+
+```ts
+await gDom.loadPackage("js/motion.js");
+```
+
+See [loadPackage](/assets/load-package) for full usage details.
+
+---
+
+### loadDynamicComponent
+
+```ts
+loadDynamicComponent(id: string, callback?: () => void): void
+```
+
+Fetches the HTML that was stripped out of a `<Dynamic id="...">` block at build time and swaps it into the placeholder element (`[component-id="<id>"][component-type="c"]`) via `outerHTML`. Any `<script>` tags bundled with that content are appended to the document. Calls `callback` once done.
+
+```ts
+gDom.loadDynamicComponent("my-panel", () => {
+  console.info("panel injected");
+});
+```
+
+See [Dynamic Components](/runtime/dynamic-components) for the full build-time/runtime flow.
+
+---
+
+### addWidgetToBody
+
+```ts
+addWidgetToBody(id: string, callback?: () => void): void
+```
+
+Same fetch-and-inject mechanism as `loadDynamicComponent`, but for a lazy widget's placeholder (`[component-id="<id>"][component-type="w"]`) instead of a `Dynamic` block. This is what the runtime calls on startup for every id listed in the `w-m` registry — see below.
+
+```ts
+gDom.addWidgetToBody("HelloMessage", () => {
+  console.info("widget injected");
+});
+```
+
+See [Lazy Widgets](/runtime/lazy-widgets) for how widgets end up in the `w-m` list.
+
+---
+
+## The w-m Widget Registry
+
+Every generated page includes a hidden JSON element listing the ids of its lazy widgets, in order:
+
+```html
+<script type="application/json" id="w-m">["HelloMessage", "Testimonials"]</script>
+```
+
+On startup, the client runtime reads this array and calls `addWidgetToBody` for each id sequentially — each widget is fetched and injected only after the previous one finishes, via chained callbacks. Widgets without `loadingStrategy: "lazy"` never appear in this list; their HTML is already inline in the page.

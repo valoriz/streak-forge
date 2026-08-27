@@ -1,0 +1,176 @@
+---
+title: Testing
+description: How to test data handlers, widget helpers, and build output in a Streak.js project.
+order: 3
+---
+
+# Testing
+
+Streak.js projects use `bun:test`, the test runner built into Bun. No extra packages are required.
+
+---
+
+## Setup
+
+Bun discovers test files automatically. Place them alongside your source code or in a dedicated `tests/` directory:
+
+```
+src/
+  handlers/
+    HomeDataHandler.ts
+    HomeDataHandler.test.ts    ← test file
+  helpers/
+    colors.ts
+    colors.test.ts
+```
+
+Run all tests:
+
+```bash
+bun test
+```
+
+Run a specific file:
+
+```bash
+bun test src/handlers/HomeDataHandler.test.ts
+```
+
+---
+
+## Testing Data Handlers
+
+Data handlers are async functions with the signature `(metadata, { common }) => {...}` that return plain objects. Import the handler, call it, and assert the shape of the return value.
+
+```ts
+// src/handlers/HomeDataHandler.ts
+export default async function getHomeData(metadata, { common }) {
+  return {
+    status: 200,
+    HelloBanner: { heading: "Hello World" },
+  };
+}
+```
+
+```ts
+// src/handlers/HomeDataHandler.test.ts
+import { describe, test, expect, beforeAll } from "bun:test";
+import getHomeData from "./HomeDataHandler";
+
+describe("HomeDataHandler", () => {
+  let data: Record<string, any>;
+
+  beforeAll(async () => {
+    // Called with no arguments here since this test doesn't need metadata
+    // or a common handler result — real calls receive (metadata, { common }).
+    data = await getHomeData();
+  });
+
+  test("returns status 200", () => {
+    expect(data.status).toBe(200);
+  });
+
+  test("HelloBanner has a heading", () => {
+    expect(data.HelloBanner).toBeDefined();
+    expect(typeof data.HelloBanner.heading).toBe("string");
+    expect(data.HelloBanner.heading.length).toBeGreaterThan(0);
+  });
+
+  test("PageHead has a non-empty title", () => {
+    expect(data.PageHead?.title).toBeTruthy();
+  });
+});
+```
+
+---
+
+## Testing Patterns
+
+### Handler Shape
+
+Verify every key the sitemap expects is present and has the correct type:
+
+```ts
+test("returns all required widget keys", () => {
+  const requiredKeys = ["PageHead", "HelloBanner", "HelloMessage"];
+  for (const key of requiredKeys) {
+    expect(data[key]).toBeDefined();
+  }
+});
+```
+
+### Non-Empty Strings
+
+Guard against empty strings that would render blank content:
+
+```ts
+test("heading is a non-empty string", () => {
+  expect(typeof data.HelloBanner.heading).toBe("string");
+  expect(data.HelloBanner.heading.length).toBeGreaterThan(0);
+});
+```
+
+### Hex Color Values
+
+If your handler returns color values, validate the format:
+
+```ts
+test("accentColor is a valid hex color", () => {
+  const hex = /^#[0-9a-fA-F]{6}$/;
+  expect(data.HelloBanner.accentColor).toMatch(hex);
+});
+```
+
+### ID Uniqueness
+
+If the handler returns arrays with `id` fields, verify uniqueness:
+
+```ts
+test("article IDs are unique", () => {
+  const ids = data.ArticleList.items.map((item: any) => item.id);
+  expect(new Set(ids).size).toBe(ids.length);
+});
+```
+
+---
+
+## Testing Widget Helpers
+
+Widgets are stateless TSX components rendered at build time. You do not need DOM tests — Streak renders them to static HTML strings.
+
+However, if a widget contains pure helper logic (formatting, calculation, data transformation), extract it into a separate file and test it independently:
+
+```ts
+// src/helpers/colors.ts
+export const hexToRgb = (hex: string): [number, number, number] | null => {
+  const match = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!match) return null;
+  return [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)];
+};
+```
+
+```ts
+// src/helpers/colors.test.ts
+import { describe, test, expect } from "bun:test";
+import { hexToRgb } from "./colors";
+
+describe("hexToRgb", () => {
+  test("converts valid hex to RGB tuple", () => {
+    expect(hexToRgb("#ff8800")).toEqual([255, 136, 0]);
+  });
+
+  test("returns null for invalid input", () => {
+    expect(hexToRgb("not-a-color")).toBeNull();
+  });
+});
+```
+
+---
+
+## What You Do Not Need to Test
+
+- **Widget JSX rendering** — widgets produce static HTML at build time. The build itself is the test. If it builds, the HTML is correct.
+- **Script functions** — these are serialized to strings and run in the browser. They cannot be unit-tested with `bun:test`. Verify them manually in the browser.
+- **Tailwind classes** — class names are strings applied at build time. Tailwind compilation is tested by the CSS build step.
+
+Focus your test effort on data handlers and extracted helper logic — these are the parts most likely to break when upstream data changes.

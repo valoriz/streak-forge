@@ -1,0 +1,33 @@
+{
+  "name": "streak-forge-monorepo",
+  "version": "1.0.0",
+  "description": "Streak.js framework: streak-forge core, create-streak-app CLI scaffolder, and docs site",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/streak-forge && npm run build -w packages/create-streak-app && npm run build -w apps/docs-site",
+    "build:streak-forge": "npm run build -w packages/streak-forge",
+    "build:create-streak-app": "npm run build -w packages/create-streak-app",
+    "build:docs-site": "npm run build -w apps/docs-site",
+    "lint": "npm run lint -w packages/streak-forge && eslint packages/create-streak-app/src",
+    "test": "echo \"no tests configured yet\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/valoriz/streak-forge.git"
+  },
+  "author": "indrajithc",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/valoriz/streak-forge/issues"
+  },
+  "homepage": "https://github.com/valoriz/streak-forge#readme",
+  "devDependencies": {
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "typescript": "^5.9.3"
+  }
+}
