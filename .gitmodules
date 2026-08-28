@@ -1,0 +1,3 @@
+[submodule "apps/hello-streak-app"]
+	path = apps/hello-streak-app
+	url = git@github.com:valoriz/hello-streak-app.git
