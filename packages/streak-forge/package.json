@@ -1,6 +1,6 @@
 {
   "name": "streak-forge",
-  "version": "4.1.6-beta.0",
+  "version": "4.1.7",
   "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
   "author": "indrajithc",
   "license": "Apache-2.0",
@@ -58,7 +58,8 @@
     "build:js": "bun bun.build.ts",
     "build:types": "tsc -p tsconfig.build.json",
     "build": "bun run clean && bun run build:js && bun run build:types",
-    "dev": "echo 'run `streak-forge dev` from a consumer app instead'"
+    "dev": "echo 'run `streak-forge dev` from a consumer app instead'",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "chokidar": "^5.0.0",

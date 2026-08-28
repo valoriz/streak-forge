@@ -2,16 +2,6 @@ name: npm beta release
 
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: "Branch to build and publish from"
-        required: true
-        type: string
-        default: main
-      version:
-        description: "Version to publish, e.g. 4.0.0-beta.1"
-        required: true
-        type: string
 
 permissions:
   contents: write  # tag the release commit, create the GitHub Release
@@ -25,22 +15,7 @@ jobs:
   build-and-verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Enforce allowed release branches
-        # The npm-publish environment's "Deployment branches" rule can't gate
-        # this - the workflow always runs from the default branch (the branch
-        # to build is an input, not the run's ref), so that rule always sees
-        # the default branch and always passes. This step is the real branch
-        # gate. Widen the allowlist if you cut releases from release/* too.
-        run: |
-          case "${{ inputs.branch }}" in
-            main) echo "branch ok: ${{ inputs.branch }}" ;;
-            *) echo "::error::'${{ inputs.branch }}' is not an allowed release branch"; exit 1 ;;
-          esac
-
-      - name: Check out the selected branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
+      - uses: actions/checkout@v4  # checks out the branch picked in "Use workflow from"
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -64,10 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm-publish  # <- the required-reviewer gate lives here
     steps:
-      - name: Check out the selected branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
+      - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -81,9 +53,29 @@ jobs:
         # bundled with the runner's preinstalled Node is usually older.
         run: npm install -g npm@latest
 
+      - name: Resolve beta version from package.json
+        id: ver
+        working-directory: packages/streak-forge
+        run: |
+          current="$(node -p "require('./package.json').version")"
+          case "$current" in
+            *-beta.*|*-beta) version="$current" ;;                       # already a beta prerelease
+            *-*) echo "::error::version '$current' has a non-beta prerelease tag - fix packages/streak-forge/package.json"; exit 1 ;;
+            *) version="${current}-beta.0" ;;                            # plain version -> first beta
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing streak-forge@$version"
+
+      - name: Guard - version not already on npm
+        run: |
+          if npm view "streak-forge@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+            echo "::error::streak-forge@${{ steps.ver.outputs.version }} is already published - bump the version in packages/streak-forge/package.json"
+            exit 1
+          fi
+
       - name: Set version
         working-directory: packages/streak-forge
-        run: npm pkg set version="${{ inputs.version }}"
+        run: npm pkg set version="${{ steps.ver.outputs.version }}"
 
       - name: Build
         working-directory: packages/streak-forge
@@ -97,8 +89,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "streak-forge@${{ inputs.version }}"
-          git push origin "streak-forge@${{ inputs.version }}"
+          git tag "streak-forge@${{ steps.ver.outputs.version }}"
+          git push origin "streak-forge@${{ steps.ver.outputs.version }}"
 
       - name: Resolve release-notes file
         id: notes
@@ -106,7 +98,7 @@ jobs:
           # Notes live per minor line: RELEASE-<major>.<minor>.md
           # (e.g. 4.1.6-beta.0 -> RELEASE-4.1.md). Fall back to a generic
           # name, then to no notes file at all.
-          minor="$(echo "${{ inputs.version }}" | grep -oE '^[0-9]+\.[0-9]+')"
+          minor="$(echo "${{ steps.ver.outputs.version }}" | grep -oE '^[0-9]+\.[0-9]+')"
           for f in "RELEASE-${minor}.md" "RELEASE_NOTES.md"; do
             if [ -f "$f" ]; then echo "file=$f" >> "$GITHUB_OUTPUT"; break; fi
           done
@@ -116,8 +108,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
-          gh release create "streak-forge@${{ inputs.version }}" \
-            --title "streak-forge v${{ inputs.version }}" \
+          gh release create "streak-forge@${{ steps.ver.outputs.version }}" \
+            --title "streak-forge v${{ steps.ver.outputs.version }}" \
             ${NOTES_FILE:+--notes-file "$NOTES_FILE"} \
             --prerelease \
             --draft
