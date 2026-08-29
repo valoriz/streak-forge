@@ -1,5 +1,7 @@
 name: npm promote to latest
 
+run-name: promote ${{ inputs.beta_tag }} to latest
+
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +21,8 @@ concurrency:
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
+    outputs:
+      stable: ${{ steps.ver.outputs.stable }}
     steps:
       - name: Resolve stable version from the beta tag
         id: ver
@@ -30,7 +34,22 @@ jobs:
           esac
           stable="${beta%%-beta*}"          # 4.1.0-beta.3 -> 4.1.0
           echo "stable=$stable" >> "$GITHUB_OUTPUT"
-          echo "Promoting $beta -> $stable"
+          {
+            echo "## Promote to latest"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Beta tag | \`${{ inputs.beta_tag }}\` |"
+            echo "| Publishing as | \`streak-forge@$stable\` |"
+            echo "| npm dist-tag | \`latest\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Promote::$beta -> streak-forge@$stable (latest)"
+
+      - name: Guard - stable version must not already exist on npm
+        run: |
+          if npm view "streak-forge@${{ steps.ver.outputs.stable }}" version >/dev/null 2>&1; then
+            echo "::error::streak-forge@${{ steps.ver.outputs.stable }} is already published"; exit 1
+          fi
 
       - name: Check out the beta tag
         uses: actions/checkout@v4
@@ -58,17 +77,9 @@ jobs:
     needs: build-and-verify
     runs-on: ubuntu-latest
     environment: npm-publish  # reuses the same required-reviewer gate
+    env:
+      STABLE: ${{ needs.build-and-verify.outputs.stable }}
     steps:
-      - name: Resolve stable version from the beta tag
-        id: ver
-        run: |
-          beta='${{ inputs.beta_tag }}'; beta="${beta#streak-forge@}"
-          case "$beta" in
-            *-beta.*|*-beta) : ;;
-            *) echo "::error::'${{ inputs.beta_tag }}' is not a -beta tag"; exit 1 ;;
-          esac
-          echo "stable=${beta%%-beta*}" >> "$GITHUB_OUTPUT"
-
       - name: Check out the beta tag
         uses: actions/checkout@v4
         with:
@@ -84,15 +95,9 @@ jobs:
       - name: Update npm CLI
         run: npm install -g npm@latest
 
-      - name: Guard - stable version must not already exist on npm
-        run: |
-          if npm view "streak-forge@${{ steps.ver.outputs.stable }}" version >/dev/null 2>&1; then
-            echo "::error::streak-forge@${{ steps.ver.outputs.stable }} is already published"; exit 1
-          fi
-
       - name: Set stable version
         working-directory: packages/streak-forge
-        run: npm pkg set version="${{ steps.ver.outputs.stable }}"
+        run: npm pkg set version="$STABLE"
 
       - name: Build
         working-directory: packages/streak-forge
@@ -106,13 +111,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "streak-forge@${{ steps.ver.outputs.stable }}"
-          git push origin "streak-forge@${{ steps.ver.outputs.stable }}"
+          git tag "streak-forge@$STABLE"
+          git push origin "streak-forge@$STABLE"
 
       - name: Resolve release-notes file
         id: notes
         run: |
-          minor="$(echo "${{ steps.ver.outputs.stable }}" | grep -oE '^[0-9]+\.[0-9]+')"
+          minor="$(echo "$STABLE" | grep -oE '^[0-9]+\.[0-9]+')"
           for f in "RELEASE-${minor}.md" "RELEASE_NOTES.md"; do
             if [ -f "$f" ]; then echo "file=$f" >> "$GITHUB_OUTPUT"; break; fi
           done
@@ -122,7 +127,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
-          gh release create "streak-forge@${{ steps.ver.outputs.stable }}" \
-            --title "streak-forge v${{ steps.ver.outputs.stable }}" \
+          gh release create "streak-forge@$STABLE" \
+            --title "streak-forge v$STABLE" \
             ${NOTES_FILE:+--notes-file "$NOTES_FILE"} \
             --latest

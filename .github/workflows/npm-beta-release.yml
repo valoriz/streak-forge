@@ -1,5 +1,7 @@
 name: npm beta release
 
+run-name: npm beta release from ${{ github.ref_name }}
+
 on:
   workflow_dispatch:
 
@@ -14,8 +16,40 @@ concurrency:
 jobs:
   build-and-verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4  # checks out the branch picked in "Use workflow from"
+
+      - name: Resolve beta version from package.json
+        id: ver
+        working-directory: packages/streak-forge
+        run: |
+          current="$(node -p "require('./package.json').version")"
+          case "$current" in
+            *-beta.*|*-beta) version="$current" ;;                       # already a beta prerelease
+            *-*) echo "::error::version '$current' has a non-beta prerelease tag - fix packages/streak-forge/package.json"; exit 1 ;;
+            *) version="${current}-beta.0" ;;                            # plain version -> first beta
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Beta release"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo "| package.json version | \`$current\` |"
+            echo "| Publishing as | \`streak-forge@$version\` |"
+            echo "| npm dist-tag | \`beta\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Beta version::Publishing streak-forge@$version from branch ${{ github.ref_name }}"
+
+      - name: Guard - version not already on npm
+        run: |
+          if npm view "streak-forge@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
+            echo "::error::streak-forge@${{ steps.ver.outputs.version }} is already published - bump the version in packages/streak-forge/package.json"
+            exit 1
+          fi
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -38,6 +72,8 @@ jobs:
     needs: build-and-verify
     runs-on: ubuntu-latest
     environment: npm-publish  # <- the required-reviewer gate lives here
+    env:
+      VERSION: ${{ needs.build-and-verify.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,29 +89,9 @@ jobs:
         # bundled with the runner's preinstalled Node is usually older.
         run: npm install -g npm@latest
 
-      - name: Resolve beta version from package.json
-        id: ver
-        working-directory: packages/streak-forge
-        run: |
-          current="$(node -p "require('./package.json').version")"
-          case "$current" in
-            *-beta.*|*-beta) version="$current" ;;                       # already a beta prerelease
-            *-*) echo "::error::version '$current' has a non-beta prerelease tag - fix packages/streak-forge/package.json"; exit 1 ;;
-            *) version="${current}-beta.0" ;;                            # plain version -> first beta
-          esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Publishing streak-forge@$version"
-
-      - name: Guard - version not already on npm
-        run: |
-          if npm view "streak-forge@${{ steps.ver.outputs.version }}" version >/dev/null 2>&1; then
-            echo "::error::streak-forge@${{ steps.ver.outputs.version }} is already published - bump the version in packages/streak-forge/package.json"
-            exit 1
-          fi
-
       - name: Set version
         working-directory: packages/streak-forge
-        run: npm pkg set version="${{ steps.ver.outputs.version }}"
+        run: npm pkg set version="$VERSION"
 
       - name: Build
         working-directory: packages/streak-forge
@@ -89,8 +105,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "streak-forge@${{ steps.ver.outputs.version }}"
-          git push origin "streak-forge@${{ steps.ver.outputs.version }}"
+          git tag "streak-forge@$VERSION"
+          git push origin "streak-forge@$VERSION"
 
       - name: Resolve release-notes file
         id: notes
@@ -98,7 +114,7 @@ jobs:
           # Notes live per minor line: RELEASE-<major>.<minor>.md
           # (e.g. 4.1.6-beta.0 -> RELEASE-4.1.md). Fall back to a generic
           # name, then to no notes file at all.
-          minor="$(echo "${{ steps.ver.outputs.version }}" | grep -oE '^[0-9]+\.[0-9]+')"
+          minor="$(echo "$VERSION" | grep -oE '^[0-9]+\.[0-9]+')"
           for f in "RELEASE-${minor}.md" "RELEASE_NOTES.md"; do
             if [ -f "$f" ]; then echo "file=$f" >> "$GITHUB_OUTPUT"; break; fi
           done
@@ -108,8 +124,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
-          gh release create "streak-forge@${{ steps.ver.outputs.version }}" \
-            --title "streak-forge v${{ steps.ver.outputs.version }}" \
+          gh release create "streak-forge@$VERSION" \
+            --title "streak-forge v$VERSION" \
             ${NOTES_FILE:+--notes-file "$NOTES_FILE"} \
             --prerelease \
             --draft
