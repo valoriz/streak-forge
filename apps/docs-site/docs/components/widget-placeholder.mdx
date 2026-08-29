@@ -27,8 +27,10 @@ Both props are required — `WidgetPlaceholder` throws at render time if either 
 
 | Prop | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | Must match the widget `id` in the sitemap and the handler return key |
-| `type` | string | Must match the widget filename in `src/widgets/` (case-sensitive) |
+| `id` | string | Must equal the widget entry's `id` in the sitemap `widgets[]` and the handler return key. Any string — it does **not** have to equal `type`. Must be unique within the page. |
+| `type` | string | Must equal the widget entry's `type` in the sitemap and the widget filename in `src/widgets/` (case-sensitive) |
+
+`id` and `type` are independent. `type` selects which widget file renders; `id` selects which slice of handler data it receives and which placeholder it fills. They're the same string in most examples only for readability.
 
 ---
 
@@ -79,4 +81,34 @@ const MainLayout = () => {
 export default MainLayout;
 ```
 
-Every widget declared in `streak.sitemap.json` `widgets[]` must have a corresponding `WidgetPlaceholder` in the layout. The `id` and `type` values must match exactly.
+Every widget declared in `streak.sitemap.json` `widgets[]` must have a corresponding `WidgetPlaceholder` in the layout whose `id` and `type` match that entry's `id` and `type` (case-sensitive). This is a match between the placeholder and the sitemap entry — it does **not** mean `id` must equal `type`.
+
+---
+
+## Reusing a Widget Type Multiple Times
+
+The same `type` can appear more than once on a page — each occurrence just needs its own unique `id`:
+
+```json
+"widgets": [
+  { "id": "featuredProducts", "type": "ProductList" },
+  { "id": "newArrivals",      "type": "ProductList" }
+]
+```
+
+```tsx
+<WidgetPlaceholder id="featuredProducts" type="ProductList" />
+<WidgetPlaceholder id="newArrivals"      type="ProductList" />
+```
+
+```ts
+// handler return
+return {
+  featuredProducts: { items: [...] },
+  newArrivals:      { items: [...] },
+};
+```
+
+Both render `src/widgets/ProductList.tsx`, each with its own `props.data`, placed at its own slot.
+
+**Caveat — `<Script>` ids.** Script ids are deduplicated per page. If `ProductList` contains `<Script id="product-list">`, only the first instance's script (with the first instance's `options`) ships; later instances get no script. For a widget type used more than once, derive the `<Script id>` from the data (or accept a prop) so each instance emits a distinct id.

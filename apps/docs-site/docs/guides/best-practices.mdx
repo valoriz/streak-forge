@@ -119,16 +119,25 @@ Every sitemap entry must have a globally unique `renderId`. It identifies the en
 
 ## Match Widget IDs Exactly
 
-The widget `id` and `type` must match across three places. A mismatch in any one causes the widget to silently fail:
+A widget's `id` and `type` are two independent values, each of which must line up across several places. A mismatch in any one causes the widget to silently fail. `id` and `type` do **not** have to equal each other.
+
+`id` — the instance key — must be identical in:
 
 | Location | Field | Example |
 | --- | --- | --- |
-| `streak.sitemap.json` | `widgets[].id` and `widgets[].type` | `"id": "HelloBanner", "type": "HelloBanner"` |
-| Layout | `<WidgetPlaceholder id= type= />` | `<WidgetPlaceholder id="HelloBanner" type="HelloBanner" />` |
-| Handler return | Object key | `{ HelloBanner: { heading: "Hello" } }` |
+| `streak.sitemap.json` | `widgets[].id` | `"id": "helloBanner"` |
+| Layout | `<WidgetPlaceholder id= />` | `<WidgetPlaceholder id="helloBanner" ... />` |
+| Handler return | Object key | `{ helloBanner: { heading: "Hello" } }` |
+
+`type` — the component name — must be identical in:
+
+| Location | Field | Example |
+| --- | --- | --- |
+| `streak.sitemap.json` | `widgets[].type` | `"type": "HelloBanner"` |
+| Layout | `<WidgetPlaceholder type= />` | `<WidgetPlaceholder ... type="HelloBanner" />` |
 | Widget file | Filename | `src/widgets/HelloBanner.tsx` |
 
-All four values are case-sensitive and must match exactly.
+All values are case-sensitive. Each `id` must be unique within a page's `widgets[]`; the same `type` can be reused by several entries on one page (each with its own `id`) to place the same component in multiple spots.
 
 ---
 

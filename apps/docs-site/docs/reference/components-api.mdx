@@ -22,8 +22,8 @@ Marks the position in a layout where a widget's rendered HTML will be injected a
 
 | Prop | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | string | Yes | Must match the widget `id` in the sitemap and the handler return key |
-| `type` | string | Yes | Must match the widget filename in `src/widgets/` (case-sensitive) |
+| `id` | string | Yes | Must equal the widget entry's `id` in the sitemap and the handler return key. Any string — not required to equal `type`. Unique within the page. |
+| `type` | string | Yes | Must equal the widget entry's `type` in the sitemap and the widget filename in `src/widgets/` (case-sensitive) |
 
 `WidgetPlaceholder` throws at render time if either prop is missing.
 
@@ -47,7 +47,9 @@ const MainLayout = () => (
 export default MainLayout;
 ```
 
-Every widget in the sitemap `widgets[]` array must have a corresponding `WidgetPlaceholder` in the layout. The `id` and `type` values must match exactly.
+Every widget in the sitemap `widgets[]` array must have a corresponding `WidgetPlaceholder` in the layout whose `id` and `type` equal that entry's `id` and `type` (case-sensitive). This is placeholder-to-entry matching — `id` is not required to equal `type`.
+
+The same `type` may be used by multiple entries on one page as long as each has a distinct `id` (and its own placeholder). See [WidgetPlaceholder → Reusing a Widget Type](/components/widget-placeholder#reusing-a-widget-type-multiple-times).
 
 ### At Build Time
 
