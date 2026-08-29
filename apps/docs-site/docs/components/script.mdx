@@ -105,3 +105,132 @@ const outerVar = "hello";
 **`id` is required** and must be unique on the page.
 
 **`options` must be JSON-serializable** — it is passed through `JSON.stringify`.
+
+---
+
+## Same Component in Multiple Lazy Widgets
+
+If the same component (with a `Script` block) is used in two or more lazy widgets on the same page, only the **first** widget to load will have its script execute.
+
+### Why
+
+Every `Script` block is wrapped in `addFunctionToDom(id, fn)` at build time. `addFunctionToDom` is idempotent — it tracks executed ids in `window.loadedScripts` and skips any id it has already seen:
+
+```js
+// Widget A's content.js (loads first)
+window.addFunctionToDom("card-init", () => { /* runs ✓ */ });
+
+// Widget B's content.js (loads second — same id)
+window.addFunctionToDom("card-init", () => { /* skipped ✗ */ });
+```
+
+Widget B's HTML appears in the DOM, but its script never runs.
+
+---
+
+### Solution 1 — Per-instance Script ID
+
+Give each instance a unique id by incorporating the widget's own id. Each `addFunctionToDom` call gets a distinct key, so both run:
+
+```tsx
+const CardWidget = (props) => (
+  <div id={`card-${props.widgetId}`}>
+    <h2>{props.data?.title}</h2>
+    <Script id={`card-init-${props.widgetId}`} options={{ id: props.widgetId, title: props.data?.title }}>
+      {(gDom: any, options: any) => {
+        const el = document.getElementById(`card-${options.id}`);
+        if (!el) return;
+        el.addEventListener("click", () => {
+          console.log("clicked:", options.title);
+        });
+      }}
+    </Script>
+  </div>
+);
+```
+
+**Use when:** the script needs per-instance `options` (different data per widget), or each instance needs its own scoped event listener.
+
+Two listeners for two instances is correct here — each is scoped to its own element and they do not interfere with each other.
+
+---
+
+### Solution 2 — Event Delegation in a Layout Script
+
+Put one listener on `document` in a layout script (which runs once for the whole page). Inside the handler, use `closest()` to identify which instance was interacted with. Widget data travels via HTML attributes instead of `options`.
+
+Widget component — no `Script` needed:
+```tsx
+const CardWidget = (props) => (
+  <div data-card data-title={props.data?.title ?? ""}>
+    <h2>{props.data?.title}</h2>
+  </div>
+);
+```
+
+Layout script (fires once, covers every instance on the page including lazily-loaded ones):
+```tsx
+<Script id="card-click-handler">
+  {() => {
+    document.addEventListener("click", (e: MouseEvent) => {
+      const card = (e.target as Element).closest("[data-card]");
+      if (!card) return;
+      const title = card.getAttribute("data-title");
+      console.log("clicked:", title);
+    });
+  }}
+</Script>
+```
+
+**Use when:** the handler logic is shared and identical across all instances. One listener, zero duplication, lazily-loaded widgets are automatically covered because `document` is already listening.
+
+---
+
+### Solution 3 — Custom Elements
+
+Define a Custom Element class once in a layout script. The browser calls `connectedCallback` automatically each time any instance is inserted into the DOM — lazy-loaded or not — with no coordination needed from your script.
+
+Layout script (define once):
+```tsx
+<Script id="card-element-def">
+  {() => {
+    class StreakCard extends HTMLElement {
+      connectedCallback() {
+        if (this.dataset.ready) return;
+        this.dataset.ready = "1";
+        this.addEventListener("click", () => {
+          console.log("clicked:", this.dataset.title);
+        });
+      }
+      disconnectedCallback() {
+        // cleanup fires automatically when the element leaves the DOM
+      }
+    }
+    if (!customElements.get("streak-card")) {
+      customElements.define("streak-card", StreakCard);
+    }
+  }}
+</Script>
+```
+
+Widget component — use the custom element tag, no `Script`:
+```tsx
+const CardWidget = (props) => (
+  <streak-card data-title={props.data?.title ?? ""}>
+    <h2>{props.data?.title}</h2>
+  </streak-card>
+);
+```
+
+**Use when:** you want zero per-instance wiring. The browser upgrades each instance on insert and cleans it up on removal. Custom element tag names must contain a hyphen.
+
+---
+
+### Which Solution to Pick
+
+| | Per-instance ID | Event delegation | Custom Element |
+|---|---|---|---|
+| Per-instance `options` data | ✓ Easy via `options` prop | Harder (data attrs only) | Data attrs |
+| Identical logic across instances | Duplicates the handler | ✓ One handler | ✓ One class |
+| Auto-cleanup on SPA nav | Via runtime generation cleanup | Via runtime generation cleanup | `disconnectedCallback` |
+| Widget needs no `Script` block | ✗ | ✓ | ✓ |
