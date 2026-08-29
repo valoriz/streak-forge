@@ -1,0 +1,320 @@
+---
+title: Measuring Performance
+description: How to measure, profile, and reason about JavaScript performance in Streak sites — from browser DevTools to function-level complexity.
+order: 3
+---
+
+# Measuring Performance
+
+> **Beta** — This page is a work in progress. Content will be expanded with more tooling and examples.
+
+Performance problems usually have one of two shapes: **loading** (how fast the page delivers content to the user) or **runtime** (how smoothly it runs once loaded). This page covers how to measure both, and how to reason about the complexity of individual functions.
+
+---
+
+## Core Web Vitals — What to Watch
+
+These are the metrics Google and Lighthouse use. They map directly to what users experience.
+
+| Metric | What it measures | Target |
+|---|---|---|
+| **LCP** (Largest Contentful Paint) | Time until the biggest visible element loads | < 2.5s |
+| **TBT** (Total Blocking Time) | Sum of time the main thread was blocked > 50ms | < 200ms |
+| **INP** (Interaction to Next Paint) | Latency from user input to next frame | < 200ms |
+| **CLS** (Cumulative Layout Shift) | How much elements jump around during load | < 0.1 |
+| **FCP** (First Contentful Paint) | Time until any content is painted | < 1.8s |
+
+In Streak, **TBT** and **INP** are the most likely to be affected by Script block code — they reflect how much JavaScript work blocks the main thread.
+
+---
+
+## Lighthouse
+
+The fastest way to get a performance score and identify specific issues.
+
+**In Chrome DevTools:**
+1. Open DevTools → **Lighthouse** tab
+2. Select **Performance** (uncheck others if you want a faster run)
+3. Click **Analyze page load**
+
+Read the **Opportunities** and **Diagnostics** sections — each item links directly to the metric it affects and explains what to fix.
+
+**Tips:**
+- Run Lighthouse in an Incognito window to exclude extensions
+- Use **Mobile** mode (the default) — it simulates a mid-tier mobile device and slow network, which is where real performance problems show up
+- Run 3–5 times and average the scores — Lighthouse varies between runs
+
+---
+
+## Chrome DevTools Performance Panel
+
+For runtime profiling (scroll jank, slow interactions, excessive JS execution), the Performance panel gives you a frame-by-frame timeline.
+
+**Recording a profile:**
+1. Open DevTools → **Performance** tab
+2. Click **Record** (⏺)
+3. Do the action you want to measure (scroll, click a button, navigate)
+4. Click **Stop**
+
+**What to look at:**
+- **Long tasks** (shown as red-topped bars in the Main thread row) — any task over 50ms blocks the main thread and can cause dropped frames or delayed interactions
+- **Bottom-Up** tab → sort by **Total Time** — shows which functions consumed the most time
+- **Call Tree** tab → shows the full call stack from top-level down
+
+**Finding your Script block code:**
+Your Script block functions are minified, but the function names are usually still recognizable. Look for anonymous IIFEs or named callbacks in the call stack. Filter by your site's domain in the **Sources** panel to exclude third-party noise.
+
+---
+
+## console.time / console.timeEnd
+
+The simplest way to time a specific block of code:
+
+```js
+console.time("init-carousel");
+// ... carousel initialization code ...
+console.timeEnd("init-carousel");
+// Prints: "init-carousel: 12.34ms"
+```
+
+Works well inside Script blocks for measuring initialization cost. Remove before shipping.
+
+---
+
+## performance.now()
+
+For precise sub-millisecond timing, especially across async boundaries:
+
+```js
+const start = performance.now();
+
+await gDom.loadPackage("js/motion.js");
+// ...animation setup...
+
+const elapsed = performance.now() - start;
+console.log(`Animation init took ${elapsed.toFixed(2)}ms`);
+```
+
+`performance.now()` returns time in milliseconds with microsecond precision and is not affected by system clock adjustments.
+
+---
+
+## PerformanceObserver — Watching Metrics in Real Time
+
+For measuring LCP, CLS, and INP programmatically (useful for analytics or debugging):
+
+```js
+// Observe LCP
+new PerformanceObserver((list) => {
+  const entries = list.getEntries();
+  const last = entries[entries.length - 1];
+  console.log("LCP:", last.startTime.toFixed(0) + "ms", last.element);
+}).observe({ type: "largest-contentful-paint", buffered: true });
+
+// Observe layout shifts
+let cumulativeCLS = 0;
+new PerformanceObserver((list) => {
+  list.getEntries().forEach((entry: any) => {
+    if (!entry.hadRecentInput) cumulativeCLS += entry.value;
+  });
+  console.log("CLS so far:", cumulativeCLS.toFixed(4));
+}).observe({ type: "layout-shift", buffered: true });
+
+// Observe long tasks (>50ms main-thread blocks)
+new PerformanceObserver((list) => {
+  list.getEntries().forEach((entry) => {
+    console.warn("Long task:", entry.duration.toFixed(0) + "ms");
+  });
+}).observe({ type: "longtask" });
+```
+
+Put these in a layout Script block during development — they report live as you interact with the page.
+
+---
+
+## Profiling a Specific Function
+
+If you suspect a particular function is slow, wrap it:
+
+```js
+function timedFn(name, fn) {
+  return function (...args) {
+    const t = performance.now();
+    const result = fn.apply(this, args);
+    console.log(`${name}: ${(performance.now() - t).toFixed(2)}ms`);
+    return result;
+  };
+}
+
+// Wrap your function for measurement
+const slowFn = timedFn("recalculate-layout", recalculateLayout);
+window.addEventListener("scroll", slowFn, { passive: true });
+```
+
+Or use DevTools **Performance** → **Bottom-Up** after recording a profile — it shows the actual measured time, including JavaScript engine optimizations, which a manual timer cannot.
+
+---
+
+## Reasoning About Function Complexity
+
+Before measuring, it helps to estimate whether a function is worth profiling based on how its work scales with input size. This is **Big-O** notation — a rough description of how an algorithm's time grows.
+
+| Notation | Name | Example | Risk |
+|---|---|---|---|
+| O(1) | Constant | `getElementById`, property access | None |
+| O(n) | Linear | `forEach`, `querySelectorAll` + loop | OK for small n |
+| O(n log n) | Log-linear | Most sort algorithms | OK |
+| O(n²) | Quadratic | Loop inside a loop | Avoid for n > 100 |
+
+**Common Streak patterns and their complexity:**
+
+```js
+// O(1) — constant, safe anywhere
+document.getElementById("my-el");
+el.classList.add("active");
+window.scrollY;
+
+// O(n) — linear in the number of elements matched
+document.querySelectorAll(".card").forEach(initCard);
+
+// O(n) inside a scroll handler — runs on every scroll tick!
+// This is O(n) × ~60fps = avoid for large n
+window.addEventListener("scroll", () => {
+  document.querySelectorAll(".card").forEach(updatePosition); // RISKY
+});
+
+// O(n²) — nested loops over DOM elements — avoid
+items.forEach(itemA => {
+  items.forEach(itemB => {
+    // comparing every item to every other item
+  });
+});
+```
+
+**The scroll handler is the most common perf trap.** If you have O(n) work inside a scroll handler, that work runs 60+ times per second. For n=50 cards, that is 3000 DOM operations per second during a scroll. Cache the references, debounce the handler, or move the computation outside the handler.
+
+**How to estimate a function's complexity before profiling:**
+
+1. Count the loops — each nested loop multiplies complexity. One `forEach` over n items is O(n). A `forEach` inside another `forEach` over n items is O(n²).
+2. Check what's inside the loop — DOM queries (`querySelectorAll`, `getBoundingClientRect`) inside a loop are especially expensive.
+3. Check where the function is called — O(n) on page load may be fine. The same O(n) inside a scroll handler is 60× worse.
+4. Profile when unsure — use `console.time` or the Performance panel to measure actual time, not just theoretical complexity.
+
+---
+
+## Avoiding Long Tasks (TBT)
+
+**Total Blocking Time (TBT)** measures how long the browser's main thread was occupied with tasks longer than 50ms. Every millisecond over the 50ms threshold on each such task is added to the TBT score. A TBT above 200ms will flag in Lighthouse.
+
+Long tasks block everything — rendering, scroll, input response. The user sees a frozen page. The browser cannot paint a frame while a long task is running.
+
+### What Creates Long Tasks
+
+- **Heavy init loops** — initializing 50+ elements synchronously on page load
+- **Large `querySelectorAll` + processing** — selecting and operating on many DOM nodes at once
+- **Synchronous JSON parsing** of large responses
+- **Deep call stacks** inside event handlers (click, scroll, resize)
+
+### How to Identify Them
+
+Open DevTools → **Performance** → Record a page load. Long tasks appear as red-capped bars in the Main thread row. Click one to see its call stack in the bottom panel.
+
+### Breaking Up Work
+
+If a long task is doing a lot of similar work (processing a list, initializing many elements), split it into smaller chunks yielded across frames using `setTimeout`:
+
+```js
+// WRONG — processes all 200 items synchronously, one long task
+items.forEach(initItem);
+
+// CORRECT — process in chunks, yielding to the browser between each
+function processChunk(items, index = 0, chunkSize = 10) {
+  const end = Math.min(index + chunkSize, items.length);
+  for (let i = index; i < end; i++) {
+    initItem(items[i]);
+  }
+  if (end < items.length) {
+    setTimeout(() => processChunk(items, end, chunkSize), 0);
+  }
+}
+
+processChunk(Array.from(document.querySelectorAll(".card")));
+```
+
+Each `setTimeout(..., 0)` yields control back to the browser — it can render a frame, handle a scroll event, or respond to a click before the next chunk runs. The total work is the same; it just no longer blocks the thread in one continuous burst.
+
+### Deferring Non-Critical Init
+
+Not all initialization needs to happen immediately. Move work that doesn't affect the first visible frame to after load:
+
+```js
+// WRONG — runs everything synchronously during widget load
+initCarousel();
+initTooltips();
+initAnalytics();
+prefetchImages();
+
+// CORRECT — defer non-critical work to after page is interactive
+initCarousel(); // needed immediately
+
+requestAnimationFrame(() => {
+  // runs after the next paint — user sees the carousel first
+  initTooltips();
+
+  setTimeout(() => {
+    // runs after the browser is idle-ish
+    initAnalytics();
+    prefetchImages();
+  }, 200);
+});
+```
+
+### Using requestIdleCallback
+
+For work that is truly optional and low-priority, `requestIdleCallback` runs it only when the browser has nothing else to do:
+
+```js
+requestIdleCallback(() => {
+  prefetchNextPageImages();
+  initAnalyticsSession();
+}, { timeout: 2000 }); // fallback: run within 2s even if never idle
+```
+
+`requestIdleCallback` is not supported in every browser — check compatibility for your target audience, and provide a `setTimeout` fallback if needed.
+
+### TBT vs INP
+
+| Metric | What it measures | Affected by |
+|---|---|---|
+| **TBT** | Long tasks during page load | Heavy init code, synchronous loops |
+| **INP** | Delay from user input to next paint | Event handler cost, main-thread contention |
+
+TBT is measured during load. INP is measured across the whole session. A page with low TBT can still have high INP if click handlers do too much synchronous work.
+
+---
+
+## Quick Checklist Before Shipping
+
+- [ ] Run Lighthouse on the page — TBT < 200ms, LCP < 2.5s, INP < 200ms
+- [ ] Open the Performance panel, record a page load — any red-capped bars (long tasks)?
+- [ ] Check the Bottom-Up tab — is any of your Script code showing significant time?
+- [ ] Is heavy init work chunked or deferred so it does not create a single long task?
+- [ ] Are scroll/resize handlers debounced?
+- [ ] Are DOM queries cached (not repeated inside event handlers)?
+- [ ] Is there an `O(n)` loop inside a scroll or resize handler for large n?
+- [ ] Are multiple IntersectionObservers running simultaneously? (consolidate into one)
+- [ ] Are setInterval IDs being cleared on re-mount?
+- [ ] Is non-critical work (analytics, prefetch) deferred with `requestAnimationFrame` or `setTimeout`?
+
+---
+
+## DevTools Shortcuts
+
+| Action | Mac | Windows/Linux |
+|---|---|---|
+| Open DevTools | `Cmd+Option+I` | `F12` / `Ctrl+Shift+I` |
+| Lighthouse tab | DevTools → Lighthouse | DevTools → Lighthouse |
+| Performance tab | DevTools → Performance | DevTools → Performance |
+| Start/stop recording | `Ctrl+E` (in perf panel) | `Ctrl+E` |
+| Inspect element | `Cmd+Shift+C` | `Ctrl+Shift+C` |
+| Open Console | `Cmd+Option+J` | `Ctrl+Shift+J` |

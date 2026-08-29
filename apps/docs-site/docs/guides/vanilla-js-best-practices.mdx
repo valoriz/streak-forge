@@ -1,0 +1,311 @@
+---
+title: Vanilla JS Best Practices
+description: Common mistakes and recommended patterns for Script blocks — especially for developers coming from a React background.
+order: 2
+---
+
+# Vanilla JS Best Practices
+
+> **Beta** — This page is a work in progress. Examples and guidance will be expanded over time.
+
+Script blocks in Streak run as plain JavaScript in the browser — no React, no virtual DOM, no state management. Developers coming from a React background often carry over habits that do not translate to this context. This page covers the most common mistakes and how to fix them.
+
+---
+
+## Always Null-Check getElementById
+
+`document.getElementById` returns `null` if the element doesn't exist. Calling a method on `null` throws a `TypeError` that silently kills the rest of the script.
+
+```js
+// WRONG — crashes if the element is absent
+const el = document.getElementById("my-banner");
+el.addEventListener("click", handler); // TypeError: Cannot read properties of null
+
+// CORRECT — guard first
+const el = document.getElementById("my-banner");
+if (!el) return;
+el.addEventListener("click", handler);
+
+// ALSO CORRECT — optional chaining (skips silently if null)
+document.getElementById("my-banner")?.addEventListener("click", handler);
+```
+
+This applies to every DOM query — `querySelector`, `getElementById`, `closest`. If the element might not be rendered (conditional rendering, A/B test, lazy widget not yet loaded), always check before using.
+
+---
+
+## Use const and let, Never var
+
+`var` has function scope, not block scope. Inside Script blocks, `var` declarations are hoisted to the top of the IIFE — which can create confusing behavior when the same script re-runs after an SPA navigation (two sets of handlers may close over two separate `var` bindings, both firing on the same event).
+
+```js
+// WRONG
+var currentPage = 1;
+var isDragging = false;
+
+// CORRECT
+let currentPage = 1;
+let isDragging = false;
+const itemsPerPage = 12;
+```
+
+Prefer `const` for anything that is not reassigned. Use `let` for counters and state variables. Never use `var`.
+
+---
+
+## Use IDs That Are Actually Unique
+
+Element IDs must be unique within a page. If two widgets on the same page use `id="pagination-container"` or `id="modal"`, `getElementById` will return the first one regardless of which widget's script is running. The second widget's script silently operates on the wrong element.
+
+```tsx
+// WRONG — generic ID used by multiple widgets
+<div id="modal">...</div>
+
+// CORRECT — scoped to this widget's instance
+<div id={`share-modal-${props.widgetId}`}>...</div>
+```
+
+Avoid short, generic IDs like `"modal"`, `"container"`, `"header"`, `"banner"`, `"content"`. Prefix them with the widget name or use the widget's `id` prop to make them unique.
+
+---
+
+## Scope DOM Queries to the Widget's Root, Not document
+
+`document.querySelector(".tab-item")` finds the FIRST `.tab-item` anywhere on the entire page — including elements from other widgets. If two widgets both use `.tab-item`, each one's script modifies the other's elements too.
+
+```js
+// WRONG — selects elements from other widgets too
+const tabs = document.querySelectorAll(".tab-item");
+
+// CORRECT — scope to this widget's root
+const root = document.getElementById("my-widget-root");
+if (!root) return;
+const tabs = root.querySelectorAll(".tab-item");
+```
+
+Use specific, widget-prefixed class names, or scope every `querySelectorAll` call to the widget's container element.
+
+---
+
+## Event Listeners Accumulate — Remove Before Adding
+
+Unlike React components that unmount and remount, Streak Script blocks re-execute after each SPA navigation. Every `addEventListener` call inside a Script block adds a NEW listener. After three navigations, three listeners are registered for the same event on the same element — all three fire on every event.
+
+```js
+// WRONG — adds a new listener every time the script runs
+window.addEventListener("scroll", updateNav, { passive: true });
+
+// CORRECT — remove the previous registration first
+window.removeEventListener("scroll", updateNav);
+window.addEventListener("scroll", updateNav, { passive: true });
+```
+
+`removeEventListener` is a no-op if the listener was never registered, so it is always safe to call first.
+
+For one-time listeners, use `{ once: true }` — the browser removes the listener automatically after it fires once:
+
+```js
+window.addEventListener("load", initLazyLoad, { once: true });
+```
+
+For full details on how the runtime cleans up per-generation listeners automatically (and when you need to handle it yourself), see [SPA Events](/runtime/spa-events.html).
+
+---
+
+## Always Clear setInterval on Re-Mount
+
+A `setInterval` that is not cleared keeps running even after the user navigates away. The next time the Script runs (next navigation back to this page), a SECOND interval starts — now two intervals run concurrently. After several navigations, multiple intervals compete and produce incorrect behavior.
+
+```js
+// WRONG — interval is never cleared
+setInterval(() => { updateSlide(); }, 3000);
+
+// CORRECT — store the id and clear it if already running
+const AUTOPLAY_KEY = "__carousel_interval";
+clearInterval((window as any)[AUTOPLAY_KEY]);
+(window as any)[AUTOPLAY_KEY] = setInterval(() => { updateSlide(); }, 3000);
+```
+
+Storing the interval ID on `window` (or a namespaced key) lets the next run cancel the previous one. The same pattern applies to `setTimeout` that might fire after an SPA navigation replaces the DOM.
+
+---
+
+## Do Not Control body.overflow From Multiple Independent Scripts
+
+If multiple widgets each set `document.body.style.overflow = "hidden"` (to lock scroll for a modal) and `document.body.style.overflow = ""` (to restore it), they will conflict. Closing one modal may restore scrolling while another is still open.
+
+```js
+// WRONG — each widget independently toggles overflow
+// Widget A opens modal:
+document.body.style.overflow = "hidden";
+// Widget B closes its modal (but Widget A's modal is still open):
+document.body.style.overflow = ""; // scroll restored too early!
+```
+
+Coordinate scroll-lock through a shared counter or a CSS class on `<body>`:
+
+```js
+// CORRECT — track how many things have locked scroll
+const lock = () => {
+  const count = parseInt(document.body.dataset.scrollLocks || "0") + 1;
+  document.body.dataset.scrollLocks = String(count);
+  document.body.style.overflow = "hidden";
+};
+
+const unlock = () => {
+  const count = Math.max(0, parseInt(document.body.dataset.scrollLocks || "0") - 1);
+  document.body.dataset.scrollLocks = String(count);
+  if (count === 0) document.body.style.overflow = "";
+};
+```
+
+Or use a CSS class (`body.scroll-locked { overflow: hidden }`) and track the count with the class presence.
+
+---
+
+## Toggle Classes, Don't Mutate Styles Directly
+
+Direct `element.style.property` assignments override anything set by CSS (including Tailwind). They are hard to inspect, hard to animate, and hard to revert. Use class toggling instead.
+
+```js
+// WRONG — bypasses CSS, hard to override
+el.style.display = "none";
+el.style.backgroundColor = "#f00";
+el.style.width = "200px";
+
+// CORRECT — use CSS classes
+el.classList.add("hidden");
+el.classList.toggle("active", isActive);
+```
+
+Reserve direct `style` manipulation for values that are genuinely computed at runtime and cannot be expressed as a CSS class — for example, a `transform: translateX(${offset}px)` that depends on a measurement.
+
+---
+
+## Cache DOM References Outside Event Handlers
+
+If your event handler calls `document.getElementById` or `document.querySelector` on every event, you are traversing the DOM on every scroll tick, every keystroke, or every mouse move. Cache the reference once before attaching the listener.
+
+```js
+// WRONG — DOM query on every scroll event
+window.addEventListener("scroll", () => {
+  const header = document.getElementById("main-header"); // queried every scroll tick
+  header?.classList.toggle("sticky", window.scrollY > 60);
+}, { passive: true });
+
+// CORRECT — query once, reuse
+const header = document.getElementById("main-header");
+if (!header) return;
+
+window.addEventListener("scroll", () => {
+  header.classList.toggle("sticky", window.scrollY > 60);
+}, { passive: true });
+```
+
+The same applies to `querySelectorAll` inside loops or frequent handlers — collect the NodeList once and store it.
+
+---
+
+## Debounce Scroll, Resize, and Input Handlers
+
+Scroll and resize events fire dozens of times per second. Handlers that do DOM work (class toggling, style updates, `getBoundingClientRect()`) inside these events cause layout thrashing and dropped frames. Debounce them.
+
+```js
+// WRONG — runs on every pixel of scroll
+window.addEventListener("scroll", () => {
+  document.querySelectorAll(".card").forEach(recalculate); // expensive on every tick
+}, { passive: true });
+
+// CORRECT — debounce to ~60fps
+const onScroll = gDom.debounce(() => {
+  document.querySelectorAll(".card").forEach(recalculate);
+}, 16);
+
+window.addEventListener("scroll", onScroll, { passive: true });
+```
+
+Use `{ passive: true }` on scroll and touch handlers unless you are calling `preventDefault()` inside them.
+
+---
+
+## Do Not Set innerHTML with Unsanitized Data
+
+Setting `element.innerHTML` with a string that contains user-supplied or CMS-supplied data is an XSS risk if the data source is ever compromised or changed.
+
+```js
+// RISKY — if someData.description contains a <script> tag, it executes
+el.innerHTML = someData.description;
+
+// SAFER for plain text — use textContent
+el.textContent = someData.description;
+
+// SAFER for structured HTML — sanitize first, or build DOM nodes
+const p = document.createElement("p");
+p.textContent = someData.description;
+el.appendChild(p);
+```
+
+Also: `JSON.stringify(value)` produces JSON text, not HTML. Setting `el.innerHTML = JSON.stringify(obj)` renders literal curly braces and quotes in the browser — it does not render `obj` as markup.
+
+---
+
+## Do Not Bind the Same Event Twice on the Same Element
+
+Attaching both a JSX inline handler (`onClick={...}`) and a Script `addEventListener` on the same element registers two separate handlers. Both fire on every event. In the browser, the JSX handler runs once (it is a static attribute in the rendered HTML, not a live React binding), and the Script handler runs once per Script execution — accumulating across navigations.
+
+```tsx
+// WRONG — two click handlers on the same element
+<button id="close-btn" onClick={() => closeModal()}>Close</button>
+// ...in Script block:
+document.getElementById("close-btn")?.addEventListener("click", closeModal);
+```
+
+Pick one approach. Prefer `addEventListener` in Script blocks — it is explicit and controllable. JSX inline handlers are evaluated once at build time and cannot be removed.
+
+---
+
+## Prefer One Shared Observer Over Many Per-Widget Observers
+
+Each `IntersectionObserver` instance carries overhead. If every widget creates its own observer, a page with ten lazy widgets has ten active observers watching the viewport simultaneously.
+
+Use a single delegated observer in a layout script instead:
+
+```js
+// Layout script — one observer for all lazy-load images
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (!entry.isIntersecting) return;
+    const img = entry.target as HTMLImageElement;
+    if (img.dataset.src) img.src = img.dataset.src;
+    observer.unobserve(img);
+  });
+}, { rootMargin: "200px" });
+
+document.querySelectorAll("img[data-src]").forEach((img) => observer.observe(img));
+
+// On SPA nav, pick up any new images the new page added
+window.addEventListener("sf:pageload", () => {
+  document.querySelectorAll("img[data-src]").forEach((img) => observer.observe(img));
+});
+```
+
+All widget images on the page share one observer. New images added by lazy-loaded widgets are picked up by the `sf:pageload` handler.
+
+---
+
+## State Does Not Persist Between Navigations
+
+Variables declared inside a Script block live only for that execution. They are not React state — there is no persistent store between page loads or SPA navigations. Each time the Script runs, all variables are re-initialized.
+
+```js
+// WRONG — this does NOT persist across navigations
+let pageViewCount = 0;
+pageViewCount++; // always 1 after every navigation
+
+// CORRECT — use cookies, sessionStorage, or localStorage for persistence
+const key = "page-view-count";
+const count = parseInt(sessionStorage.getItem(key) || "0") + 1;
+sessionStorage.setItem(key, String(count));
+```
+
+If you need state that survives SPA navigations within one browser session, use `sessionStorage`. For state that survives full page reloads, use `localStorage` or cookies.
