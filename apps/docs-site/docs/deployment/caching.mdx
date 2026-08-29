@@ -1,0 +1,219 @@
+---
+title: Browser Caching
+description: Recommended cache headers for every URL pattern Streak generates — what to cache forever, what to revalidate, and why.
+order: 2
+---
+
+# Browser Caching
+
+Streak's build output uses two layers of cache-busting so most files can be cached forever without stale-content risk:
+
+- **Query version (`?v=…`)** — every reference to a runtime file or page resource carries a `?v=` query string that changes whenever the underlying content changes. A browser that cached `common.js?v=abc` will fetch fresh when the URL becomes `common.js?v=xyz`.
+- **Path version (`/{version}/…`)** — widget and script files live inside a versioned directory segment (e.g. `1.0.0/`). A new content version means a new path, so old cached responses are never reused.
+
+The only files whose URLs do **not** change on rebuild are `index.html` and `index.json` — they must never be aggressively cached.
+
+---
+
+## URL Patterns and Recommended Headers
+
+### index.html — No cache
+
+```
+Cache-Control: no-cache
+```
+
+Every page's HTML lives at the same URL across deploys (e.g. `/products/sunglasses/`). A CDN or browser caching `index.html` would serve stale markup indefinitely. `no-cache` forces a revalidation on every request — the server can still return a `304 Not Modified` if the content hasn't changed, so this doesn't mean every visit is a full download.
+
+**Pattern:** `**/*.html` and any URL that serves HTML (extensionless routes like `/products/sunglasses/`)
+
+---
+
+### index.json — No cache
+
+```
+Cache-Control: no-cache
+```
+
+The SPA router fetches each page's `index.json` on every client-side navigation (it already passes `cache: "no-cache"` in the fetch call). The CDN must not serve a stale cached copy or the navigated-to page would show old content. Same reasoning as `index.html` above.
+
+**Pattern:** `**/index.json`
+
+---
+
+### Runtime scripts — Immutable
+
+```
+Cache-Control: public, max-age=31536000, immutable
+```
+
+The following files are at fixed paths but every `<script>` reference to them carries a `?v=` query string that changes whenever the file content changes. Once a browser has cached `/root.js?v=4.1.7`, it will never ask for that URL again — and the next deploy that changes the file will serve a different URL (`?v=4.1.8`).
+
+| File | Path |
+| --- | --- |
+| Page bootstrap | `/root.js` |
+| App runtime | `/app.js` |
+| Asset web worker | `/assets/js/asset-worker.js` |
+| Worker handler | `/assets/js/asset-worker-handler.js` |
+| SPA router | `/assets/js/spa-router.js` |
+
+**Pattern:** `/root.js`, `/app.js`, `/assets/js/asset-worker.js`, `/assets/js/asset-worker-handler.js`, `/assets/js/spa-router.js`
+
+---
+
+### Versioned page resources — Immutable
+
+```
+Cache-Control: public, max-age=31536000, immutable
+```
+
+Widget data, widget scripts, layout scripts, and secondary CSS all live under a versioned path segment **and** carry a `?v=` query string. Both layers guarantee a fresh URL whenever the content changes, so these are safe to cache permanently.
+
+| Resource | Example path |
+| --- | --- |
+| Layout scripts | `/{version}/common.js?v=…` |
+| Widget CSS | `/{version}/secondary-css.css?v=…` |
+| Widget data | `/{version}/w/{id}/content.json?v=…` |
+| Widget scripts | `/{version}/w/{id}/content.js?v=…` |
+| Dynamic component scripts | `/{version}/c/{id}/content.js?v=…` |
+
+**Pattern:** `**/{version}/**` where `{version}` is a semver segment (e.g. `1.0.0`, `2.3.1`)
+A practical glob that matches all of them: `**/[0-9]*.[0-9]*.[0-9]*/**`
+
+---
+
+### User static assets — Long cache
+
+```
+Cache-Control: public, max-age=31536000, immutable
+```
+
+Files committed to your project's `public/assets/` directory (libraries, images, fonts) are served under `/assets/`. They are not touched by any build step — if you need to update one, change the filename. Cache them indefinitely.
+
+**Pattern:** `/assets/**` (excluding the runtime files listed above, which share this prefix)
+
+Because the runtime files are already listed explicitly above, you can apply the immutable rule to all of `/assets/**` and let the runtime files inherit the same header — the `?v=` on every reference means there is no stale-content risk regardless.
+
+---
+
+## Config Examples
+
+### Vercel (`vercel.json`)
+
+```json
+{
+  "headers": [
+    {
+      "source": "/(.*)\\.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/(.*)/index\\.json",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/root\\.js",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/app\\.js",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/:version(\\d+\\.\\d+\\.\\d+)/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ]
+}
+```
+
+> **Tip:** Vercel's `source` patterns are evaluated top-to-bottom; more specific rules should come first. The `index.json` rule must appear before any catch-all.
+
+---
+
+### Nginx
+
+```nginx
+# HTML pages — always revalidate
+location ~* \.(html)$ {
+    add_header Cache-Control "no-cache";
+}
+
+# SPA data twins — always revalidate
+location ~* /index\.json$ {
+    add_header Cache-Control "no-cache";
+}
+
+# Runtime and static assets — immutable
+location ~* ^/assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+location ~* ^/(root|app)\.js$ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+
+# Versioned page resources — immutable
+location ~* ^/[^/]+/[0-9]+\.[0-9]+\.[0-9]+/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+}
+```
+
+---
+
+### Apache (`.htaccess`)
+
+```apache
+<IfModule mod_headers.c>
+  # HTML — revalidate
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # SPA index.json — revalidate
+  <FilesMatch "^index\.json$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # Assets and runtime — immutable
+  <FilesMatch "\.(js|css|json|woff2?|ttf|svg|png|jpg|webp)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+```
+
+> Note: Apache's `FilesMatch` matches the filename only, not the path. For path-based rules (e.g. excluding `index.json` inside versioned paths), use `LocationMatch` instead.
+
+---
+
+### Cloudflare (Page Rules or Cache Rules)
+
+Cloudflare caches based on the response's `Cache-Control` header by default. Set the headers on your origin server as shown above and Cloudflare will respect them. If you want to bypass origin and set rules at the edge:
+
+| URL pattern | Cache TTL |
+| --- | --- |
+| `*.html` | Bypass (no cache) |
+| `*/index.json` | Bypass (no cache) |
+| `/root.js`, `/app.js` | Cache Everything — 1 year |
+| `/assets/*` | Cache Everything — 1 year |
+| `*/{semver}/*` | Cache Everything — 1 year |
+
+Use **Cache Rules** (the new interface) over Page Rules. Set "Cache eligibility" to **Bypass cache** for HTML and JSON, and **Cache Everything** with a 1-year edge TTL for the versioned and asset paths.
+
+---
+
+## Quick Reference
+
+| File type | Cache-Control | Why |
+| --- | --- | --- |
+| `index.html` (all pages) | `no-cache` | URL never changes; content changes on deploy |
+| `index.json` (all pages) | `no-cache` | SPA router fetches fresh on every nav |
+| `/root.js`, `/app.js` | `public, max-age=31536000, immutable` | `?v=` changes on version bump |
+| `/assets/js/spa-router.js` | `public, max-age=31536000, immutable` | `?v=` changes on version bump |
+| `/assets/js/asset-worker*.js` | `public, max-age=31536000, immutable` | `?v=` changes on version bump |
+| `/{version}/common.js` | `public, max-age=31536000, immutable` | Path + `?v=` both change on rebuild |
+| `/{version}/w/*/content.*` | `public, max-age=31536000, immutable` | Path + `?v=` both change on rebuild |
+| `/assets/**` (user files) | `public, max-age=31536000, immutable` | Filename controls versioning |
