@@ -9,12 +9,14 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w packages/streak-forge && npm run build -w packages/create-streak-app && npm run build -w apps/docs-site",
-    "build:streak-forge": "npm run build -w packages/streak-forge",
-    "build:create-streak-app": "npm run build -w packages/create-streak-app",
-    "build:docs-site": "npm run build -w apps/docs-site",
+    "build": "bun run --filter 'streak-forge' --filter 'create-streak-app' --filter 'docs-site' build",
+    "build:streak-forge": "bun run --filter 'streak-forge' build",
+    "build:create-streak-app": "bun run --filter 'create-streak-app' build",
+    "build:docs-site": "bun run --filter 'docs-site' build",
     "lint": "bun run --filter 'streak-forge' --filter 'create-streak-app' lint",
-    "test": "echo \"no tests configured yet\" && exit 0"
+    "typecheck": "tsc --noEmit -p packages/streak-forge/tsconfig.json && tsc --noEmit -p packages/create-streak-app/tsconfig.json",
+    "test": "bun run --filter 'streak-forge' test",
+    "verify": "bun install --frozen-lockfile && bun run lint && bun run typecheck && bun run build && bun run test"
   },
   "repository": {
     "type": "git",
