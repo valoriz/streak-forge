@@ -52,5 +52,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # --branch=main => always the production deployment, regardless of
-          # which branch was built. Change "streak-docs" to your Pages project name.
-          command: pages deploy dist --project-name=streak-docs --branch=main
+          # which branch was built. Change "streak-doc" to your Pages project name.
+          command: pages deploy dist --project-name=streak-doc --branch=main
