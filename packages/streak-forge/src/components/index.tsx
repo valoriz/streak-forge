@@ -31,6 +31,54 @@ export const Dynamic = (props: DynamicProps) => {
   return createElement(customTags.DYNAMIC, { id }, children);
 };
 
+// Runtime helpers and SPA events that Streak injects on window.
+// gDom inside a Script block is window typed as GDom, giving full autocomplete
+// on Streak's developer-facing API while preserving all standard window members.
+export type GDom = Window & {
+  // --- Package / component loading ---
+  loadPackage(name: string): Promise<void>;
+  loadDynamicComponent(id: string, callback?: () => void): void;
+
+  // --- DOM / viewport utilities ---
+  onVisible(
+    target: Element,
+    callback: (isIntersecting: boolean, el: Element, metadata: unknown) => void,
+    options: { onlyOnce?: boolean },
+    metadata: unknown,
+  ): void;
+  geById(id: string): HTMLElement | null;
+
+  // --- Timing helpers ---
+  debounce<T extends (...args: unknown[]) => unknown>(fn: T, delay: number): T;
+  stall(ms: number): Promise<void>;
+
+  // --- Cookie helpers ---
+  setCookie(name: string, value: string, days?: number): void;
+  getCookie(name: string): string | null;
+
+  // --- SPA lifecycle events ---
+  addEventListener(
+    type: "sf:pageload",
+    listener: (e: CustomEvent<{ pathname: string; from: string }>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  addEventListener(
+    type: "sf:pageunload",
+    listener: (e: CustomEvent<{ from: string }>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: "sf:pageload",
+    listener: (e: CustomEvent<{ pathname: string; from: string }>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  removeEventListener(
+    type: "sf:pageunload",
+    listener: (e: CustomEvent<{ from: string }>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void;
+};
+
 export interface ScriptProps {
   id: string;
   nonce?: string;
@@ -38,7 +86,7 @@ export interface ScriptProps {
   // a function into its already-serialized source string before the dev
   // server ever imports the widget file. The function type is kept as a
   // fallback for the (unlikely) case the transform didn't run.
-  children: ((gDom: any, options?: any) => void) | string;
+  children: ((gDom: GDom, options?: any) => void) | string;
   options?: Record<string, any>;
 }
 

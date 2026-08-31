@@ -1,0 +1,129 @@
+---
+title: SPA Events
+description: Custom events dispatched by the SPA router — sf:pageload and sf:pageunload — and event listener best practices for SPA-aware scripts.
+order: 6
+---
+
+# SPA Events
+
+When the SPA router is enabled, two custom events are dispatched on `window` for every client-side navigation. They give widget scripts a reliable hook to react to page transitions without requiring any coupling to the router internals.
+
+---
+
+## sf:pageunload
+
+Fired **just before** the current page's body is replaced. The old DOM is still fully live at this point — all elements from the departing page are accessible.
+
+```ts
+window.addEventListener("sf:pageunload", (event: CustomEvent) => {
+  const { from } = event.detail; // pathname of the page being left
+  // Tear down anything that can't be cleaned up automatically:
+  // singleton instances, classes on <html>, third-party observers, etc.
+});
+```
+
+| Detail field | Type | Description |
+| --- | --- | --- |
+| `from` | `string` | `location.pathname` of the page being left |
+
+---
+
+## sf:pageload
+
+Fired **just after** the new page's body is swapped in and `hydratePage` has started. The static HTML is in the DOM, but lazy widgets may still be loading.
+
+```ts
+window.addEventListener("sf:pageload", (event: CustomEvent) => {
+  const { pathname, from } = event.detail;
+  // Re-initialize page-level behaviour: analytics, scroll tracking,
+  // third-party embeds, etc.
+});
+```
+
+| Detail field | Type | Description |
+| --- | --- | --- |
+| `pathname` | `string` | `location.pathname` of the page just loaded |
+| `from` | `string` | `location.pathname` of the page that was left |
+
+> **Note:** `sf:pageload` signals that the static HTML is ready, **not** that all widgets have rendered. For widget-specific timing, use the script callback inside the widget's own `Script` block.
+
+---
+
+## These events fire only during SPA navigation
+
+`sf:pageload` and `sf:pageunload` fire on client-side transitions only. They do **not** fire on the initial cold page load. For cold-load setup, use the normal browser events (`DOMContentLoaded`, `load`) or simply write your initialization at the top level of a `Script` block — `addFunctionToDom` already handles idempotency for you.
+
+---
+
+## Event Listener Best Practice in SPA Scripts
+
+The runtime automatically intercepts `window.addEventListener` and `document.addEventListener` calls made by `Script` blocks, tagging each registration with the current page generation. When the user navigates away, the previous page's listeners are torn down before the new page's scripts run — no manual cleanup needed for listeners registered the normal way inside a `Script` function.
+
+However, if your code adds listeners **outside** of a `Script` block — for example, in a third-party library, or on an element that persists across navigations like `<html>` or a fixed header — the automatic cleanup won't cover them. For those cases, the safest pattern is to **remove before adding**:
+
+```ts
+// Inside a Script block or a sf:pageload handler:
+function handleScroll() { /* ... */ }
+
+// Remove any previous registration first, then add fresh.
+// Safe to call even if the listener was never added.
+window.removeEventListener("scroll", handleScroll);
+window.addEventListener("scroll", handleScroll, { passive: true });
+```
+
+This is especially important for `sf:pageload` handlers themselves — they are added once on cold load and fire on every subsequent navigation, so no duplicate registration issue. But any listener you add **inside** a `sf:pageload` handler runs on every navigation and will accumulate unless you pair each add with a remove:
+
+```ts
+// WRONG — a new scroll listener is added on every navigation
+window.addEventListener("sf:pageload", () => {
+  window.addEventListener("scroll", myScrollHandler, { passive: true });
+});
+
+// CORRECT — remove the previous one before adding
+window.addEventListener("sf:pageload", () => {
+  window.removeEventListener("scroll", myScrollHandler);
+  window.addEventListener("scroll", myScrollHandler, { passive: true });
+});
+```
+
+For listeners that are fully managed by `Script` blocks and `addFunctionToDom`, the runtime's per-generation cleanup handles this automatically — the remove-before-add pattern is only needed when you're outside that managed scope.
+
+---
+
+## Example: Page Transition Analytics
+
+```ts
+window.addEventListener("sf:pageload", (event: CustomEvent) => {
+  const { pathname, from } = event.detail;
+  // Track navigation in your analytics tool
+  analytics.track("page_view", { page: pathname, referrer: from });
+});
+```
+
+## Example: Reinitializing a Third-Party Library
+
+```ts
+let observer: IntersectionObserver | null = null;
+
+window.addEventListener("sf:pageunload", () => {
+  // Disconnect the old observer before the DOM it was watching disappears
+  observer?.disconnect();
+  observer = null;
+});
+
+window.addEventListener("sf:pageload", () => {
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { /* ... */ });
+  });
+  document.querySelectorAll("[data-animate]").forEach((el) => observer!.observe(el));
+});
+```
+
+## Example: Clearing a Body Class
+
+```ts
+window.addEventListener("sf:pageunload", () => {
+  // Remove a class the departing page's script added to <html>
+  document.documentElement.classList.remove("menu-open");
+});
+```

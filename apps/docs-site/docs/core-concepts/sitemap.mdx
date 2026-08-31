@@ -66,9 +66,11 @@ streak.sitemap.json   ← project root
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `id` | string | Must match `WidgetPlaceholder id=` in the layout |
-| `type` | string | Must match the filename in `src/widgets/` |
+| `id` | string | Any string identifying this widget slot. Must match `WidgetPlaceholder id=` in the layout and the handler return key. Unique within this page's `widgets[]`. Not required to equal `type`. |
+| `type` | string | The widget name — must match the filename in `src/widgets/` (case-sensitive) |
 | `loadingStrategy` | `"lazy"` | If set, widget JS assets are deferred until after page is interactive |
+
+`id` and `type` are separate: `type` picks the component file, `id` picks the data slice and the layout slot. Examples use the same value for both only for readability.
 
 ---
 
@@ -88,7 +90,18 @@ If two entries share the same `renderId`, one will overwrite the other.
 
 ## Widget Array
 
-The `widgets[]` array is ordered. Widgets are rendered and injected in the order they appear. Each entry must have a corresponding `WidgetPlaceholder` in the layout with matching `id` and `type`.
+The `widgets[]` array is ordered. Widgets are rendered and injected in the order they appear. Each entry must have a corresponding `WidgetPlaceholder` in the layout whose `id` and `type` equal that entry's `id` and `type`.
+
+Each `id` must be unique within the page. The same `type` may appear in multiple entries — this is how you place the same widget component in more than one spot on a page:
+
+```json
+"widgets": [
+  { "id": "featuredProducts", "type": "ProductList" },
+  { "id": "newArrivals",      "type": "ProductList" }
+]
+```
+
+Each instance renders the same file with its own `props.data` (keyed by `id`) at its own placeholder. Note: `<Script>` ids are deduplicated per page, so a widget type reused on one page must emit a distinct `<Script id>` per instance or only the first gets its client script. See [WidgetPlaceholder](/components/widget-placeholder#reusing-a-widget-type-multiple-times).
 
 ---
 

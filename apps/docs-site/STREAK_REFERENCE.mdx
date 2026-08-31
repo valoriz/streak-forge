@@ -204,7 +204,9 @@ The **central registry** for all pages. Every page that Streak resolves statical
   - `id` links to the handler return object key **and** the matching `WidgetPlaceholder`'s `id`
   - `type` links to the widget component filename **and** the matching `WidgetPlaceholder`'s `type`
   - They are usually the same string but don't have to be
-- Every widget listed in `widgets[]` must have a corresponding `WidgetPlaceholder` with a matching `id` and `type` in the layout
+- Each `id` must be unique within a page's `widgets[]` (it keys the handler data slice and the placeholder). The same `type` may appear in multiple entries on one page — that's how the same widget component is placed in more than one slot; each such entry still needs its own unique `id` and its own `WidgetPlaceholder`
+- `<Script>` ids are deduplicated per page, so a widget `type` used more than once on a page must emit a distinct `<Script id>` per instance or only the first instance's client script ships
+- Every widget listed in `widgets[]` must have a corresponding `WidgetPlaceholder` in the layout whose `id` and `type` equal that entry's `id` and `type` (this is placeholder-to-entry matching, not `id` == `type`)
 - The sitemap loader validates each entry has `url`, `renderConfig`, `renderConfig.renderId`, `renderConfig.rootLayout`, and `renderConfig.widgets[]` — a missing field throws at load time (both `dev` and `build`)
 
 ---

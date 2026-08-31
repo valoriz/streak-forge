@@ -1,0 +1,63 @@
+---
+title: Adaptive Widget Loading
+description: How Streak automatically reads the visitor's network conditions and loads lazy widgets intelligently — so fast connections feel instant and slow connections stay stable.
+order: 7
+---
+
+# Adaptive Widget Loading
+
+Most sites treat every visitor the same. They fire all their lazy-load requests at once and hope the network can handle it. The result: on fast connections it works fine; on slow connections everything races for the same limited bandwidth, and the page stutters or widgets pop in out of order.
+
+Streak takes a different approach. Before loading a single lazy widget, it reads the network conditions of the current visitor's session — and then makes a decision.
+
+---
+
+## The Page Reads the Room
+
+From the very first byte the page delivers, Streak is quietly observing. It measures how quickly the initial page resources arrived and derives a picture of the connection it is working with — all before any lazy content has been requested.
+
+By the time the page is ready to start loading widgets, it already knows whether it is sitting on a fast, reliable connection or a slow, constrained one. No assumptions. No averages. The measurement is specific to this visitor, in this session, on this network, right now.
+
+---
+
+## Slow Connections Get a Lighter Touch
+
+On a slow connection, bandwidth is the bottleneck. Sending multiple widget requests at once is counterproductive — each one competes with the others, and all of them arrive slower as a result.
+
+When Streak detects a slow connection, it narrows the loading lane. Fewer widgets load simultaneously. Each request gets a clear path through the available bandwidth. The result is that content arrives steadily and predictably — visible widgets appear quickly because they are not fighting invisible background requests for the same connection capacity.
+
+The page still loads all its widgets. It just loads them more patiently.
+
+---
+
+## Fast Connections Load in Parallel
+
+On a fast connection, there is room to move. Streak opens up the loading lane fully, fetching several widgets at once — making full use of the connection capacity to get everything on screen as fast as possible.
+
+Because the detection happens before loading starts, this is not a ramp-up or a gradual increase. The page enters the right mode from the start and loads at the appropriate pace from the first widget request.
+
+---
+
+## Viewport Priority Is Always Respected
+
+Regardless of connection speed, what the visitor can see on screen always loads first. Widgets in the visible viewport are queued ahead of everything below the fold — so the content the visitor is actually looking at appears first, while the rest fills in as they scroll down.
+
+On slow connections this ordering matters even more: the visitor gets a usable, readable page immediately, even while the rest is still loading in the background.
+
+---
+
+## Zero Configuration
+
+None of this requires setup. There are no thresholds to tune, no feature flags to enable, no manual fast/slow bucketing to configure. The logic runs automatically on every page, on every visit.
+
+Developers define their widgets. Streak handles the delivery.
+
+---
+
+## What This Looks Like for Visitors
+
+On a fast connection, a page with twelve lazy widgets feels like it loads all at once — because the parallel loading happens so quickly that there is no perceptible gap between widgets appearing.
+
+On a slow connection, the same page delivers visible content first and loads the rest incrementally, matching what the connection can actually handle — rather than overwhelming it and making everything slow.
+
+The page is not just loading widgets. It is loading them intelligently.

@@ -65,9 +65,29 @@ The sitemap file is a JSON array. Each element is a page entry.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | string | Yes | Must match the `WidgetPlaceholder id=` in the layout and the key returned by the data handler |
-| `type` | string | Yes | Must match the filename in `src/widgets/` (case-sensitive, without extension) |
+| `id` | string | Yes | Any string identifying this widget slot. Must match the `WidgetPlaceholder id=` in the layout and the key returned by the data handler. Must be unique within this entry's `widgets[]`. Not required to equal `type`. |
+| `type` | string | Yes | The widget name. Must match the filename in `src/widgets/` (case-sensitive, without extension). May be shared by multiple entries on the same page. |
 | `loadingStrategy` | `"lazy"` | No | When set, only a lightweight skeleton placeholder ships in the initial payload — the widget's real HTML and scripts are fetched and swapped in after page load |
+
+---
+
+## id vs type
+
+`id` and `type` are independent fields:
+
+- `type` — the widget component to render. Resolves to `src/widgets/<type>.tsx`. Multiple entries on a page can share one `type`.
+- `id` — the instance key. Selects the handler data slice (`props.data = handlerReturn[id]`) and the layout slot (`WidgetPlaceholder id=`). Must be unique among the entry's `widgets[]`.
+
+They hold the same string in most examples purely for readability. To place the same widget in two spots on one page, give two entries the same `type` and different `id`s:
+
+```json
+"widgets": [
+  { "id": "featuredProducts", "type": "ProductList" },
+  { "id": "newArrivals",      "type": "ProductList" }
+]
+```
+
+`<Script>` ids are deduplicated per page: a reused widget type must produce a distinct `<Script id>` per instance, or only the first instance's client script ships.
 
 ---
 
