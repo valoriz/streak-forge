@@ -6,7 +6,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/docs-site"
   ],
   "scripts": {
     "build": "bun run --filter 'streak-forge' --filter 'create-streak-app' --filter 'docs-site' build",
