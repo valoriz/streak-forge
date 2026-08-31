@@ -1,0 +1,40 @@
+# Controls GitHub's auto-generated release notes ("What's Changed").
+# Used by `gh api .../releases/generate-notes` in the release workflows.
+# PRs are sorted into sections by their labels; first matching rule wins.
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - skip-changelog
+    authors:
+      - dependabot
+      - github-actions
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking
+        - "breaking change"
+    - title: Features
+      labels:
+        - feature
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: Performance
+      labels:
+        - performance
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Internal / Chore
+      labels:
+        - chore
+        - refactor
+        - ci
+        - test
+    - title: Other Changes
+      labels:
+        - "*"
