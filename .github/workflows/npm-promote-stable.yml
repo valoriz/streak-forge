@@ -115,20 +115,41 @@ jobs:
           git tag "streak-forge@$STABLE"
           git push origin "streak-forge@$STABLE"
 
-      - name: Resolve release-notes file
-        id: notes
+      - name: Assemble release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          TAG="streak-forge@$STABLE"
+
+          # Previous streak-forge tag (usually the last stable; falls back to
+          # the newest beta of this line if that's all there is).
+          PREV_TAG="$(git tag -l 'streak-forge@*' --sort=-version:refname \
+            | grep -vxF "$TAG" | head -n1 || true)"
+
+          AUTO="$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$TAG" \
+            ${PREV_TAG:+-f previous_tag_name="$PREV_TAG"} \
+            --jq .body)"
+
           minor="$(echo "$STABLE" | grep -oE '^[0-9]+\.[0-9]+')"
+          INTRO=""
           for f in "RELEASE-${minor}.md" "RELEASE_NOTES.md"; do
-            if [ -f "$f" ]; then echo "file=$f" >> "$GITHUB_OUTPUT"; break; fi
+            if [ -f "$f" ]; then INTRO="$f"; break; fi
           done
+
+          {
+            if [ -n "$INTRO" ]; then cat "$INTRO"; printf '\n\n---\n\n'; fi
+            echo "$AUTO"
+          } > RELEASE_BODY.md
+
+          echo "Assembled notes (prev tag: ${PREV_TAG:-none}):"
+          cat RELEASE_BODY.md
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
           gh release create "streak-forge@$STABLE" \
             --title "streak-forge v$STABLE" \
-            ${NOTES_FILE:+--notes-file "$NOTES_FILE"} \
+            --notes-file RELEASE_BODY.md \
             --latest

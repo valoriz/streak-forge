@@ -109,24 +109,47 @@ jobs:
           git tag "streak-forge@$VERSION"
           git push origin "streak-forge@$VERSION"
 
-      - name: Resolve release-notes file
+      - name: Assemble release notes
         id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Notes live per minor line: RELEASE-<major>.<minor>.md
-          # (e.g. 4.1.6-beta.0 -> RELEASE-4.1.md). Fall back to a generic
-          # name, then to no notes file at all.
+          TAG="streak-forge@$VERSION"
+
+          # Previous streak-forge tag (for the "what changed since" diff).
+          PREV_TAG="$(git tag -l 'streak-forge@*' --sort=-version:refname \
+            | grep -vxF "$TAG" | head -n1 || true)"
+
+          # GitHub's auto notes: PRs since PREV_TAG, grouped by the sections in
+          # .github/release.yml, plus contributors and a Full Changelog link.
+          AUTO="$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$TAG" \
+            ${PREV_TAG:+-f previous_tag_name="$PREV_TAG"} \
+            --jq .body)"
+
+          # Optional curated intro, per minor line: RELEASE-<major>.<minor>.md
+          # (4.1.7-beta.0 -> RELEASE-4.1.md). Prepended above the auto notes.
           minor="$(echo "$VERSION" | grep -oE '^[0-9]+\.[0-9]+')"
+          INTRO=""
           for f in "RELEASE-${minor}.md" "RELEASE_NOTES.md"; do
-            if [ -f "$f" ]; then echo "file=$f" >> "$GITHUB_OUTPUT"; break; fi
+            if [ -f "$f" ]; then INTRO="$f"; break; fi
           done
+
+          {
+            if [ -n "$INTRO" ]; then cat "$INTRO"; printf '\n\n---\n\n'; fi
+            echo "$AUTO"
+          } > RELEASE_BODY.md
+
+          echo "Assembled notes (prev tag: ${PREV_TAG:-none}):"
+          echo "----------------------------------------"
+          cat RELEASE_BODY.md
 
       - name: Create draft GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
           gh release create "streak-forge@$VERSION" \
             --title "streak-forge v$VERSION" \
-            ${NOTES_FILE:+--notes-file "$NOTES_FILE"} \
+            --notes-file RELEASE_BODY.md \
             --prerelease \
             --draft
