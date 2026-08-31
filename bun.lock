@@ -61,7 +61,7 @@
     },
     "packages/streak-forge": {
       "name": "streak-forge",
-      "version": "4.1.7",
+      "version": "4.1.8",
       "bin": "dist/cli/main.js",
       "dependencies": {
         "chokidar": "^5.0.0",
