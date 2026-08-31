@@ -127,7 +127,9 @@ const getMinifiedTemplate = (fnSource: string): string => {
     // a size optimization — fall back to the unminified wrapper (still
     // correct, just larger) and surface the problem instead of silently
     // eating it.
-    console.warn(`<Script>: failed to minify script content, shipping unminified. ${error instanceof Error ? error.message : error}`);
+    console.warn(
+      `<Script>: failed to minify script content, shipping unminified. ${error instanceof Error ? error.message : error}`,
+    );
     template = wrapped;
   }
 
