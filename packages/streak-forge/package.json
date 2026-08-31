@@ -59,6 +59,7 @@
     "build:types": "tsc -p tsconfig.build.json",
     "build": "bun run clean && bun run build:js && bun run build:types",
     "dev": "echo 'run `streak-forge dev` from a consumer app instead'",
+    "lint": "eslint src cli",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

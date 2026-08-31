@@ -103,8 +103,7 @@ const coreRuntime = (
     observer.observe(target);
   };
 
-  win.stall = (ms: number) =>
-    new Promise((resolve) => setTimeout(resolve, ms));
+  win.stall = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   win.setCookie = function (name: string, value: string, days?: number) {
     let expires = "";

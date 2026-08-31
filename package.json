@@ -13,7 +13,7 @@
     "build:streak-forge": "npm run build -w packages/streak-forge",
     "build:create-streak-app": "npm run build -w packages/create-streak-app",
     "build:docs-site": "npm run build -w apps/docs-site",
-    "lint": "npm run lint -w packages/streak-forge && eslint packages/create-streak-app/src",
+    "lint": "bun run --filter 'streak-forge' --filter 'create-streak-app' lint",
     "test": "echo \"no tests configured yet\" && exit 0"
   },
   "repository": {
@@ -27,7 +27,14 @@
   },
   "homepage": "https://github.com/valoriz/streak-forge#readme",
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
     "eslint-import-resolver-typescript": "^4.4.5",
-    "typescript": "^5.9.3"
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.2.6",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "prettier": "^3.4.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
   }
 }

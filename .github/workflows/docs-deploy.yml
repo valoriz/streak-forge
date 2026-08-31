@@ -51,6 +51,11 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --branch=main => always the production deployment, regardless of
-          # which branch was built. Change "streak-doc" to your Pages project name.
-          command: pages deploy dist --project-name=streak-doc --branch=main
+          # --branch is the Cloudflare Pages branch label, not a git branch. When it
+          # equals the Pages project's configured "production branch" the deploy is
+          # production; otherwise it's a preview. Passing the repo's default branch
+          # (develop) here => always a production deploy. Set the Pages project's
+          # production branch to the SAME value (develop). Rename-safe: reads the
+          # default branch from the repo instead of hardcoding it.
+          # Change "streak-doc" to the exact Pages project name.
+          command: pages deploy dist --project-name=streak-doc --branch=${{ github.event.repository.default_branch }}

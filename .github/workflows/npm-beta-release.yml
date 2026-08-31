@@ -62,6 +62,7 @@ jobs:
         run: node_modules/.bin/tsc --noEmit -p packages/streak-forge/tsconfig.json
 
       - name: Lint
+        working-directory: packages/streak-forge
         run: bun run lint
 
       - name: Build
