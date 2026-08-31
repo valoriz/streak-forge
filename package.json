@@ -15,7 +15,7 @@
     "build:docs-site": "bun run --filter 'docs-site' build",
     "lint": "bun run --filter 'streak-forge' --filter 'create-streak-app' lint",
     "typecheck": "tsc --noEmit -p packages/streak-forge/tsconfig.json && tsc --noEmit -p packages/create-streak-app/tsconfig.json",
-    "test": "echo \"no tests configured yet\" && exit 0",
+    "test": "bun run --filter 'streak-forge' test",
     "verify": "bun install --frozen-lockfile && bun run lint && bun run typecheck && bun run build && bun run test"
   },
   "repository": {
