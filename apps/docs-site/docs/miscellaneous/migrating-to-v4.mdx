@@ -1,0 +1,104 @@
+---
+title: Migrating to v4
+description: Step-by-step guide for upgrading a Streak.js project from v3 or earlier to v4.
+order: 1
+---
+
+# Migrating to v4
+
+Streak Forge v4 changes the JSX transform so widgets and layouts no longer need to import from React or any compatibility shim — the framework ships its own JSX runtime. The migration is straightforward but requires a few deliberate steps to avoid stale module caches.
+
+---
+
+## 1. Update `tsconfig.json`
+
+This is the most important change. Add `jsxImportSource` so TypeScript resolves JSX from `streak-forge` instead of React:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "streak-forge",
+    "moduleResolution": "bundler",
+    "baseUrl": "src/",
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "types": ["bun-types"]
+  },
+  "include": ["src/**/*"]
+}
+```
+
+Without `jsxImportSource`, TypeScript still looks for `react/jsx-runtime`, which may silently resolve to an old cached copy and produce confusing type errors or runtime mismatches.
+
+---
+
+## 2. Update `package.json`
+
+Change the `streak-forge` version to `"beta"` (or a pinned `4.x` release):
+
+```json
+{
+  "dependencies": {
+    "streak-forge": "beta"
+  }
+}
+```
+
+---
+
+## 3. Clean install
+
+After editing `tsconfig.json` and `package.json`, **delete `node_modules` and the lockfile** before reinstalling. Bun caches resolved modules aggressively — a clean install guarantees no leftover v3 artefacts remain in the module graph.
+
+```bash
+rm -rf node_modules bun.lockb
+bun install
+```
+
+> If you use npm instead of Bun, delete `package-lock.json` and run `npm install`.
+
+---
+
+## 4. Remove React imports from widgets and layouts
+
+In v3 and earlier, every TSX file needed an explicit JSX factory import:
+
+```tsx
+// v3 — no longer needed
+import React from "react";
+```
+
+In v4 the JSX runtime is injected automatically by the build step. Remove any `import React from "react"` lines from your widgets, layouts, and handlers.
+
+If you have React listed as a dependency, you can remove it:
+
+```bash
+bun remove react @types/react
+```
+
+---
+
+## 5. Verify
+
+Run the type checker and dev server to confirm everything is wired up correctly:
+
+```bash
+bun run typecheck
+bun run dev
+```
+
+A successful `typecheck` with no JSX-related errors means the migration is complete.
+
+---
+
+## Summary
+
+| Step | What to change |
+| --- | --- |
+| `tsconfig.json` | Add `"jsxImportSource": "streak-forge"` |
+| `package.json` | Set `"streak-forge": "beta"` (or `"^4.x"`) |
+| `node_modules` | Delete and reinstall cleanly |
+| Widget/layout files | Remove `import React from "react"` |
+| Optional | Remove `react` dependency entirely |

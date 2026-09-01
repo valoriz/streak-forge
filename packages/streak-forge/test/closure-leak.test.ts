@@ -61,6 +61,19 @@ describe("findClosureLeaks", () => {
     expect(findClosureLeaks(src, "w.tsx")).toEqual([]);
   });
 
+  test("a realistic tracking-pixel Script body is clean", () => {
+    // The pattern that surfaced both the missing-global (Image) and
+    // arguments-in-a-real-function false positives.
+    const src = wrap(`
+      function log() { console.log(...arguments); }
+      const img = new Image();
+      img.src = options.pixelUrl;
+      img.onload = () => log("pixel loaded");
+      img.onerror = () => console.error("pixel failed");
+    `);
+    expect(findClosureLeaks(src, "w.tsx")).toEqual([]);
+  });
+
   test("arguments is not a leak inside a nested named function (has its own binding)", () => {
     // Arrow functions never bind their own `arguments` - but a regular
     // `function` declared *inside* one does, same as anywhere else in JS.
