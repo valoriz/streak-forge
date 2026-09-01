@@ -1,13 +1,23 @@
 import fs from "fs";
+import path from "path";
 import chokidar from "chokidar";
 import config from "./config";
 import { invalidateModule } from "./moduleLoader";
-import { broadcastReload, broadcastScriptWarning } from "./devServer";
+import {
+  broadcastReload,
+  broadcastScriptWarning,
+  reloadSitemap,
+} from "./devServer";
 import { findClosureLeaks } from "./build/scriptTransform";
 
 const WATCHED_EXTENSIONS = /\.(ts|tsx|js|jsx|json|html|css)$/;
 const JSX_EXTENSIONS = /\.(tsx|jsx)$/;
 const IGNORED = /(node_modules|\.git|\.cache|dist)(\/|\\|$)/;
+
+// Resolved once - compared against every changed file to catch edits to the
+// sitemap itself, which needs a full reload() (see devServer.ts), not just
+// the per-file cache-bust that every other watched file gets.
+const SITEMAP_PATH = path.join(config.targetSrc, "streak.sitemap.json");
 
 // Rebroadcast delay: the browser's SSE connection closes on reload and needs
 // a moment to reconnect before it can receive anything - the reload event
@@ -40,9 +50,23 @@ export const startWatcher = () => {
     }
   };
 
-  const onChange = (filePath: string) => {
+  const onChange = async (filePath: string) => {
     if (!WATCHED_EXTENSIONS.test(filePath)) return;
     console.info(`streak-forge: change detected - ${filePath}`);
+
+    if (path.resolve(filePath) === SITEMAP_PATH) {
+      try {
+        await reloadSitemap();
+      } catch (err) {
+        // Keep serving the last-good sitemap rather than crashing the dev
+        // server over a mid-edit syntax error in the JSON.
+        console.error(
+          "streak-forge: failed to reload streak.sitemap.json",
+          err,
+        );
+      }
+    }
+
     invalidateModule(filePath);
     checkScriptClosures(filePath);
     broadcastReload();

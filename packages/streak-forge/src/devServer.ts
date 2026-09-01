@@ -166,11 +166,25 @@ const servePublicFile = async (pathname: string): Promise<Response | null> => {
   return new Response(Bun.file(filePath));
 };
 
-export const startDevServer = async () => {
-  const pages = await loadSitemap(config.targetSrc);
+// Module-scoped (not local to startDevServer) so `reloadSitemap` can swap it
+// out from under the running server - loadSitemap() itself always re-reads
+// the file fresh, but the request handler was closing over a `const` that
+// was only ever assigned once, at server boot. That meant edits to
+// streak.sitemap.json (adding/removing a widget, a page, a dataHandler, ...)
+// were invisible until the whole dev server was restarted, even though the
+// file watcher fired a browser reload for them - the browser dutifully
+// refetched the page and got the exact same stale render from the server.
+let pages: Map<string, StreakSitemapItem> = new Map();
+
+export const reloadSitemap = async () => {
+  pages = await loadSitemap(config.targetSrc);
   console.info(
-    `streak-forge: loaded ${pages.size} page(s) from streak.sitemap.json`,
+    `streak-forge: reloaded ${pages.size} page(s) from streak.sitemap.json`,
   );
+};
+
+export const startDevServer = async () => {
+  await reloadSitemap();
 
   onClosureLeak(broadcastScriptWarning);
 
