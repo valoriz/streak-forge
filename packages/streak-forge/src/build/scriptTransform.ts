@@ -35,6 +35,20 @@ const collectBindingNames = (name: ts.BindingName, out: Set<string>): void => {
 const collectDeclaredNames = (root: ts.Node): Set<string> => {
   const declared = new Set<string>();
 
+  // Every non-arrow function - including the Script body itself, when it was
+  // authored as `function(gDom, options) {...}` instead of an arrow - gets
+  // its own implicit `arguments` binding; arrow functions never do. This is
+  // a flat heuristic (not real per-scope resolution, like the rest of this
+  // file): it only distinguishes "there's a real function somewhere in
+  // here" from "this is only the Script's own arrow with nothing nested
+  // inside it" - which is exactly the distinction that matters, since a
+  // bare `arguments` directly inside the Script's top-level arrow (no
+  // nested function anywhere) is a genuine ReferenceError in the browser
+  // and should still be flagged.
+  const bindsOwnArguments = (node: ts.Node): boolean =>
+    ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node);
+  if (bindsOwnArguments(root)) declared.add("arguments");
+
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
       collectBindingNames(node.name, declared);
@@ -46,6 +60,7 @@ const collectDeclaredNames = (root: ts.Node): Set<string> => {
     } else if (ts.isCatchClause(node) && node.variableDeclaration) {
       collectBindingNames(node.variableDeclaration.name, declared);
     }
+    if (bindsOwnArguments(node)) declared.add("arguments");
     ts.forEachChild(node, visit);
   };
 

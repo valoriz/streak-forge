@@ -61,11 +61,14 @@
     },
     "packages/streak-forge": {
       "name": "streak-forge",
-      "version": "4.1.10",
-      "bin": "dist/cli/main.js",
+      "version": "4.1.11",
+      "bin": {
+        "streak-forge": "./dist/cli/main.js",
+      },
       "dependencies": {
         "chokidar": "^5.0.0",
         "dotenv": "^17.2.2",
+        "globals": "^15.15.0",
         "node-html-parser": "^7.0.1",
         "terser": "^5.43.1",
         "typescript": "^5.9.3",
@@ -987,6 +990,8 @@
     "parse-entities/@types/unist": ["@types/unist@2.0.11", "", {}, ""],
 
     "source-map-support/source-map": ["source-map@0.6.1", "", {}, ""],
+
+    "streak-forge/globals": ["globals@15.15.0", "", {}, "sha512-7ACyT3wmyp3I61S4fG682L0VA2RGD9otkqGJIwNUMF1SWUombIIk+af1unuDYgMm082aHYwD+mzJvv9Iu8dsgg=="],
 
     "@eslint/eslintrc/js-yaml/argparse": ["argparse@2.0.1", "", {}, ""],
 
