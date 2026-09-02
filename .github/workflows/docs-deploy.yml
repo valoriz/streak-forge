@@ -25,6 +25,10 @@ jobs:
 
       - name: Build docs site
         working-directory: apps/docs-site
+        # "Edit this page on GitHub" links point at whatever branch was picked
+        # in "Use workflow from" - the same branch whose content is being built.
+        env:
+          DOCS_EDIT_BRANCH: ${{ github.ref_name }}
         run: bun run build
 
       - name: Upload build output
@@ -51,11 +55,13 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --branch is the Cloudflare Pages branch label, not a git branch. When it
-          # equals the Pages project's configured "production branch" the deploy is
-          # production; otherwise it's a preview. Passing the repo's default branch
-          # (develop) here => always a production deploy. Set the Pages project's
-          # production branch to the SAME value (develop). Rename-safe: reads the
-          # default branch from the repo instead of hardcoding it.
+          # --branch here is the Cloudflare Pages *branch label*, NOT the git
+          # branch you built. Cloudflare treats a deploy as production only when
+          # this value equals the Pages project's configured "Production branch"
+          # (which is `main` and stays `main`). Anything else = a preview URL.
+          # So this is pinned to the production-branch name, independent of which
+          # git branch the "Use workflow from" dropdown selected to build.
+          # Override via a repo variable if the Pages production branch ever
+          # changes; falls back to main.
           # Change "streak-doc" to the exact Pages project name.
-          command: pages deploy dist --project-name=streak-doc --branch=${{ github.event.repository.default_branch }}
+          command: pages deploy dist --project-name=streak-doc --branch=${{ vars.CF_PRODUCTION_BRANCH || 'main' }}
