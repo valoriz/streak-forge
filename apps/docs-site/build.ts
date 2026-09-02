@@ -1,7 +1,24 @@
 import fs from "fs/promises"
 import path from "path"
+import { execSync } from "child_process"
 import glob from "fast-glob"
 import matter from "gray-matter"
+
+// The branch the "Edit this page on GitHub" links point at. CI sets
+// DOCS_EDIT_BRANCH to the branch the deploy was built from (github.ref_name),
+// so an edit link always targets the same branch whose content is live. Local
+// builds fall back to the current git branch, then to "develop".
+const EDIT_BRANCH = (() => {
+  if (process.env.DOCS_EDIT_BRANCH) return process.env.DOCS_EDIT_BRANCH
+  try {
+    return execSync("git rev-parse --abbrev-ref HEAD", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {
+    return "develop"
+  }
+})()
 
 import { unified } from "unified"
 import remarkParse from "remark-parse"
@@ -350,6 +367,7 @@ export async function build({ minify = false } = {}) {
       .replace("{{toc}}", tocHtml)
       .replace("{{prev}}", prev)
       .replace("{{next}}", next)
+      .replaceAll("{{edit_branch}}", EDIT_BRANCH)
       .replace("{{edit_url}}", page.file)
 
     if (minify) out = minifyHtml(out)
