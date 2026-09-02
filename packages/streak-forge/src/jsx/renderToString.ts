@@ -42,6 +42,23 @@ const styleToCss = (
     .map(([k, v]) => `${k.startsWith("--") ? k : kebabCase(k)}:${v}`)
     .join(";");
 
+// Compact, safe-for-logging description of whatever reached the renderer -
+// component functions become `[function Name]`, circular refs (e.g. a React
+// element's _owner) don't throw, and the whole thing is length-capped.
+const describeNode = (node: unknown): string => {
+  try {
+    const json = JSON.stringify(node, (_key, value) =>
+      typeof value === "function"
+        ? `[function ${value.name || "anonymous"}]`
+        : value,
+    );
+    if (!json) return String(node);
+    return json.length > 300 ? `${json.slice(0, 300)}…` : json;
+  } catch {
+    return Object.prototype.toString.call(node);
+  }
+};
+
 const renderAttrs = (props: Record<string, any>): string => {
   let out = "";
   for (const key in props) {
@@ -78,8 +95,45 @@ export const renderToString = async (node: VNodeChild): Promise<string> => {
     return parts.join("");
   }
 
+  // Reaching here means `node` is a non-null object that isn't an array. A
+  // real VNode is `{ type, props }`. Anything else (a bare object literal
+  // used instead of JSX, a Promise passed as a child, an element compiled
+  // against a different JSX runtime) can't be rendered - fail with something
+  // the app author can act on, not a TypeError deep inside this function.
+  if (!("type" in node)) {
+    throw new Error(
+      `streak-forge: cannot render value as JSX - expected a { type, props } ` +
+        `element, got ${describeNode(node)}. Common causes: a component ` +
+        `returning a plain object instead of JSX, a raw Promise used as a ` +
+        `child, or a component built against a different JSX runtime.`,
+    );
+  }
+
   const vnode = node as VNode;
-  const { type, props } = vnode;
+  const { type } = vnode;
+
+  if (type === undefined || type === null) {
+    throw new Error(
+      `streak-forge: JSX element has no "type" (${describeNode(node)}) - a ` +
+        `component likely returned undefined, or a tag/component name ` +
+        `resolved to nothing.`,
+    );
+  }
+
+  // jsx() / createElement() always attach a props object; a missing one means
+  // the node was hand-built (e.g. `{ type, children }`). Recover by treating
+  // it as an empty element, but say so - it's almost always a bug and hard
+  // to find otherwise.
+  let props = vnode.props as Record<string, any> | undefined;
+  if (props === undefined || props === null) {
+    console.warn(
+      `streak-forge: a <${typeof type === "string" ? type : "component"}> ` +
+        `element reached the renderer with no props object - it was probably ` +
+        `built by hand instead of with JSX/createElement. Rendering it with ` +
+        `no attributes. Node: ${describeNode(node)}`,
+    );
+    props = {};
+  }
 
   if (type === Fragment) {
     return renderToString(props.children);
@@ -88,6 +142,13 @@ export const renderToString = async (node: VNodeChild): Promise<string> => {
   if (typeof type === "function") {
     const result = await type(props);
     return renderToString(result);
+  }
+
+  if (typeof type !== "string") {
+    throw new Error(
+      `streak-forge: JSX element "type" must be a string tag, a component ` +
+        `function, or Fragment - got ${typeof type} (${describeNode(node)}).`,
+    );
   }
 
   // host element (string tag, including our custom marker tags)

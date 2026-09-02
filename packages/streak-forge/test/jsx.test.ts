@@ -5,7 +5,7 @@
  * Run with:  bun test   (from packages/streak-forge, or `bun run test` at the repo root)
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, spyOn } from "bun:test";
 import { createElement, jsx, jsxs } from "../src/jsx/element";
 import { Fragment } from "../src/jsx/types";
 import { renderToString } from "../src/jsx/renderToString";
@@ -195,5 +195,43 @@ describe("renderToString — Fragment and components", () => {
     expect(await renderToString(createElement(Slow, { n: 21 }))).toBe(
       "<p>42</p>",
     );
+  });
+});
+
+describe("renderToString — malformed nodes", () => {
+  test("a hand-built element with no props object renders (empty) instead of crashing", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const bad = { type: "div", children: "hi" } as unknown;
+      expect(await renderToString(bad as never)).toBe("<div></div>");
+      expect(warn).toHaveBeenCalled();
+      expect(String(warn.mock.calls[0]?.[0])).toContain("no props object");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("an object that isn't an element throws a named error", async () => {
+    await expect(renderToString({ foo: 1 } as never)).rejects.toThrow(
+      /cannot render value as JSX/,
+    );
+  });
+
+  test("a Promise passed as a child throws a named error", async () => {
+    await expect(renderToString(Promise.resolve("x") as never)).rejects.toThrow(
+      /cannot render value as JSX/,
+    );
+  });
+
+  test("an element with an undefined type throws a named error", async () => {
+    await expect(
+      renderToString({ type: undefined, props: {} } as never),
+    ).rejects.toThrow(/has no "type"/);
+  });
+
+  test("an element whose type is a number throws a named error", async () => {
+    await expect(
+      renderToString({ type: 42, props: {} } as never),
+    ).rejects.toThrow(/"type" must be a string tag/);
   });
 });
