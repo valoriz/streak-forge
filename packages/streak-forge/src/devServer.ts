@@ -67,7 +67,9 @@ const HMR_CLIENT_SCRIPT = `<script>
 const injectHmr = (html: string): string =>
   config.hmrEnabled
     ? html.includes("</body>")
-      ? html.replace("</body>", `${HMR_CLIENT_SCRIPT}</body>`)
+      ? // replacer function, not a string - a string replacement would run
+        // "$&" / "$`" / "$'" substitution on already-rendered page content
+        html.replace("</body>", () => `${HMR_CLIENT_SCRIPT}</body>`)
       : html + HMR_CLIENT_SCRIPT
     : html;
 
