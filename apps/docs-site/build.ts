@@ -28,6 +28,7 @@ const NAV_ORDER = [
   "deployment",
   "guides",
   "reference",
+  "miscellaneous",
 ]
 
 interface PageMeta {
