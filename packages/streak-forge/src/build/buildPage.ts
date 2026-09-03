@@ -30,7 +30,7 @@ export interface RawContent {
 // code, scratch data, etc.) - only `common` and per-widget-id keys are part
 // of the documented dataHandlerOut contract, so anything else is dropped
 // rather than leaking into the build artifact.
-const filterHandlerResponse = (response: Record<string, any>, widgetIds: string[]): Record<string, any> => {
+export const filterHandlerResponse = (response: Record<string, any>, widgetIds: string[]): Record<string, any> => {
   const filtered: Record<string, any> = {};
   if (response?.common !== undefined) filtered.common = response.common;
   for (const id of widgetIds) {
@@ -85,10 +85,11 @@ export const buildPageData = async (
   const rootLayoutOut = await renderComponent(layoutModule.default, renderConfig.metadata || {});
   progress?.updateProgress("layout", { stage: "layout" });
 
+  const commonData = dataHandlerOut.common as Record<string, any> | undefined;
   const widgets: WidgetOut[] = await Promise.all(
     renderConfig.widgets.map(async (w) => {
       const widgetModule = await importFromDir(widgetsDir, w.type);
-      const props: WidgetProps = { data: dataHandlerOut[w.id] };
+      const props: WidgetProps = { data: dataHandlerOut[w.id], common: commonData };
       const out = await renderComponent(widgetModule.default, props);
       const sOut = typeof widgetModule.skeleton === "function" ? await renderComponent(widgetModule.skeleton, props) : "";
       return { id: w.id, type: w.type, loadingStrategy: w.loadingStrategy, out, sOut };

@@ -21,6 +21,7 @@ export interface StreakSitemapItem {
 
 export interface WidgetProps {
   data?: Record<string, any>;
+  common?: Record<string, any>;
 }
 
 export interface ScriptItem {

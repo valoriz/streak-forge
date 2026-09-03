@@ -40,10 +40,11 @@ export const renderPage = async (
     renderConfig.metadata || {},
   );
 
+  const commonData = dataMap.common as Record<string, any> | undefined;
   const widgets: WidgetForAssembly[] = await Promise.all(
     renderConfig.widgets.map(async (w) => {
       const widgetModule = await importFromDir(srcDir.widgetsDir, w.type);
-      const props: WidgetProps = { data: dataMap[w.id] };
+      const props: WidgetProps = { data: dataMap[w.id], common: commonData };
       const html = await renderComponent(widgetModule.default, props);
       const skeletonHtml =
         typeof widgetModule.skeleton === "function"
