@@ -36,7 +36,10 @@ describe("filterHandlerResponse — common key", () => {
       navWidget: { links: ["/"] },
       footerWidget: { year: 2026 },
     };
-    const result = filterHandlerResponse(response, ["navWidget", "footerWidget"]);
+    const result = filterHandlerResponse(response, [
+      "navWidget",
+      "footerWidget",
+    ]);
     expect(result.navWidget).toEqual({ links: ["/"] });
     expect(result.footerWidget).toEqual({ year: 2026 });
     expect(result.common).toEqual({ theme: "dark" });
