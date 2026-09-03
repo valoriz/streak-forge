@@ -7,6 +7,7 @@ import {
   SCRIPT_OPTS_ATTR,
   OPTS_PLACEHOLDER,
 } from "../constants";
+import { escapeRawTextElementContent } from "../jsx/renderToString";
 import { putContent } from "./contentStore";
 import type { ScriptItem } from "../types";
 
@@ -30,9 +31,15 @@ const extractScripts = (
       // identifier and throws.
       const opts = el.getAttribute(SCRIPT_OPTS_ATTR);
       if (opts && content.includes(OPTS_PLACEHOLDER)) {
-        content = content.replaceAll(OPTS_PLACEHOLDER, opts);
+        // Replacer function, not a string: string replacement runs "$&" /
+        // "$`" / "$'" / "$$" substitution, which would corrupt option values
+        // that contain a literal "$" (a price, a template hint, ...).
+        content = content.replaceAll(OPTS_PLACEHOLDER, () => opts);
       }
-      scripts.push({ id, content });
+      // The options JSON just spliced in (and, defensively, anything the
+      // parser handed back) must not carry a live "</script" - a widget
+      // passing an HTML snippet / embed code through `options` is common.
+      scripts.push({ id, content: escapeRawTextElementContent(content) });
       seenIds.add(id);
     }
     el.remove();

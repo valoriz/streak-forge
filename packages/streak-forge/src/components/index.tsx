@@ -147,12 +147,26 @@ export const Script = (props: ScriptProps) => {
   // undefined - anywhere inside options. Left unguarded this surfaces as a
   // confusing internal crash ("undefined is not an object") deep inside
   // this framework file instead of pointing back at the actual widget.
-  const optionsJson = JSON.stringify(options ?? {});
-  if (optionsJson === undefined) {
+  const rawJson = JSON.stringify(options ?? {});
+  if (rawJson === undefined) {
     throw new Error(
       `<Script id="${id}">'s "options" prop must be JSON-serializable - it contains a value (e.g. a function or symbol) that JSON.stringify can't represent.`,
     );
   }
+
+  // Escape "<" as \u003c (plus > & and the JS line separators). This value
+  // travels two ways: as the data-sf-opts *attribute*, and - once postProcess
+  // / streak-distiller splices it in for OPTS_PLACEHOLDER - as text inside the
+  // inline <script>. A CMS string containing "</script>" (a course title, an
+  // embed snippet) would otherwise break out of the element and dump the rest
+  // of the code onto the page as visible text. It parses back to the original
+  // characters, so widget code is unaffected.
+  const optionsJson = rawJson
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 
   const __html = getMinifiedTemplate(fnSource);
   return createElement(customTags.SCRIPT, {

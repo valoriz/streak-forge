@@ -1,6 +1,6 @@
 {
   "name": "streak-forge",
-  "version": "4.1.11",
+  "version": "4.1.16",
   "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
   "author": "indrajithc",
   "license": "Apache-2.0",

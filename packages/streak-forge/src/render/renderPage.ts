@@ -65,8 +65,11 @@ export const renderPage = async (
 
   if (assembled.headLinks.length) {
     const headExtra = assembled.headLinks.join("");
+    // Replacer *function*, not a string: a string replacement runs "$&", "$`",
+    // "$'" etc. substitution, which corrupts injected <script> content that
+    // legitimately contains "$&" (a minifier's `x&&y` short-circuit).
     doc = doc.includes("</head>")
-      ? doc.replace("</head>", `${headExtra}</head>`)
+      ? doc.replace("</head>", () => `${headExtra}</head>`)
       : doc + headExtra;
   }
 
@@ -82,7 +85,7 @@ export const renderPage = async (
   const bodyExtra =
     buildClientScript(assembled.lazyWidgetIds) + trailingScripts;
   doc = doc.includes("</body>")
-    ? doc.replace("</body>", `${bodyExtra}</body>`)
+    ? doc.replace("</body>", () => `${bodyExtra}</body>`)
     : doc + bodyExtra;
 
   return `<!DOCTYPE html>${doc}`;

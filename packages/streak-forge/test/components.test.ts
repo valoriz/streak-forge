@@ -22,7 +22,7 @@ describe("Script — options bridge", () => {
     expect(vnode.props.id).toBe("hero");
   });
 
-  test("data-sf-opts is JSON.stringify(options)", () => {
+  test("data-sf-opts is JSON.stringify(options) for plain values", () => {
     const options = { accent: "#818cf8", ms: 700 };
     const vnode = Script({ id: "x", options, children: () => {} });
     expect(vnode.props[SCRIPT_OPTS_ATTR]).toBe(JSON.stringify(options));
@@ -31,6 +31,17 @@ describe("Script — options bridge", () => {
   test("data-sf-opts defaults to '{}' when options is omitted", () => {
     const vnode = Script({ id: "x", children: () => {} });
     expect(vnode.props[SCRIPT_OPTS_ATTR]).toBe("{}");
+  });
+
+  test("data-sf-opts escapes < > & so CMS content can't break the <script>", () => {
+    const options = { html: "<b>hi</b></script><img src=x>", amp: "a & b" };
+    const attr = Script({ id: "x", options, children: () => {} }).props[
+      SCRIPT_OPTS_ATTR
+    ] as string;
+    expect(attr).not.toMatch(/[<>&]/);
+    expect(attr).toContain("\\u003c");
+    // still parses back to the exact original object
+    expect(JSON.parse(attr)).toEqual(options);
   });
 
   test("throws when options is not JSON-serializable", () => {
