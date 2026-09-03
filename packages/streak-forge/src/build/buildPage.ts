@@ -30,7 +30,7 @@ export interface RawContent {
 // code, scratch data, etc.) - only `common` and per-widget-id keys are part
 // of the documented dataHandlerOut contract, so anything else is dropped
 // rather than leaking into the build artifact.
-const filterHandlerResponse = (response: Record<string, any>, widgetIds: string[]): Record<string, any> => {
+export const filterHandlerResponse = (response: Record<string, any>, widgetIds: string[]): Record<string, any> => {
   const filtered: Record<string, any> = {};
   if (response?.common !== undefined) filtered.common = response.common;
   for (const id of widgetIds) {
