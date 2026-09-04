@@ -5,7 +5,7 @@ import { CONTENT_ENDPOINT, WIDGET_META_ID } from "../constants";
 // <Script> uses for widget-authored scripts.
 const coreRuntime = (
   win: any,
-  opts: { endpoint: string; widgetMetaId: string },
+  opts: { endpoint: string; widgetMetaId: string; spa: boolean },
 ) => {
   win.__streakLoaded = win.__streakLoaded || new Set();
   win.__streakLoadedResources = win.__streakLoadedResources || {};
@@ -196,14 +196,83 @@ const coreRuntime = (
     win.addWidgetToBody(first, () => loadNext(rest));
   };
   loadNext(lazyWidgetIds);
+
+  // ── Dev SPA router ────────────────────────────────────────────────────────
+  // Disabled when opts.spa is false (set STREAK_DEV_SPA=false in the shell).
+  if (!opts.spa) return;
+  // Intercepts same-origin link clicks and popstate, fetches the new page HTML
+  // from the dev server, and swaps the body without a full reload — giving the
+  // same navigation feel as the production SPA router. Dev-only, intentionally
+  // simpler than the production version (no prefetch, no distillerVersion
+  // guard, no bounded-concurrency widget loading).
+  const swapPage = (href: string, push: boolean) => {
+    fetch(href, { headers: { Accept: "text/html" } })
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.text();
+      })
+      .then((html) => {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        // Reset dev runtime state so widgets and dynamic components on the new
+        // page are treated as not-yet-loaded.
+        win.__streakLoaded = new Set();
+        win.__streakLoadedResources = {};
+        if (push) win.history.pushState(null, "", href);
+        win.document.title = doc.title;
+        win.document.body.innerHTML = doc.body.innerHTML;
+        // innerHTML does not execute <script> tags — re-create each one so the
+        // browser runs it. Skip data scripts (type=application/json etc.) since
+        // those are read by coreRuntime as data, not executed as code.
+        win.document.body.querySelectorAll("script").forEach((old: HTMLScriptElement) => {
+          const t = old.type;
+          if (t && t !== "text/javascript" && t !== "module") return;
+          const s = win.document.createElement("script");
+          Array.from(old.attributes).forEach((a: Attr) => s.setAttribute(a.name, a.value));
+          if (!old.src) s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+        win.dispatchEvent(new CustomEvent("sf:pageload", { detail: { path: href } }));
+      })
+      .catch((err) => {
+        console.warn("[streak dev] spa nav failed, falling back to full reload:", err);
+        win.location.href = href;
+      });
+  };
+
+  win.document.addEventListener(
+    "click",
+    (e: MouseEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
+      if (!a || (a.target && a.target !== "_self")) return;
+      try {
+        const url = new URL(a.href, win.location.href);
+        if (url.origin !== win.location.origin) return;
+        // Hash-only change on same page — let browser handle scroll, no swap.
+        if (url.hash && url.pathname === win.location.pathname && url.search === win.location.search) return;
+        e.preventDefault();
+        swapPage(url.pathname + url.search + url.hash, true);
+      } catch {
+        // Unparseable href — let browser handle it.
+      }
+    },
+    true,
+  );
+
+  win.addEventListener("popstate", () => {
+    swapPage(win.location.pathname + win.location.search + win.location.hash, false);
+  });
 };
 
 export const buildClientScript = (lazyWidgetIds: string[]): string => {
+  // STREAK_DEV_SPA=false disables the dev SPA router. Defaults to enabled.
+  const spa = process.env.STREAK_DEV_SPA !== "false";
   const meta = `<script type="application/json" id="${WIDGET_META_ID}">${JSON.stringify(lazyWidgetIds)}</script>`;
   const runtime = `<script>(${coreRuntime.toString()})(window, ${JSON.stringify(
     {
       endpoint: CONTENT_ENDPOINT,
       widgetMetaId: WIDGET_META_ID,
+      spa,
     },
   )});</script>`;
   return meta + runtime;

@@ -61,7 +61,7 @@
     },
     "packages/streak-forge": {
       "name": "streak-forge",
-      "version": "4.1.17",
+      "version": "4.1.18",
       "bin": {
         "streak-forge": "./dist/cli/main.js",
       },
