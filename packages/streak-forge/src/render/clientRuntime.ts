@@ -223,18 +223,27 @@ const coreRuntime = (
         // innerHTML does not execute <script> tags — re-create each one so the
         // browser runs it. Skip data scripts (type=application/json etc.) since
         // those are read by coreRuntime as data, not executed as code.
-        win.document.body.querySelectorAll("script").forEach((old: HTMLScriptElement) => {
-          const t = old.type;
-          if (t && t !== "text/javascript" && t !== "module") return;
-          const s = win.document.createElement("script");
-          Array.from(old.attributes).forEach((a: Attr) => s.setAttribute(a.name, a.value));
-          if (!old.src) s.textContent = old.textContent;
-          old.replaceWith(s);
-        });
-        win.dispatchEvent(new CustomEvent("sf:pageload", { detail: { path: href } }));
+        win.document.body
+          .querySelectorAll("script")
+          .forEach((old: HTMLScriptElement) => {
+            const t = old.type;
+            if (t && t !== "text/javascript" && t !== "module") return;
+            const s = win.document.createElement("script");
+            Array.from(old.attributes).forEach((a: Attr) =>
+              s.setAttribute(a.name, a.value),
+            );
+            if (!old.src) s.textContent = old.textContent;
+            old.replaceWith(s);
+          });
+        win.dispatchEvent(
+          new CustomEvent("sf:pageload", { detail: { path: href } }),
+        );
       })
       .catch((err) => {
-        console.warn("[streak dev] spa nav failed, falling back to full reload:", err);
+        console.warn(
+          "[streak dev] spa nav failed, falling back to full reload:",
+          err,
+        );
         win.location.href = href;
       });
   };
@@ -242,14 +251,28 @@ const coreRuntime = (
   win.document.addEventListener(
     "click",
     (e: MouseEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      const a = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
+      if (
+        e.defaultPrevented ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.shiftKey ||
+        e.altKey
+      )
+        return;
+      const a = (e.target as Element).closest(
+        "a[href]",
+      ) as HTMLAnchorElement | null;
       if (!a || (a.target && a.target !== "_self")) return;
       try {
         const url = new URL(a.href, win.location.href);
         if (url.origin !== win.location.origin) return;
         // Hash-only change on same page — let browser handle scroll, no swap.
-        if (url.hash && url.pathname === win.location.pathname && url.search === win.location.search) return;
+        if (
+          url.hash &&
+          url.pathname === win.location.pathname &&
+          url.search === win.location.search
+        )
+          return;
         e.preventDefault();
         swapPage(url.pathname + url.search + url.hash, true);
       } catch {
@@ -260,7 +283,10 @@ const coreRuntime = (
   );
 
   win.addEventListener("popstate", () => {
-    swapPage(win.location.pathname + win.location.search + win.location.hash, false);
+    swapPage(
+      win.location.pathname + win.location.search + win.location.hash,
+      false,
+    );
   });
 };
 
