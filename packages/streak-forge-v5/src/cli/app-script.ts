@@ -167,7 +167,7 @@ export const APP_SCRIPT_JS = `(function () {
   setTimeout(function () {
     if (!document.getElementById("streak-common-script")) {
       var scriptPath = location.pathname.replace(/\\/+$/, "");
-      window.addResourceToBody(scriptPath + "/common.js", { async: true, maxRetries: 1, type: "js" });
+      window.addResourceToBody(window.__streakVersioned(scriptPath + "/common.js"), { async: true, maxRetries: 1, type: "js" });
     }
   }, 0);
 
@@ -233,7 +233,7 @@ export const APP_SCRIPT_JS = `(function () {
 
   function ensureWorker() {
     if (worker) return worker;
-    worker = new Worker("/__streak/asset-worker.js");
+    worker = new Worker(window.__streakVersioned("/__streak/asset-worker.js"));
     worker.addEventListener("message", function (event) {
       var message = event.data;
       if (message.type !== "ASSET_LOADED") return;
@@ -270,7 +270,7 @@ export const APP_SCRIPT_JS = `(function () {
     if (callback) callbacksPerAsset[assetId].push(callback);
     if (inProgressAssets[assetId]) return;
     inProgressAssets[assetId] = true;
-    ensureWorker().postMessage({ type: "LOAD_ASSET", assetId: assetId, id: assetId });
+    ensureWorker().postMessage({ type: "LOAD_ASSET", assetId: assetId, id: assetId, version: window.__streakVersion });
   };
 
   window.loadPackage = function (name) {

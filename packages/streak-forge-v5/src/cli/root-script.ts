@@ -31,6 +31,17 @@
 export const ROOT_SCRIPT_JS = `(function () {
   "use strict";
 
+  // Build/serve links this file as root.js?v=<page version>. That version
+  // is put on every runtime/asset URL this runtime requests itself
+  // (app.js, common.js, asset-worker.js, loadPackage assets), so all of
+  // them are cache-busted together. Dev has no ?v= — URLs stay as-is.
+  var ownScript = document.currentScript;
+  var versionMatch = ownScript && /[?&]v=([^&#]+)/.exec(ownScript.src);
+  window.__streakVersion = versionMatch ? versionMatch[1] : "";
+  window.__streakVersioned = function (url) {
+    return window.__streakVersion && url.indexOf("?") === -1 ? url + "?v=" + window.__streakVersion : url;
+  };
+
   window.__generation = window.__generation || 0;
   var trackedListeners = [];
   var trackedTimers = [];
@@ -255,6 +266,13 @@ export const ROOT_SCRIPT_JS = `(function () {
         function rootUrl(href) {
           return href.charAt(0) === "/" || /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : "/" + href;
         }
+        // The page version stamped on content.json's own URL (?v=) goes on
+        // every asset it lists too, so CSS/JS are cache-busted the same way.
+        var versionMatch = /[?&]v=([^&#]+)/.exec(contentUrl);
+        function assetUrl(href) {
+          var url = rootUrl(href);
+          return versionMatch && url.indexOf("?") === -1 ? url + "?v=" + versionMatch[1] : url;
+        }
         var inserted = false;
         function insertAndRun() {
           if (inserted) return;
@@ -265,13 +283,13 @@ export const ROOT_SCRIPT_JS = `(function () {
           // render several root elements (e.g. a backdrop + a drawer).
           el.replaceWith.apply(el, Array.prototype.slice.call(tmp.childNodes));
           if (content.scriptHref) {
-            window.addResourceToBody(rootUrl(content.scriptHref), { async: true, type: "js" }, callback);
+            window.addResourceToBody(assetUrl(content.scriptHref), { async: true, type: "js" }, callback);
           } else if (callback) {
             callback();
           }
         }
         if (content.cssHref) {
-          var cssUrl = rootUrl(content.cssHref);
+          var cssUrl = assetUrl(content.cssHref);
           window.addResourceToBody(cssUrl, { type: "css" }, insertAndRun);
           // A failed stylesheet must not drop the widget: show it anyway
           // (possibly unstyled), same as the dev fragment path.
@@ -295,7 +313,7 @@ export const ROOT_SCRIPT_JS = `(function () {
   // tag instead of several render-blocking ones — the actual lever for a
   // good mobile Lighthouse score, not just "fewer files".
   setTimeout(function () {
-    window.addResourceToBody("/__streak/app.js", { defer: true, type: "js" });
+    window.addResourceToBody(window.__streakVersioned("/__streak/app.js"), { defer: true, type: "js" });
   }, 0);
 })();
 `;

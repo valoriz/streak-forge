@@ -19,7 +19,7 @@ export const ASSET_WORKER_JS = `(function () {
   var ASSET_FETCH_MAX_RETRIES = 2;
   var ASSET_FETCH_RETRY_BASE_MS = 300;
 
-  function handleLoadAsset(assetId, callback, attempt) {
+  function handleLoadAsset(assetId, version, callback, attempt) {
     attempt = attempt || 0;
     var controller = new AbortController();
     var timeoutId = setTimeout(function () {
@@ -27,7 +27,7 @@ export const ASSET_WORKER_JS = `(function () {
     }, ASSET_FETCH_TIMEOUT_MS);
     var cleanId = assetId.replace(/^\\/+/, "");
 
-    fetch("/assets/" + cleanId, { signal: controller.signal })
+    fetch("/assets/" + cleanId + (version && cleanId.indexOf("?") === -1 ? "?v=" + version : ""), { signal: controller.signal })
       .then(function (response) {
         clearTimeout(timeoutId);
         // Check status BEFORE reading the body — an error page's body
@@ -44,7 +44,7 @@ export const ASSET_WORKER_JS = `(function () {
         clearTimeout(timeoutId);
         if (attempt < ASSET_FETCH_MAX_RETRIES) {
           setTimeout(function () {
-            handleLoadAsset(assetId, callback, attempt + 1);
+            handleLoadAsset(assetId, version, callback, attempt + 1);
           }, ASSET_FETCH_RETRY_BASE_MS * Math.pow(2, attempt));
           return;
         }
@@ -58,7 +58,7 @@ export const ASSET_WORKER_JS = `(function () {
       console.error("Unknown message type:", data.type);
       return;
     }
-    handleLoadAsset(data.assetId, function (metadata) {
+    handleLoadAsset(data.assetId, data.version, function (metadata) {
       self.postMessage({ type: "ASSET_LOADED", data: { id: data.id, assetId: data.assetId, metadata: metadata } });
     });
   });

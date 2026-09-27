@@ -1242,7 +1242,8 @@ export function composePageAsJson(manifest: PageManifest, outDir: string): Compo
     htmlAttributes,
     bodyAttributes,
     bodyHtml: stripOuterTag(bodyHtml, "body"),
-    scriptHref: manifest.hasScript ? pageScriptHref(manifest.url) : null,
+    // Build/serve: the page's own version, same ?v= as its other assets.
+    scriptHref: manifest.hasScript ? pageScriptHref(manifest.url) + (manifest.inlineCss ? `?v=${manifest.version}` : "") : null,
   };
 }
 

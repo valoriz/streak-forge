@@ -477,7 +477,8 @@ describe("page-build buildPages({ spa: true }) — index.json + spa-router.js, o
     // Never a literal <script> tag for the page's own bundle (would never
     // execute via innerHTML) — the router loads it explicitly instead.
     expect(json.bodyHtml).not.toContain("<script");
-    expect(json.scriptHref).toBe("/common.js");
+    // Same page version as every other build/serve asset URL.
+    expect(json.scriptHref).toBe(`/common.js?v=${home.version}`);
 
     const composedHtml = composePageFromFiles(home, OUT_DIR);
     expect(composedHtml).toContain(json.headHtml);
