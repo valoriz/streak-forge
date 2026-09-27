@@ -169,12 +169,15 @@ export async function runDevCommand(root: string): Promise<void> {
     watchDir(paths.handlersDir, onFsEvent),
     watchDir(paths.componentsDir, onFsEvent),
     watchDir(paths.shellDir, onFsEvent),
+    // Static assets are copied into .dev/ on each build — without this, a
+    // CSS watcher writing into public/ (or a new image) never reaches it.
+    watchDir(paths.publicDir, onFsEvent),
   ].filter((w): w is FSWatcher => w !== undefined);
   if (existsSync(paths.sitemapPath)) {
     watchers.push(watch(paths.sitemapPath, () => onFsEvent("streak.sitemap.json")));
   }
 
-  console.log("[dev] watching for changes (widgets/handlers/components/shell/streak.sitemap.json)...");
+  console.log("[dev] watching for changes (widgets/handlers/components/shell/public/streak.sitemap.json)...");
 
   process.on("SIGINT", () => {
     for (const w of watchers) w.close();

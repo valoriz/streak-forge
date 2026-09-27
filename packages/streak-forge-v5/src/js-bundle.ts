@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { removeStaleHashedFiles } from "./fs-utils.js";
 import { join } from "node:path";
 import type { BundleGenResult } from "./types.js";
 
@@ -64,6 +65,7 @@ export async function generateBundle(
   if (existsSync(cacheFile)) {
     const js = readFileSync(cacheFile, "utf-8");
     writeFileSync(join(entryDir, baseFileName), js);
+    removeStaleHashedFiles(entryDir, target.name, ".js", baseFileName);
     return { name: target.name, fileName, fromCache: true };
   }
 
@@ -87,6 +89,7 @@ export async function generateBundle(
 
   writeFileSync(cacheFile, js);
   writeFileSync(join(entryDir, baseFileName), js);
+  removeStaleHashedFiles(entryDir, target.name, ".js", baseFileName);
 
   return { name: target.name, fileName, fromCache: false };
 }

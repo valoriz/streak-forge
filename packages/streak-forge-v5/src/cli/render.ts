@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import { renderToString, Dynamic, type VNodeChild, type DynamicProps } from "../jsx.js";
+import { renderToString, Dynamic, isKind, type VNodeChild, type DynamicProps } from "../jsx.js";
 
 /** Dynamically imports a widget/component/html/head/body/rootLayout's own
  *  module and calls its exported function with `props`. Every entry in a
@@ -47,7 +47,7 @@ function isVNodeChild(value: unknown): value is VNodeChild {
 function expandDynamicForSample(node: VNodeChild): VNodeChild {
   if (node === null || node === undefined || typeof node !== "object") return node;
   if (Array.isArray(node)) return node.map(expandDynamicForSample);
-  if (node.type === Dynamic) {
+  if (isKind(node.type, Dynamic)) {
     const { children } = node.props as unknown as DynamicProps;
     return expandDynamicForSample(children ?? null);
   }

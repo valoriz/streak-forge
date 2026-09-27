@@ -297,6 +297,12 @@ export interface PageManifest {
    *  fresh, in memory, per request — cheap, since it's just string
    *  concatenation of small self-invoking functions. */
   hasScript: boolean;
+  /** outDir-relative path of this page's OWN `<head>` fragment
+   *  (`pages/<url>/head.html`) — the shell's `head()` rendered with
+   *  `{ data: page.metadata }`. Present only when the page has
+   *  `metadata` and its shell has a `head()` entry; absent = use the
+   *  shell's shared `head/<Shell>/index.html`. */
+  headPath?: string;
   /** Persisted copy of `BuildPagesOptions.inlineCss` — tells the
    *  request-time composer whether this page's head/index.html already
    *  has its CSS `<link>`s baked in (false/dev) or needs the combined

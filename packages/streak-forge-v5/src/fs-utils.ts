@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -26,4 +26,20 @@ export function walkFiles(dir: string, extensions: string[]): string[] {
   }
 
   return out;
+}
+
+/**
+ * Deletes older hashed builds of one generated file: every file in `dir`
+ * named `<stem>.<hex hash><ext>` except `keep` (pass null to delete them
+ * all). Generated CSS/JS names carry a content hash, so each rebuild after
+ * an edit writes a NEW file — without this, stale copies pile up, and
+ * readers that pick "the" `.css` file of an entry (findOwnCssFile) or link
+ * every CSS file (dev's discoverCssHrefs) pick up old ones too.
+ */
+export function removeStaleHashedFiles(dir: string, stem: string, ext: string, keep: string | null): void {
+  if (!existsSync(dir)) return;
+  const pattern = new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f]+${ext.replace(".", "\\.")}$`);
+  for (const f of readdirSync(dir)) {
+    if (f !== keep && pattern.test(f)) rmSync(join(dir, f), { force: true });
+  }
 }

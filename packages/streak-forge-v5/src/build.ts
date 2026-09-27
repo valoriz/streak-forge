@@ -1,10 +1,11 @@
 import { fullScan, saveRegistry } from "./registry.js";
-import { generateWidgetCss, generateCommonCss, findUndeclaredBracketClasses, shortScopePrefix, type PurgeEngine } from "./css-purge.js";
+import { generateWidgetCss, generateCommonCss, collectGlobalClasses, findUndeclaredBracketClasses, shortScopePrefix, type PurgeEngine } from "./css-purge.js";
 import { generateBundle, type BundleOptions } from "./js-bundle.js";
 import { hashOf } from "./hash.js";
 import { minifyCss } from "./minify.js";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, readdirSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
+import { removeStaleHashedFiles } from "./fs-utils.js";
 import type { Registry, WidgetMeta, ComponentMeta, ShellMeta, CssGenResult } from "./types.js";
 
 export interface PreBuildOptions {
@@ -159,7 +160,8 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
   // entry's own folder; if not, streak-forge creates a synthetic "Common"
   // one so there's always a single file every page can load once instead
   // of every widget repeating it.
-  const commonCssText = await generateCommonCss(options.purgeEngine, options.fullCssPath);
+  const globalClasses = collectGlobalClasses(purgeCategories.flatMap(({ entries }) => entries));
+  const commonCssText = await generateCommonCss(options.purgeEngine, options.fullCssPath, [...globalClasses]);
   const headType = Object.keys(registry.head)[0] ?? "Common";
   const commonCss = writeCommonCss(commonCssText, options.outDir, headType, options.minify ?? false);
   mirrorToPublic(options.outDir, commonCss.fileName, commonCss.css);
@@ -178,9 +180,12 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
         commonCssText,
         options.scopeClasses ?? false,
         options.minify ?? false,
+        globalClasses,
       );
       cssResults.push(result);
       if (result.fileName) mirrorToPublic(options.outDir, result.fileName, result.css);
+      const publicEntryDir = join(options.outDir, "public", kindDir, entry.type);
+      removeStaleHashedFiles(publicEntryDir, entry.type, ".css", result.fileName ? basename(result.fileName) : null);
     }
   }
 
@@ -255,6 +260,15 @@ function writeCommonCss(css: string, outDir: string, type: string, minify: boole
   mkdirSync(dir, { recursive: true });
   const finalCss = minify ? minifyCss(css) : css;
   writeFileSync(join(dir, baseFileName), finalCss);
+  // Only one common bundle may exist (findCommonCssFile takes the first):
+  // drop older ones, in every head/<Type>/ dir and its public/ mirror.
+  for (const root of [join(outDir, "head"), join(outDir, "public", "head")]) {
+    if (!existsSync(root)) continue;
+    for (const headType of readdirSync(root)) {
+      const keep = headType === type && root === join(outDir, "head") ? baseFileName : null;
+      removeStaleHashedFiles(join(root, headType), `${headType}.common`, ".css", keep);
+    }
+  }
   return { widgetType: type, fileName: `head/${type}/${baseFileName}`, css: finalCss, fromCache: false };
 }
 

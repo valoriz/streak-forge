@@ -1,6 +1,6 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import { rmSync } from "node:fs";
-import { generateWidgetCss, generateCommonCss, findUndeclaredBracketClasses, prefixCssClasses, prefixHtmlClasses, shortScopePrefix } from "../css-purge.js";
+import { generateWidgetCss, generateCommonCss, collectGlobalClasses, subtractCommonRules, findUndeclaredBracketClasses, prefixCssClasses, prefixHtmlClasses, shortScopePrefix } from "../css-purge.js";
 import { parseFile } from "../annotations.js";
 import { join } from "node:path";
 
@@ -188,5 +188,78 @@ describe("css-purge.findUndeclaredBracketClasses", () => {
     const source = `<div class="bg-[#123456]" />`;
     const undeclared = findUndeclaredBracketClasses(source, ["bg-[#123456]"]);
     expect(undeclared).toEqual([]);
+  });
+});
+
+describe("css-purge global (dynamicClasses) classes", () => {
+  const globals = new Set(["hidden", "text-[11px]", "md:flex"]);
+
+  test("prefixHtmlClasses leaves global classes unprefixed", () => {
+    expect(prefixHtmlClasses('<p class="hidden p-2 text-[11px]"></p>', "cabc", globals)).toBe(
+      '<p class="hidden cabc__p-2 text-[11px]"></p>',
+    );
+  });
+
+  test("prefixCssClasses leaves global classes unprefixed, matching their escaped selector form", () => {
+    const css = ".hidden{display:none}.p-2{padding:.5rem}.text-\\[11px\\]{font-size:11px}@media (min-width:768px){.md\\:flex{display:flex}}";
+    expect(prefixCssClasses(css, "cabc", globals)).toBe(
+      ".hidden{display:none}.cabc__p-2{padding:.5rem}.text-\\[11px\\]{font-size:11px}@media (min-width:768px){.md\\:flex{display:flex}}",
+    );
+  });
+
+  test("generateCommonCss scans the global classes, so their rules land in the common bundle", async () => {
+    let scanned = "";
+    await generateCommonCss(
+      async ({ html }) => {
+        scanned = html;
+        return "";
+      },
+      "unused.css",
+      ["hidden", "md:flex"],
+    );
+    expect(scanned).toBe('<html><body><div class="hidden md:flex"></div></body></html>');
+  });
+
+  test("collectGlobalClasses unions every entry's dynamicClasses", () => {
+    expect([...collectGlobalClasses([{ dynamicClasses: ["a", "b"] }, { dynamicClasses: ["b", "c"] }])]).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("css-purge.subtractCommonRules with Tailwind v4 @layer output", () => {
+  const common = `@layer properties;
+@layer theme, base, components, utilities;
+@layer base {
+  * { margin: 0; padding: 0; }
+}
+@layer utilities {
+  .hidden { display: none; }
+}`;
+
+  test("removes rules already in the common bundle from inside @layer/@media blocks, keeps the rest", () => {
+    const widget = `@layer base {
+  * { margin: 0; padding: 0; }
+}
+@layer utilities {
+  .hidden { display: none; }
+  .pt-2 { padding-top: 8px; }
+  @media (width >= 64rem) {
+    .lg\\:flex { display: flex; }
+  }
+}`;
+    const out = subtractCommonRules(widget, common);
+    expect(out).not.toContain("margin: 0");
+    expect(out).not.toContain(".hidden");
+    expect(out).toContain(".pt-2");
+    expect(out).toContain(".lg\\:flex");
+    expect(out).not.toContain("@layer base");
+  });
+
+  test("restates the common layer order first, so link order can't reorder cascade layers", () => {
+    const out = subtractCommonRules("@layer utilities {\n  .pt-2 { padding-top: 8px; }\n}", common);
+    expect(out.startsWith("@layer properties;\n@layer theme, base, components, utilities;\n@layer utilities {")).toBe(true);
+  });
+
+  test("returns empty when every rule is shared", () => {
+    expect(subtractCommonRules("@layer utilities {\n  .hidden { display: none; }\n}", common)).toBe("");
   });
 });

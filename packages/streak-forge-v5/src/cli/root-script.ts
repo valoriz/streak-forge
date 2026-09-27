@@ -250,20 +250,33 @@ export const ROOT_SCRIPT_JS = `(function () {
         return res.json();
       })
       .then(function (content) {
+        // content.json paths are outDir-relative ("widgets/X/X.css") —
+        // resolve from the site root, never from the current page's URL.
+        function rootUrl(href) {
+          return href.charAt(0) === "/" || /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : "/" + href;
+        }
+        var inserted = false;
         function insertAndRun() {
+          if (inserted) return;
+          inserted = true;
           var tmp = document.createElement("div");
           tmp.innerHTML = content.html;
-          var replacement = tmp.firstElementChild;
-          if (replacement) el.replaceWith(replacement);
-          else el.remove();
+          // Every top-level node, not just the first: a widget may
+          // render several root elements (e.g. a backdrop + a drawer).
+          el.replaceWith.apply(el, Array.prototype.slice.call(tmp.childNodes));
           if (content.scriptHref) {
-            window.addResourceToBody(content.scriptHref, { async: true, type: "js" }, callback);
+            window.addResourceToBody(rootUrl(content.scriptHref), { async: true, type: "js" }, callback);
           } else if (callback) {
             callback();
           }
         }
         if (content.cssHref) {
-          window.addResourceToBody(content.cssHref, { type: "css" }, insertAndRun);
+          var cssUrl = rootUrl(content.cssHref);
+          window.addResourceToBody(cssUrl, { type: "css" }, insertAndRun);
+          // A failed stylesheet must not drop the widget: show it anyway
+          // (possibly unstyled), same as the dev fragment path.
+          var cssLoad = window.loadedResources[cssUrl];
+          if (cssLoad) cssLoad.catch(insertAndRun);
         } else {
           insertAndRun();
         }

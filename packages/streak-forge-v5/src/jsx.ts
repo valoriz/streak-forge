@@ -42,18 +42,36 @@ export namespace JSX {
   export interface ElementChildrenAttribute {
     children: unknown;
   }
+  /** Accepted on any component tag (list rendering), never rendered. */
+  export interface IntrinsicAttributes {
+    key?: unknown;
+  }
 }
 
 const VOID_TAGS = new Set([
   "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
 ]);
-const SKIP_PROPS = new Set(["children", "key", "ref"]);
+const SKIP_PROPS = new Set(["children", "dangerouslySetInnerHTML", "key", "ref"]);
 
 function escapeText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 function escapeAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+// Inline <script>/<style> text ends at the first "</script"/"</style" as
+// far as the HTML parser is concerned, even inside a JS string. Escaping
+// "</script" -> "<\/script" and "<!--" -> "<\!--" is byte-equivalent to a
+// JS engine but invisible to the HTML parser. Same as v4 (streak-forge-legacy).
+function escapeRawTextElementContent(text: string): string {
+  return text.replace(/<!--/g, "<\\!--").replace(/<\/(script|style)/gi, "<\\/$1");
+}
+// <script>/<style> children are literal text — never HTML-escaped
+// (`if (a < b)` must stay `<`, not `&lt;`).
+function rawTextChildren(children: unknown): string {
+  if (children === null || children === undefined || typeof children === "boolean") return "";
+  if (Array.isArray(children)) return children.map(rawTextChildren).join("");
+  return String(children);
 }
 function kebabCase(key: string): string {
   return key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
@@ -99,16 +117,16 @@ export async function renderToString(node: VNodeChild): Promise<string> {
   // resolvePlaceholders first) has no widget content to show — render
   // nothing rather than recursing into WidgetPlaceholder itself, which
   // would just return another identical placeholder VNode forever.
-  if (type === WidgetPlaceholder) return "";
+  if (isKind(type, WidgetPlaceholder)) return "";
   // Same reasoning, one level down: a widget's own ComponentPlaceholder is
   // always turned into a marker <div> by page-build.ts's buildPages before
   // this ever runs — this guard is only a defensive fallback.
-  if (type === ComponentPlaceholder) return "";
+  if (isKind(type, ComponentPlaceholder)) return "";
   // A Dynamic block's children are extracted out to their own persisted
   // fragment and the node itself replaced with a plain marker <div> by
   // page-build.ts's buildPages, same timing as WidgetPlaceholder/
   // ComponentPlaceholder above — this guard is only a defensive fallback.
-  if (type === Dynamic) return "";
+  if (isKind(type, Dynamic)) return "";
   // Never rendered inline — collectScripts() (below) extracts it out of the
   // tree separately; see Script()'s own doc comment for why.
   if (type === SCRIPT_BLOCK) return "";
@@ -119,7 +137,14 @@ export async function renderToString(node: VNodeChild): Promise<string> {
 
   const attrs = renderAttrs(props ?? {});
   if (VOID_TAGS.has(type)) return `<${type}${attrs}>`;
-  return `<${type}${attrs}>${await renderToString(children)}</${type}>`;
+  const isRawText = type === "script" || type === "style";
+  const innerHtml = (props?.dangerouslySetInnerHTML as { __html?: unknown } | undefined)?.__html;
+  let inner: string;
+  if (innerHtml !== null && innerHtml !== undefined) inner = String(innerHtml);
+  else if (isRawText) inner = rawTextChildren(children);
+  else inner = await renderToString(children);
+  if (isRawText) inner = escapeRawTextElementContent(inner);
+  return `<${type}${attrs}>${inner}</${type}>`;
 }
 
 export interface WidgetPlaceholderProps {
@@ -194,6 +219,24 @@ export function Dynamic(props: DynamicProps): VNode {
   return { type: Dynamic, props: props as unknown as Record<string, unknown> };
 }
 
+// Placeholder/Dynamic nodes are recognized by a KIND tag, not only by
+// function identity: streak-forge and streak-boot each ship their own copy
+// of this file, and a VNode built by one (a shell/widget bundle importing
+// streak-forge) must still be recognized by the other (streak-boot's
+// page build). Same global Symbol.for key in both copies.
+const KIND = Symbol.for("streak-forge.kind");
+(WidgetPlaceholder as unknown as Record<symbol, string>)[KIND] = "widget-placeholder";
+(ComponentPlaceholder as unknown as Record<symbol, string>)[KIND] = "component-placeholder";
+(Dynamic as unknown as Record<symbol, string>)[KIND] = "dynamic";
+
+/** True if `type` is `marker` itself, or the other package's copy of it. */
+export function isKind(type: unknown, marker: (props: never) => VNode): boolean {
+  if (type === marker) return true;
+  if (typeof type !== "function") return false;
+  const kind = (type as unknown as Record<symbol, string | undefined>)[KIND];
+  return kind !== undefined && kind === (marker as unknown as Record<symbol, string | undefined>)[KIND];
+}
+
 export type PlaceholderResolver = (id: string, type: string) => Promise<VNodeChild> | VNodeChild;
 /** Either `WidgetPlaceholder` or `ComponentPlaceholder` — the marker
  *  function identity `resolvePlaceholders`/`collectPlaceholderIds` match
@@ -221,7 +264,7 @@ export async function resolvePlaceholders(node: VNodeChild, marker: PlaceholderM
   if (Array.isArray(node)) return Promise.all(node.map((child) => resolvePlaceholders(child, marker, resolve)));
 
   const { type, props } = node;
-  if (type === marker) {
+  if (isKind(type, marker)) {
     const { id, type: markedType } = props as unknown as WidgetPlaceholderProps;
     return resolve(id, markedType);
   }
@@ -231,14 +274,14 @@ export async function resolvePlaceholders(node: VNodeChild, marker: PlaceholderM
   return { type, props: { ...props, children: await resolvePlaceholders(children, marker, resolve) } };
 }
 
-export interface ScriptProps {
+export interface ScriptProps<O extends Record<string, unknown> = Record<string, unknown>> {
   id: string;
   /** The ONLY bridge from server-rendered values to browser code — the
    *  function is serialized via source-text extraction (see below), so
    *  anything it closes over vanishes; pass what it needs through here
    *  instead, JSON-serialized into the emitted script. */
-  options?: Record<string, unknown>;
-  children: (gDom: Window, options: Record<string, unknown>) => void;
+  options?: O;
+  children: (gDom: Window, options: O) => void;
 }
 
 /**
@@ -258,7 +301,7 @@ export interface ScriptProps {
  * source by default; a fork wanting that would need the same build-time
  * transform streak-forge uses.
  */
-export function Script(props: ScriptProps): VNode {
+export function Script<O extends Record<string, unknown> = Record<string, unknown>>(props: ScriptProps<O>): VNode {
   const fnSource = typeof props.children === "function" ? props.children.toString() : String(props.children);
   const optionsJson = JSON.stringify(props.options ?? {});
   return { type: SCRIPT_BLOCK, props: { id: props.id, fnSource, optionsJson } };
@@ -299,7 +342,7 @@ export async function collectScripts(node: VNodeChild, out: CollectedScript[] = 
     out.push(props as unknown as CollectedScript);
     return out;
   }
-  if (type === WidgetPlaceholder || type === ComponentPlaceholder || type === Dynamic) return out; // nothing to descend into
+  if (isKind(type, WidgetPlaceholder) || isKind(type, ComponentPlaceholder) || isKind(type, Dynamic)) return out; // nothing to descend into
   if (typeof type === "function") {
     await collectScripts(await type(props), out);
     return out;

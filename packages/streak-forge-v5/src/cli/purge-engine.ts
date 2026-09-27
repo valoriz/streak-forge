@@ -1,5 +1,20 @@
+import { readFileSync, statSync } from "node:fs";
 import { PurgeCSS } from "purgecss";
 import type { PurgeEngine } from "../css-purge.js";
+
+/** Every attribute name used in an attribute selector of the full CSS file
+ *  (`[data-active="true"]`, `[aria-expanded="true"]`, `[type="button"]`) —
+ *  cached per file + mtime, since the same file is purged once per entry. */
+const attributeCache = new Map<string, { mtimeMs: number; names: string[] }>();
+function attributeSelectorNames(fullCssPath: string): string[] {
+  const { mtimeMs } = statSync(fullCssPath);
+  const cached = attributeCache.get(fullCssPath);
+  if (cached?.mtimeMs === mtimeMs) return cached.names;
+  const selectors = readFileSync(fullCssPath, "utf-8").replace(/\{[^{}]*\}/g, "{}");
+  const names = [...new Set([...selectors.matchAll(/\[\s*([a-zA-Z_][-\w]*)\s*(?:[~|^$*]?=|\])/g)].map((m) => m[1]!))];
+  attributeCache.set(fullCssPath, { mtimeMs, names });
+  return names;
+}
 
 /**
  * The CLI's built-in purge engine, backed by the `purgecss` package —
@@ -33,6 +48,12 @@ export const defaultPurgeEngine: PurgeEngine = async ({ html, fullCssPath }) => 
     // this reason — keeps a Tailwind class's full token (colons, dots,
     // slashes) intact instead of the default word-boundary split.
     defaultExtractor: (content) => content.match(/[^<>"'`\s]*[^<>"'`\s:]/g) || [],
+    // Attribute selectors are decided by their classes alone. Otherwise a
+    // Tailwind attribute variant (`data-[active=true]:border-black` →
+    // `.data-\[active\=true\]\:border-black[data-active="true"]`) is
+    // dropped whenever the sample HTML lacks that exact attribute value —
+    // typically set by a client script at runtime.
+    dynamicAttributes: attributeSelectorNames(fullCssPath),
   });
   return result?.css ?? "";
 };

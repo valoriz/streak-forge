@@ -229,6 +229,35 @@ describe("page-build.buildPages", () => {
     );
   });
 
+  test("a page with metadata gets its own head.html, rendered with { data: metadata }; composePageFromFiles uses it", async () => {
+    const seoRender: RenderInstance = async (meta, props) => {
+      if (meta.exportName === "AppHead") {
+        const name = (props.data as { name?: string } | undefined)?.name ?? "Default";
+        return { type: "title", props: { children: `Title ${name}` } };
+      }
+      return render(meta, props);
+    };
+    const seoSitemap: StreakBootSitemap = {
+      shared: sitemap.shared,
+      pages: [
+        sitemap.pages[0]!,
+        { url: "/no-meta", rootLayout: "AppShell", widgets: sitemap.pages[0]!.widgets },
+      ],
+    };
+    const { pageManifests } = await buildPages({ registry, sitemap: seoSitemap, outDir: OUT_DIR, render: seoRender });
+    const home = pageManifests.find((m) => m.url === "/")!;
+    const noMeta = pageManifests.find((m) => m.url === "/no-meta")!;
+
+    expect(home.headPath).toBe("pages/index/head.html");
+    expect(readFileSync(join(OUT_DIR, "pages/index/head.html"), "utf-8")).toBe("<head><title>Title A</title></head>");
+    expect(composePageFromFiles(home, OUT_DIR)).toContain("<title>Title A</title>");
+
+    // No metadata: shared shell head, rendered with {}.
+    expect(noMeta.headPath).toBeUndefined();
+    expect(existsSync(join(OUT_DIR, "pages/no-meta/head.html"))).toBe(false);
+    expect(composePageFromFiles(noMeta, OUT_DIR)).toContain("<title>Title Default</title>");
+  });
+
   test("throws when a sitemap widget has no matching WidgetPlaceholder in its rootLayout", async () => {
     // Both real placeholders (badge-1, card-1) satisfied, PLUS one extra
     // sitemap widget the layout never references — isolates this
@@ -587,6 +616,31 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
     expect(fragment).toContain("Card:A");
     expect(fragment).toContain("<button>Buy</button>");
     expect(fragment).toContain("console.log(options.label)");
+  });
+
+  test("replaces the placeholder with EVERY top-level node of the widget, not only the first", async () => {
+    // A widget with two root elements (backdrop + drawer) must keep both.
+    const twoRootRender: RenderInstance = async (meta, props) =>
+      meta.filePath.endsWith("Card.tsx")
+        ? { type: Fragment, props: { children: [{ type: "div", props: { id: "backdrop" } }, { type: "aside", props: { id: "drawer" } }] } }
+        : render(meta, props);
+    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render: twoRootRender });
+    const fragment = composeLazyWidgetFragment(pageManifests[0]!, "card-1", OUT_DIR)!;
+
+    // Run the fragment against a minimal fake DOM and record what replaced the placeholder.
+    let replacedWith: string[] = [];
+    const placeholder = { replaceWith: (...nodes: { id: string }[]) => { replacedWith = nodes.map((n) => n.id); } };
+    const fakeDocument = {
+      querySelector: () => placeholder,
+      createElement: () => ({
+        set innerHTML(html: string) {
+          this.childNodes = [...html.matchAll(/id="([^"]+)"/g)].map((m) => ({ id: m[1]! }));
+        },
+        childNodes: [] as { id: string }[],
+      }),
+    };
+    new Function("document", fragment)(fakeDocument);
+    expect(replacedWith).toEqual(["backdrop", "drawer"]);
   });
 
   test("returns null for an unknown id and for a non-lazy widget's id", async () => {
@@ -1072,6 +1126,23 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
     expect(composed).toContain(`class="${shellPrefix}__layout"`);
     expect(composed).toContain(`class="${panelPrefix}__card"`);
     expect(composed).toContain(`class="${buttonPrefix}__btn"`);
+  });
+
+  test("true: a class declared in ANY entry's dynamicClasses stays unprefixed in every entry", async () => {
+    // "card" declared by the Panel widget only — the Button component's
+    // "card" stays global too, since the rule lives once in the common bundle.
+    const globalRegistry: Registry = {
+      ...scopedRegistry,
+      widgets: { Panel: { ...widgetMeta("Panel"), dynamicClasses: ["card"], dynamicClassGroups: [["card"]] } },
+    };
+    const globalRender: RenderInstance = async (meta, props) => {
+      if (meta.filePath.endsWith("Button.tsx")) return { type: "button", props: { className: "btn card", children: "Buy" } };
+      return scopedRender(meta, props);
+    };
+    const { pageManifests } = await buildPages({ registry: globalRegistry, sitemap: scopedSitemap, outDir: OUT_DIR, render: globalRender, scopeClasses: true });
+    const composed = composePageFromFiles(pageManifests[0]!, OUT_DIR);
+    expect(composed).toContain('class="card"');
+    expect(composed).toContain(`class="${shortScopePrefix("Button")}__btn card"`);
   });
 
   test("false (default): classes are left exactly as rendered, no prefix", async () => {

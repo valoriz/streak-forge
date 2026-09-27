@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, basename } from "node:path";
 import {
   renderToString,
@@ -6,6 +6,7 @@ import {
   WidgetPlaceholder,
   ComponentPlaceholder,
   Dynamic,
+  isKind,
   renderAttrs,
   collectScripts,
   type VNodeChild,
@@ -13,7 +14,7 @@ import {
   type PlaceholderMarker,
   type DynamicProps,
 } from "./jsx.js";
-import { prefixHtmlClasses, shortScopePrefix } from "./css-purge.js";
+import { collectGlobalClasses, prefixHtmlClasses, shortScopePrefix } from "./css-purge.js";
 import { hashOf } from "./hash.js";
 import { minifyHtml, minifyJsFiles, findFilesByBasename } from "./minify.js";
 import { ROOT_SCRIPT_JS } from "./cli/root-script.js";
@@ -43,6 +44,9 @@ import type {
  *
  *   html/<ShellType>/index.html    <html {attrs}><head></head><body></body></html>
  *   head/<ShellType>/index.html    <head>{content}{css links}</head>
+ *   pages/<url>/head.html          same shape, per page — only for a page
+ *                                    with `metadata`, rendered with
+ *                                    `{ data: metadata }` (per-page SEO)
  *   body/<ShellType>/index.html    <body {attrs}>{rootLayout content, with
  *                                    <div data-widget-placeholder=id .../> MARKERS
  *                                    in place of each widget, unresolved}</body>
@@ -82,6 +86,10 @@ const ATTRS_FILE = "attrs.json";
  *  since the same widget id can mean genuinely different content on a
  *  different page (see WIDGETS_DIR below for the shared/common case). */
 const PAGES_DIR = "pages";
+/** A page's own `<head>` fragment, next to its meta.json — written only
+ *  when the page has `metadata` and its shell has a `head()` entry (see
+ *  renderHeadDoc). Absent = the shell's shared head/<Shell>/index.html. */
+const PAGE_HEAD_FILE = "head.html";
 /** A SHARED/common widget instance (built once, sitemap.shared[], reused
  *  by `ref`) lives at `widgets/<Type>/<id>/` — the SAME folder prebuild's
  *  own CSS-purge output already mirrors into (`widgets/<Type>/<Type>.<hash>.css`),
@@ -481,7 +489,7 @@ function collectPlaceholderIds(node: VNodeChild, marker: PlaceholderMarker, out:
     for (const child of node) collectPlaceholderIds(child, marker, out);
     return out;
   }
-  if (node.type === marker) {
+  if (isKind(node.type, marker)) {
     out.add((node.props as unknown as { id: string }).id);
     return out;
   }
@@ -509,6 +517,50 @@ function buildScriptBundle(scripts: CollectedScript[]): string {
   return scripts.map((s) => `(function(){var __fn=(${s.fnSource});__fn(window,${s.optionsJson});})();`).join("\n");
 }
 
+/** Class scoping for one build: false = off, or the project's global
+ *  (dynamicClasses) classes, which stay unprefixed — see css-purge.ts's
+ *  collectGlobalClasses. */
+type Scope = false | { globalClasses: ReadonlySet<string> };
+
+function scopeHtml(html: string, type: string, scope: Scope): string {
+  return scope ? prefixHtmlClasses(html, shortScopePrefix(type), scope.globalClasses) : html;
+}
+
+/**
+ * Renders one `<head>` document for a shell's `head()` entry with the given
+ * props — `{}` for the shell's shared head/<Shell>/index.html, `{ data:
+ * page.metadata }` for a page's own head.html (per-page title/meta/SEO).
+ */
+async function renderHeadDoc(
+  headMeta: ShellMeta | undefined,
+  props: Record<string, unknown>,
+  shellType: string,
+  render: RenderInstance,
+  scopeClasses: Scope,
+  inlineCss: boolean,
+  cssHrefs: string[],
+): Promise<string> {
+  const headVNode = headMeta ? ((await render(headMeta, props)) as VNodeChild) : null;
+  let headContentHtml = await renderToString(headVNode);
+  // Minified BEFORE concatenating cssLinksHtml, never after — cssLinksHtml
+  // is CRITICAL_CSS_PLACEHOLDER (an HTML COMMENT) when inlineCss: true,
+  // and minifyHtml strips HTML comments; running it on the assembled
+  // headDoc would delete that placeholder along with real comments,
+  // breaking collectInlineCss's own request-time replace entirely.
+  if (inlineCss) headContentHtml = minifyHtml(headContentHtml);
+  // inlineCss: true (build/serve) — no CSS links baked in here at all.
+  // Which widgets are eager (and so need their CSS inlined) varies per
+  // PAGE, not per shell — composePageFromFiles injects the real, per-page
+  // combined <style> at request time instead (see collectInlineCss).
+  // inlineCss: false (dev) — restores the simple old behavior: every
+  // discovered CSS file gets its own <link>, baked in once, same for every
+  // page — good enough for a loop that rebuilds on every save anyway.
+  const cssLinksHtml = inlineCss ? CRITICAL_CSS_PLACEHOLDER : cssHrefs.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
+  let headDoc = `<head>${headContentHtml}${cssLinksHtml}</head>`;
+  headDoc = scopeHtml(headDoc, shellType, scopeClasses);
+  return headDoc;
+}
+
 /**
  * Writes the three shell-layer files for one rootLayout TYPE — html/head/
  * body/index.html (see the module doc comment for their exact shape).
@@ -521,7 +573,7 @@ async function writeShellFiles(
   shellType: string,
   render: RenderInstance,
   outDir: string,
-  scopeClasses: boolean,
+  scopeClasses: Scope,
   inlineCss: boolean,
   cssHrefs: string[],
 ): Promise<void> {
@@ -534,34 +586,15 @@ async function writeShellFiles(
   const htmlDir = join(outDir, "html", shellType);
   mkdirSync(htmlDir, { recursive: true });
   let htmlDoc = `<html${renderAttrs(htmlAttrs)}><head></head><body></body></html>`;
-  if (scopeClasses) htmlDoc = prefixHtmlClasses(htmlDoc, shortScopePrefix(shellType));
+  htmlDoc = scopeHtml(htmlDoc, shellType, scopeClasses);
   if (inlineCss) htmlDoc = minifyHtml(htmlDoc);
   writeFileSync(join(htmlDir, HTML_FILE), htmlDoc);
   const htmlTagMatch = htmlDoc.match(/^<html([^>]*)>/);
   writeFileSync(join(htmlDir, ATTRS_FILE), JSON.stringify(htmlTagMatch ? parseTagAttrs(htmlTagMatch[1]!) : {}));
 
-  const headVNode = headMeta ? ((await render(headMeta, {})) as VNodeChild) : null;
-  let headContentHtml = await renderToString(headVNode);
-  // Minified BEFORE concatenating cssLinksHtml, never after — cssLinksHtml
-  // is CRITICAL_CSS_PLACEHOLDER (an HTML COMMENT) when inlineCss: true,
-  // and minifyHtml strips HTML comments; running it on the assembled
-  // headDoc would delete that placeholder along with real comments,
-  // breaking collectInlineCss's own request-time replace entirely.
-  if (inlineCss) headContentHtml = minifyHtml(headContentHtml);
   const headDir = join(outDir, "head", shellType);
   mkdirSync(headDir, { recursive: true });
-  // inlineCss: true (build/serve) — no CSS links baked in here at all.
-  // head/<Shell>/index.html is SHARED across every page using this shell,
-  // but which widgets are eager (and so need their CSS inlined) varies per
-  // PAGE, not per shell — composePageFromFiles injects the real, per-page
-  // combined <style> at request time instead (see collectInlineCss).
-  // inlineCss: false (dev) — restores the simple old behavior: every
-  // discovered CSS file gets its own <link>, baked in once, same for every
-  // page — good enough for a loop that rebuilds on every save anyway.
-  const cssLinksHtml = inlineCss ? CRITICAL_CSS_PLACEHOLDER : cssHrefs.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
-  let headDoc = `<head>${headContentHtml}${cssLinksHtml}</head>`;
-  if (scopeClasses) headDoc = prefixHtmlClasses(headDoc, shortScopePrefix(shellType));
-  writeFileSync(join(headDir, HTML_FILE), headDoc);
+  writeFileSync(join(headDir, HTML_FILE), await renderHeadDoc(headMeta, {}, shellType, render, scopeClasses, inlineCss, cssHrefs));
 
   const bodyAttrs = bodyMeta ? ((await render(bodyMeta, {})) as Record<string, unknown>) : {};
   const layoutVNode = rootLayoutMeta ? ((await render(rootLayoutMeta, {})) as VNodeChild) : null;
@@ -590,7 +623,7 @@ async function writeShellFiles(
   const bodyDir = join(outDir, "body", shellType);
   mkdirSync(bodyDir, { recursive: true });
   let bodyDoc = `<body${renderAttrs(bodyAttrs)}>${bodyContentHtml}</body>`;
-  if (scopeClasses) bodyDoc = prefixHtmlClasses(bodyDoc, shortScopePrefix(shellType));
+  bodyDoc = scopeHtml(bodyDoc, shellType, scopeClasses);
   writeFileSync(join(bodyDir, HTML_FILE), bodyDoc);
   const bodyTagMatch = bodyDoc.match(/^<body([^>]*)>/);
   writeFileSync(join(bodyDir, ATTRS_FILE), JSON.stringify(bodyTagMatch ? parseTagAttrs(bodyTagMatch[1]!) : {}));
@@ -618,14 +651,14 @@ async function writeShellFiles(
  * (no real example nests one inside the other), so order between them
  * doesn't matter; this just runs first for a simpler mental model.
  */
-async function extractDynamicBlocks(node: VNodeChild, outDir: string, ownerType: string, scopeClasses: boolean, inlineCss: boolean): Promise<VNodeChild> {
+async function extractDynamicBlocks(node: VNodeChild, outDir: string, ownerType: string, scopeClasses: Scope, inlineCss: boolean): Promise<VNodeChild> {
   if (node === null || node === undefined || typeof node !== "object") return node;
   if (Array.isArray(node)) return Promise.all(node.map((child) => extractDynamicBlocks(child, outDir, ownerType, scopeClasses, inlineCss)));
 
-  if (node.type === Dynamic) {
+  if (isKind(node.type, Dynamic)) {
     const { id, children } = node.props as unknown as DynamicProps;
     let html = await renderToString(children ?? null);
-    if (scopeClasses) html = prefixHtmlClasses(html, shortScopePrefix(ownerType));
+    html = scopeHtml(html, ownerType, scopeClasses);
     if (inlineCss) html = minifyHtml(html);
     const scripts = await collectScripts(children ?? null);
     const dir = join(outDir, DYNAMIC_DIR, id);
@@ -684,7 +717,7 @@ async function buildWidgetComponents(
   outDir: string,
   widgetPath: string,
   context: string,
-  scopeClasses: boolean,
+  scopeClasses: Scope,
   inlineCss: boolean,
 ): Promise<{ markedVNode: VNodeChild; components: WidgetComponentManifestEntry[] }> {
   const strayWidgetIds = collectPlaceholderIds(vnode, WidgetPlaceholder);
@@ -713,7 +746,7 @@ async function buildWidgetComponents(
       );
     }
     let cHtml = await renderToString(cVnode);
-    if (scopeClasses) cHtml = prefixHtmlClasses(cHtml, shortScopePrefix(c.type));
+    cHtml = scopeHtml(cHtml, c.type, scopeClasses);
     if (inlineCss) cHtml = minifyHtml(cHtml);
     const path = join(widgetPath, COMPONENTS_DIR, c.id);
     writeWidgetFiles(outDir, path, cHtml, await collectScripts(cVnode), [], findOwnCssFile(outDir, COMPONENTS_DIR, c.type));
@@ -748,7 +781,19 @@ function readWidgetComponentManifest(outDir: string, widgetPath: string): Widget
  * manifest to `outDir/pages/<url>/meta.json`.
  */
 export async function buildPages(options: BuildPagesOptions): Promise<BuildPagesResult> {
-  const { registry, sitemap, outDir, render, scopeClasses = false, inlineCss = false, cssHrefs = [], spa = false } = options;
+  const { registry, sitemap, outDir, render, inlineCss = false, cssHrefs = [], spa = false } = options;
+  const scopeClasses: Scope = options.scopeClasses
+    ? {
+        globalClasses: collectGlobalClasses([
+          ...Object.values(registry.widgets),
+          ...Object.values(registry.components),
+          ...Object.values(registry.html),
+          ...Object.values(registry.head),
+          ...Object.values(registry.body),
+          ...Object.values(registry.rootLayout),
+        ]),
+      }
+    : false;
   const sharedById = new Map(sitemap.shared?.map((s) => [s.id, s]) ?? []);
   const wIndex: Record<string, string> = {};
 
@@ -770,7 +815,7 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
       inlineCss,
     );
     let html = await renderToString(markedVNode);
-    if (scopeClasses) html = prefixHtmlClasses(html, shortScopePrefix(shared.type));
+    html = scopeHtml(html, shared.type, scopeClasses);
     if (inlineCss) html = minifyHtml(html);
     writeWidgetFiles(outDir, path, html, await collectScripts(markedVNode), components, findOwnCssFile(outDir, WIDGETS_DIR, shared.type));
   }
@@ -805,7 +850,7 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
         const path = join(PAGES_DIR, folder, WIDGETS_DIR, w.id);
         const { markedVNode, components } = await buildWidgetComponents(registry, vnode, w.components, render, outDir, path, context, scopeClasses, inlineCss);
         let html = await renderToString(markedVNode);
-        if (scopeClasses) html = prefixHtmlClasses(html, shortScopePrefix(w.type));
+        html = scopeHtml(html, w.type, scopeClasses);
         if (inlineCss) html = minifyHtml(html);
         const widgetCssHref = findOwnCssFile(outDir, WIDGETS_DIR, w.type);
         writeWidgetFiles(outDir, path, html, await collectScripts(markedVNode), components, widgetCssHref);
@@ -834,6 +879,19 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
     const pageDir = join(outDir, PAGES_DIR, folder);
     mkdirSync(pageDir, { recursive: true });
 
+    // Per-page <head> (title/meta/canonical per product, collection, ...):
+    // the shell's head() rendered again with this page's own metadata.
+    // Pages without metadata keep using the shell's shared head file.
+    const headMeta = registry.head[rootLayoutMeta.type];
+    const pageHeadPath = join(pageDir, PAGE_HEAD_FILE);
+    let headPath: string | undefined;
+    if (headMeta && page.metadata) {
+      writeFileSync(pageHeadPath, await renderHeadDoc(headMeta, { data: page.metadata }, rootLayoutMeta.type, render, scopeClasses, inlineCss, cssHrefs));
+      headPath = join(PAGES_DIR, folder, PAGE_HEAD_FILE);
+    } else {
+      rmSync(pageHeadPath, { force: true });
+    }
+
     // No combined per-page script file is written here — each widget
     // instance already wrote its OWN tiny script.js above (if it had any
     // Script blocks), and so did each of its OWN components; composeScriptBundle
@@ -850,9 +908,10 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
     // <link>s instead (writeShellFiles' own cssHrefs param, discovered from
     // public/ once up front), so a per-page combined list would go unused.
     const pageCssHrefs = inlineCss ? collectCssHrefs(widgets, rootLayoutMeta.type, outDir) : [];
-    const version = computePageVersion(widgets, rootLayoutMeta.type, outDir);
+    const version = computePageVersion(widgets, rootLayoutMeta.type, outDir, headPath);
 
     const manifest: PageManifest = { url: page.url, rootLayoutType: rootLayoutMeta.type, widgets, hasScript, inlineCss, spa, cssHrefs: pageCssHrefs, version };
+    if (headPath) manifest.headPath = headPath;
     writeFileSync(join(pageDir, META_FILE), JSON.stringify(manifest, null, 2));
     pageManifests.push(manifest);
   }
@@ -985,11 +1044,12 @@ function collectCssHrefs(widgets: PageWidgetManifestEntry[], shellType: string, 
  * content.json, in a fixed order, joined with a separator that can't
  * appear in either (so two different splits never hash the same).
  */
-function computePageVersion(widgets: PageWidgetManifestEntry[], shellType: string, outDir: string): string {
+function computePageVersion(widgets: PageWidgetManifestEntry[], shellType: string, outDir: string, headPath?: string): string {
   const parts: string[] = [];
   for (const kindDir of ["html", "head", "body", "rootLayout"]) {
     parts.push(readFileOr(join(outDir, kindDir, shellType, HTML_FILE), ""));
   }
+  if (headPath) parts.push(readFileOr(join(outDir, headPath), ""));
   for (const w of widgets) {
     parts.push(readFileOr(join(outDir, w.path, CONTENT_FILE), ""));
   }
@@ -1029,7 +1089,7 @@ function collectInlineCss(manifest: PageManifest, outDir: string): string {
  *  whole HTML string vs a JSON shape with head/body kept separate). */
 function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: string; bodyHtml: string; closingScripts: string } {
   const shellType = manifest.rootLayoutType;
-  const headHtml = readFileOr(join(outDir, "head", shellType, HTML_FILE), "<head></head>");
+  const headHtml = readFileOr(join(outDir, manifest.headPath ?? join("head", shellType, HTML_FILE)), "<head></head>");
   let bodyHtml = readFileOr(join(outDir, "body", shellType, HTML_FILE), "<body></body>");
 
   for (const w of manifest.widgets) {
@@ -1269,8 +1329,9 @@ function buildFragmentScript(selector: string, html: string, script: string, css
   function show(){
     var t=document.createElement("div");
     t.innerHTML=${JSON.stringify(html)};
-    var r=t.firstElementChild;
-    if (el) { if (r) el.replaceWith(r); else el.remove(); }
+    // Every top-level node, not just the first: a widget may render
+    // several root elements (e.g. a backdrop + a drawer).
+    if (el) el.replaceWith.apply(el, Array.prototype.slice.call(t.childNodes));
     (function(){${script}})();
   }
   var cssHref=${JSON.stringify(cssHref)};

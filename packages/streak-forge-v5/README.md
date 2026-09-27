@@ -56,6 +56,7 @@ streak-boot serve       # serve out/ (no live-reload)
 - **`@dynamicClasses`** annotation — declares Tailwind-style bracket-syntax classes (`bg-[#123]`) that the CSS-purge scan can't discover by static analysis alone.
 - **CSS-Modules-style scoping** — every widget's CSS is purged and prefixed to a short, deterministic per-type code, so two widgets can safely use the same class name.
 - **`<Script>`** — `(gDom: Window, options) => void`, serialized via `Function.prototype.toString()` at render time. `options` is required (pass `{}` if unused). See the migration guide for how this differs from v4.
+- **Per-page `<head>`** — a page with `metadata` gets its own head fragment (`pages/<url>/head.html`): the shell's `head()` rendered with `{ data: page.metadata }`, for per-page title/description/canonical. Pages without `metadata` use the shell's shared head.
 
 ## Output
 
