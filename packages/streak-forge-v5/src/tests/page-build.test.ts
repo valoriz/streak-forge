@@ -16,6 +16,7 @@ import {
   type RenderInstance,
 } from "../page-build.js";
 import { shortScopePrefix } from "../css-purge.js";
+import { handler, resetHandlerCache } from "../hoc.js";
 import { WidgetPlaceholder, ComponentPlaceholder, Dynamic, Fragment, Script, type VNode } from "../jsx.js";
 import type { Registry, WidgetMeta, ShellMeta, ComponentMeta, StreakBootSitemap } from "../types.js";
 
@@ -256,6 +257,30 @@ describe("page-build.buildPages", () => {
     expect(noMeta.headPath).toBeUndefined();
     expect(existsSync(join(OUT_DIR, "pages/no-meta/head.html"))).toBe(false);
     expect(composePageFromFiles(noMeta, OUT_DIR)).toContain("<title>Title Default</title>");
+  });
+
+  test("handlerCachePerPage: a handler runs once per page render (shared by that page's widgets), not once per whole build", async () => {
+    let runs = 0;
+    const loadName = handler({})(async (name: string) => {
+      runs++;
+      return name;
+    });
+    // The Card widget calls the same handler twice with the same input.
+    const cachedRender: RenderInstance = async (meta, props) => {
+      if (meta.filePath.endsWith("Card.tsx")) {
+        await loadName("same");
+        await loadName("same");
+      }
+      return render(meta, props);
+    };
+
+    await buildPages({ registry, sitemap, outDir: OUT_DIR, render: cachedRender, handlerCachePerPage: true });
+    expect(runs).toBe(2); // two pages, one run each
+
+    runs = 0;
+    resetHandlerCache();
+    await buildPages({ registry, sitemap, outDir: OUT_DIR, render: cachedRender });
+    expect(runs).toBe(1); // default: one cache for the whole build
   });
 
   test("throws when a sitemap widget has no matching WidgetPlaceholder in its rootLayout", async () => {

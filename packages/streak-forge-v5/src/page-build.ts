@@ -15,6 +15,7 @@ import {
   type DynamicProps,
 } from "./jsx.js";
 import { collectGlobalClasses, prefixHtmlClasses, shortScopePrefix } from "./css-purge.js";
+import { resetHandlerCache } from "./hoc.js";
 import { hashOf } from "./hash.js";
 import { minifyHtml, minifyJsFiles, findFilesByBasename } from "./minify.js";
 import { ROOT_SCRIPT_JS } from "./cli/root-script.js";
@@ -292,6 +293,12 @@ export interface BuildPagesOptions {
    *  regardless of this flag — same as real streak-forge's own "every
    *  page already writes an index.json twin, unconditionally" behavior. */
   spa?: boolean;
+  /** Dev: reset the handler cache (hoc.ts's resetHandlerCache) before the
+   *  shared widgets and before each page, so every page render calls each
+   *  handler once — its head and widgets share that one result — and a
+   *  re-render fetches fresh data. Off (one cache for the whole run) for
+   *  prebuild/build. */
+  handlerCachePerPage?: boolean;
 }
 
 export interface BuildPagesResult {
@@ -781,7 +788,7 @@ function readWidgetComponentManifest(outDir: string, widgetPath: string): Widget
  * manifest to `outDir/pages/<url>/meta.json`.
  */
 export async function buildPages(options: BuildPagesOptions): Promise<BuildPagesResult> {
-  const { registry, sitemap, outDir, render, inlineCss = false, cssHrefs = [], spa = false } = options;
+  const { registry, sitemap, outDir, render, inlineCss = false, cssHrefs = [], spa = false, handlerCachePerPage = false } = options;
   const scopeClasses: Scope = options.scopeClasses
     ? {
         globalClasses: collectGlobalClasses([
@@ -797,6 +804,7 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
   const sharedById = new Map(sitemap.shared?.map((s) => [s.id, s]) ?? []);
   const wIndex: Record<string, string> = {};
 
+  if (handlerCachePerPage) resetHandlerCache();
   for (const shared of sitemap.shared ?? []) {
     const meta = lookupWidget(registry, shared.type, `shared widget "${shared.id}"`);
     let vnode = (await render(meta, shared.props ?? {})) as VNodeChild;
@@ -830,6 +838,7 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
   const shellsWritten = new Set<string>();
 
   for (const page of sitemap.pages) {
+    if (handlerCachePerPage) resetHandlerCache();
     const folder = cleanUrlToFolder(page.url);
     const rootLayoutMeta = resolveRootLayoutType(registry, page);
 

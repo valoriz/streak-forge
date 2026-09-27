@@ -37,8 +37,10 @@ export function widget<Fn extends (...args: any[]) => any>(_meta: WidgetHocMeta 
  *  Same handler + same (deep-equal) input, called from any widget, any
  *  number of times in this process, only actually runs the handler once —
  *  later calls (including ones still in flight) get the same Promise back.
- *  Lives for the process's lifetime: fresh per `build`/`prebuild` run,
- *  reused across a `dev` run's rebuilds. A widget file imports its handler
+ *  Lives until resetHandlerCache() is called: a `build`/`prebuild` run
+ *  never resets it (one cache for the whole run); `dev` resets it before
+ *  each page it renders (see BuildPagesOptions.handlerCachePerPage), so a
+ *  handler runs once per page render and a reload shows fresh data. A widget file imports its handler
  *  with a plain `import`, so within one process the imported function
  *  reference is stable and this Map is genuinely shared across every widget
  *  instance/page that calls it — see cli/render.ts's importAndCall doc
@@ -52,16 +54,35 @@ export function widget<Fn extends (...args: any[]) => any>(_meta: WidgetHocMeta 
  *  resolves to the already-loaded module. Restart `dev` to pick up a
  *  handler edit. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const handlerCaches = new WeakMap<(...args: any[]) => any, Map<string, unknown>>();
+type HandlerCaches = WeakMap<(...args: any[]) => any, Map<string, unknown>>;
+
+// Kept on globalThis under a Symbol.for key, not in a module variable: a
+// project's widgets get `handler` from the preloaded streak-forge/globals,
+// which may be a different module instance than the CLI's own copy (a
+// symlinked or duplicated install) — resetHandlerCache must clear the one
+// the widgets actually use.
+const CACHE_KEY = Symbol.for("streak-forge.handler-cache");
+
+function handlerCaches(): HandlerCaches {
+  const g = globalThis as unknown as Record<symbol, HandlerCaches | undefined>;
+  return (g[CACHE_KEY] ??= new WeakMap());
+}
+
+/** Drops every memoized handler result — the next call of any handler
+ *  runs it for real again. */
+export function resetHandlerCache(): void {
+  (globalThis as unknown as Record<symbol, HandlerCaches>)[CACHE_KEY] = new WeakMap();
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handler<Fn extends (...args: any[]) => any>(_meta: HandlerHocMeta = {}) {
   return (fn: Fn): Fn => {
     const memoized = ((...args: Parameters<Fn>) => {
-      let cache = handlerCaches.get(fn);
+      const caches = handlerCaches();
+      let cache = caches.get(fn);
       if (!cache) {
         cache = new Map();
-        handlerCaches.set(fn, cache);
+        caches.set(fn, cache);
       }
       const key = hashValue(args);
       if (cache.has(key)) return cache.get(key);

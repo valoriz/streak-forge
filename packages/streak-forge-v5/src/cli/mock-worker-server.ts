@@ -73,15 +73,19 @@ export interface MockWorkerServerOptions {
    *  successful rebuild, which pushes a message that reloads any open
    *  tab. Never set for a plain prod-style preview server. */
   liveReload?: boolean;
+  /** Dev-only: awaited before a page (or its SPA index.json) is composed,
+   *  with that page's url — `dev` re-renders the page here, so every
+   *  reload shows fresh handler data. */
+  beforePage?: (pageUrl: string) => Promise<void>;
 }
 
 export function createMockWorkerServer(options: MockWorkerServerOptions) {
-  const { outDir, port = 3690, liveReload = false } = options;
+  const { outDir, port = 3690, liveReload = false, beforePage } = options;
   const reloadClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 
   const server = Bun.serve({
     port,
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
       const pathname = url.pathname;
 
@@ -135,6 +139,7 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
       // asset branch below, which would otherwise 404 it as a missing file.
       const jsonPageUrl = pageUrlFromJsonPath(pathname);
       if (jsonPageUrl !== null) {
+        if (beforePage) await beforePage(jsonPageUrl);
         const manifest = loadManifest(outDir, jsonPageUrl);
         if (!manifest) return new Response("Not found", { status: 404 });
         return Response.json(composePageAsJson(manifest, outDir));
@@ -171,6 +176,7 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
       }
 
       // A page route — no manifest, no such page.
+      if (beforePage) await beforePage(pathname);
       const manifest = loadManifest(outDir, pathname);
       if (!manifest) return new Response("Not found", { status: 404 });
 

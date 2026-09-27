@@ -2,6 +2,7 @@ import { existsSync, cpSync, watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
 import { runPreBuild } from "../build.js";
 import { readSitemap, buildPages } from "../page-build.js";
+import type { Registry } from "../types.js";
 import { defaultPurgeEngine } from "./purge-engine.js";
 import { renderSample, renderInstance } from "./render.js";
 import { discoverCssHrefs } from "./discover-css-hrefs.js";
@@ -34,7 +35,13 @@ import { projectPaths } from "./conventions.js";
  * forever, which a test can't easily call and assert on). `runDevCommand`
  * below just calls this on startup and again on every watched file change.
  */
-export async function runDevBuildOnce(root: string): Promise<{ lintErrors: string[] }> {
+export interface DevBuildResult {
+  lintErrors: string[];
+  registry: Registry;
+  cssHrefs: string[];
+}
+
+export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
   const paths = projectPaths(root);
 
   writeDynamicClassesSafelist({
@@ -81,17 +88,66 @@ export async function runDevBuildOnce(root: string): Promise<{ lintErrors: strin
   // does it differently.
   const cssHrefs = discoverCssHrefs(publicDir);
   const sitemap = readSitemap(paths.sitemapPath);
-  await buildPages({ registry: prebuild.registry, sitemap, outDir: paths.devDir, render: renderInstance, scopeClasses: true, cssHrefs });
+  await buildPages({
+    registry: prebuild.registry,
+    sitemap,
+    outDir: paths.devDir,
+    render: renderInstance,
+    scopeClasses: true,
+    cssHrefs,
+    handlerCachePerPage: true,
+  });
 
-  return { lintErrors: prebuild.lintErrors };
+  return { lintErrors: prebuild.lintErrors, registry: prebuild.registry, cssHrefs };
+}
+
+/**
+ * Re-renders ONE page (plus the shared widgets it references) into `.dev/`
+ * — called by the dev server before it serves that page, so a browser
+ * reload always shows fresh handler data. The handler cache is reset first
+ * (handlerCachePerPage), so each handler runs once for this render and the
+ * page's head and widgets share that result. Returns false for a url that
+ * isn't in the sitemap (the server then 404s as usual).
+ */
+export async function renderDevPage(root: string, build: Pick<DevBuildResult, "registry" | "cssHrefs">, pageUrl: string): Promise<boolean> {
+  const paths = projectPaths(root);
+  const sitemap = readSitemap(paths.sitemapPath);
+  const wanted = pageUrl.replace(/\/+$/, "") || "/";
+  const page = sitemap.pages.find((p) => (p.url.replace(/\/+$/, "") || "/") === wanted);
+  if (!page) return false;
+  const refs = new Set(page.widgets.flatMap((w) => ("ref" in w ? [w.ref] : [])));
+  await buildPages({
+    registry: build.registry,
+    sitemap: { shared: (sitemap.shared ?? []).filter((s) => refs.has(s.id)), pages: [page] },
+    outDir: paths.devDir,
+    render: renderInstance,
+    scopeClasses: true,
+    cssHrefs: build.cssHrefs,
+    handlerCachePerPage: true,
+  });
+  return true;
 }
 
 export async function runDevCommand(root: string): Promise<void> {
   const paths = projectPaths(root);
   const port = Number(process.env.PORT ?? 4000);
 
+  // Latest full build — the registry/CSS a per-request page render reuses.
+  let latest: DevBuildResult | null = null;
+
+  // Full rebuilds and per-request page renders both write into .dev/ —
+  // run them one at a time so they never interleave.
+  let queue: Promise<unknown> = Promise.resolve();
+  function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = queue.then(task);
+    queue = run.catch(() => undefined);
+    return run;
+  }
+
   async function build(): Promise<void> {
-    const { lintErrors } = await runDevBuildOnce(root);
+    const result = await enqueue(() => runDevBuildOnce(root));
+    latest = result;
+    const { lintErrors } = result;
     if (lintErrors.length > 0) {
       console.warn(`[dev] ${lintErrors.length} lint warning(s):`);
       for (const err of lintErrors) console.warn(`  - ${err}`);
@@ -128,7 +184,22 @@ export async function runDevCommand(root: string): Promise<void> {
   // state worth preserving, so a full reload (pushed to the browser over
   // SSE the moment a rebuild finishes, instead of hitting refresh
   // yourself) is the correct fit, not a shortcut.
-  const server = createMockWorkerServer({ outDir: paths.devDir, port, liveReload: true });
+  const server = createMockWorkerServer({
+    outDir: paths.devDir,
+    port,
+    liveReload: true,
+    // Re-render the requested page on every request, so a reload shows
+    // fresh data (handlers run once per page render).
+    beforePage: async (pageUrl) => {
+      const current = latest;
+      if (!current) return;
+      try {
+        await enqueue(() => renderDevPage(root, current, pageUrl));
+      } catch (err) {
+        console.error(`[dev] render of ${pageUrl} failed:`, err);
+      }
+    },
+  });
   console.log(`[dev] serving ${paths.devDir} at ${server.url} (live-reload on)`);
 
   let rebuilding = false;

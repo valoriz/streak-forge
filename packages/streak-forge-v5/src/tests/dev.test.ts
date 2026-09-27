@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { runDevBuildOnce } from "../cli/dev.js";
+import { runDevBuildOnce, renderDevPage } from "../cli/dev.js";
 
 const ROOT = join(import.meta.dir, "fixtures/dev-project");
 const DEV_DIR = join(ROOT, ".dev");
@@ -33,5 +33,17 @@ describe("cli/dev.runDevBuildOnce", () => {
     await runDevBuildOnce(ROOT);
     expect(existsSync(join(DEV_DIR, "pages/index/meta.json"))).toBe(true);
     expect(existsSync(join(DEV_DIR, "body/AppShell/index.html"))).toBe(true);
+  });
+});
+
+describe("cli/dev.renderDevPage — per-request re-render", () => {
+  test("re-renders the requested page into .dev/ (a reload shows fresh output); unknown urls return false", async () => {
+    const result = await runDevBuildOnce(ROOT);
+    rmSync(join(DEV_DIR, "pages/index"), { recursive: true, force: true });
+
+    expect(await renderDevPage(ROOT, result, "/")).toBe(true);
+    expect(existsSync(join(DEV_DIR, "pages/index/meta.json"))).toBe(true);
+
+    expect(await renderDevPage(ROOT, result, "/does-not-exist")).toBe(false);
   });
 });

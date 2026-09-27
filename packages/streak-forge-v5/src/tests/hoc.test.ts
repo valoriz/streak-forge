@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { handler, widget, component } from "../hoc.js";
+import { handler, widget, component, resetHandlerCache } from "../hoc.js";
 
 // handler() is the one HOC with real runtime behavior (memoization) — see
 // its own doc comment in hoc.ts. widget()/component() stay pure identity
@@ -98,5 +98,22 @@ describe("hoc.widget / hoc.component — pure identity wrappers", () => {
     const wrapped = component({})(fn);
     expect(wrapped).toBe(fn);
     expect(wrapped({ x: 1 })).toBe(2);
+  });
+});
+
+describe("hoc.resetHandlerCache", () => {
+  test("a reset makes the next call run the handler again; calls in between share one run", async () => {
+    let runs = 0;
+    const load = handler({})(async (slug: string) => {
+      runs++;
+      return slug;
+    });
+    await load("a");
+    await load("a");
+    expect(runs).toBe(1);
+    resetHandlerCache();
+    await load("a");
+    await load("a");
+    expect(runs).toBe(2);
   });
 });
