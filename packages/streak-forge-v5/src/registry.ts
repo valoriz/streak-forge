@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, relative, sep } from "node:path";
 import ts from "typescript";
 import type { Registry, WidgetMeta, HandlerMeta, ComponentMeta, ShellMeta } from "./types.js";
 import { hashOf } from "./hash.js";
@@ -107,14 +107,19 @@ function categories(registry: Registry) {
  * into, so "everything about ProductCard" is one directory instead of
  * scattered across a flat outDir. Only a small marker file (version +
  * generatedAt) stays at the top level.
+ *
+ * `filePath` is written relative to `projectRoot` (forward slashes, e.g.
+ * `src/widgets/Hero.tsx`): the output folder stays valid when copied to
+ * another machine or directory, and no local absolute path leaks into it.
+ * loadRegistry resolves it back against its own `projectRoot`.
  */
-export function saveRegistry(registry: Registry, outDir = "."): void {
+export function saveRegistry(registry: Registry, outDir = ".", projectRoot = process.cwd()): void {
   for (const { dir: dirName, record } of categories(registry)) {
     for (const [key, meta] of Object.entries(record)) {
       const dir = join(outDir, dirName, key);
       mkdirSync(dir, { recursive: true });
       const entry: PersistedEntry<typeof meta> = {
-        meta,
+        meta: { ...meta, filePath: toPortablePath(meta.filePath, projectRoot) },
         sourceFileHash: registry.fileHashes[meta.filePath] ?? "",
       };
       writeFileSync(join(dir, META_FILE), JSON.stringify(entry, null, 2));
@@ -128,7 +133,14 @@ export function saveRegistry(registry: Registry, outDir = "."): void {
   );
 }
 
-export function loadRegistry(outDir = "."): Registry | null {
+/** Absolute source path -> project-relative, forward-slash form. */
+function toPortablePath(filePath: string, projectRoot: string): string {
+  return relative(projectRoot, filePath).split(sep).join("/");
+}
+
+/** `filePath` in the returned metas (and `fileHashes` keys) is resolved
+ *  against `projectRoot`; an older absolute path passes through as-is. */
+export function loadRegistry(outDir = ".", projectRoot = process.cwd()): Registry | null {
   const markerPath = join(outDir, REGISTRY_MARKER_PATH);
   if (!existsSync(markerPath)) return null;
   const marker = JSON.parse(readFileSync(markerPath, "utf-8")) as { version: number; generatedAt: string };
@@ -151,6 +163,7 @@ export function loadRegistry(outDir = "."): Registry | null {
       const metaPath = join(root, key, META_FILE);
       if (!existsSync(metaPath)) continue;
       const entry = JSON.parse(readFileSync(metaPath, "utf-8")) as PersistedEntry<T>;
+      entry.meta.filePath = resolve(projectRoot, entry.meta.filePath);
       target[keyOf(entry.meta)] = entry.meta;
       if (entry.sourceFileHash) fileHashes[entry.meta.filePath] = entry.sourceFileHash;
     }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { writeFileSync, rmSync, mkdirSync } from "node:fs";
-import { fullScan, incrementalRescan } from "../registry.js";
+import { writeFileSync, rmSync, mkdirSync, readFileSync } from "node:fs";
+import { fullScan, incrementalRescan, saveRegistry, loadRegistry } from "../registry.js";
 import { walkFiles } from "../fs-utils.js";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
@@ -87,5 +87,25 @@ describe("registry.incrementalRescan", () => {
     expect(updated.widgets.Dependent!.sourceHash).toBe(originalHash);
 
     rmSync(scratch, { recursive: true, force: true });
+  });
+});
+
+describe("registry.saveRegistry / loadRegistry — portable paths", () => {
+  const OUT = join(import.meta.dir, "registry-scratch");
+
+  test("meta.json stores filePath relative to the project root; loading resolves it against the given root", () => {
+    rmSync(OUT, { recursive: true, force: true });
+    const registry = fullScan(join(FIXTURES, "widgets"), join(FIXTURES, "handlers"));
+    saveRegistry(registry, OUT, import.meta.dir);
+
+    const persisted = JSON.parse(readFileSync(join(OUT, "widgets/HelloBanner/meta.json"), "utf-8"));
+    expect(persisted.meta.filePath).toBe("fixtures/widgets/HelloBanner.tsx");
+
+    // Same output folder, loaded as if copied under another project root.
+    const loaded = loadRegistry(OUT, "/elsewhere/project")!;
+    const widget = loaded.widgets.HelloBanner!;
+    expect(widget.filePath).toBe("/elsewhere/project/fixtures/widgets/HelloBanner.tsx");
+    expect(loaded.fileHashes[widget.filePath]).toBe(registry.fileHashes[registry.widgets.HelloBanner!.filePath]);
+    rmSync(OUT, { recursive: true, force: true });
   });
 });

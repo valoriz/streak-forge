@@ -39,6 +39,9 @@ export interface PreBuildOptions {
   outDir: string;
   fullCssPath: string;
   purgeEngine: PurgeEngine;
+  /** Base for the relative `filePath` written into every meta.json (see
+   *  registry.ts's saveRegistry). Defaults to process.cwd(). */
+  projectRoot?: string;
   /** Given a widget/component/html/head/body's meta, return sample
    *  rendered HTML used only to seed the purge scan (real per-instance data
    *  doesn't matter here — CSS output is data-independent by design, see
@@ -238,7 +241,7 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
     cpSync(options.publicDir, join(options.outDir, "public"), { recursive: true });
   }
 
-  saveRegistry(registry, options.outDir);
+  saveRegistry(registry, options.outDir, options.projectRoot);
 
   return { registry, cssResults, commonCss, bundleResults, lintErrors };
 }

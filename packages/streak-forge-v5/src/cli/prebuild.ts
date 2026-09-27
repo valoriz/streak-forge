@@ -46,6 +46,7 @@ export async function runPrebuildCommand(root: string): Promise<void> {
     outDir: paths.prebuildDir,
     fullCssPath: paths.fullCssPath,
     purgeEngine: defaultPurgeEngine,
+    projectRoot: paths.root,
     strict: true,
     renderSample,
     scopeClasses: true,

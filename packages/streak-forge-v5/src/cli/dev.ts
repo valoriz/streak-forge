@@ -54,6 +54,7 @@ export async function runDevBuildOnce(root: string): Promise<{ lintErrors: strin
     outDir: paths.devDir,
     fullCssPath: paths.fullCssPath,
     purgeEngine: defaultPurgeEngine,
+    projectRoot: paths.root,
     // false, not true: a lint miss (an undeclared bracket-syntax class)
     // shouldn't take the whole dev server down — just warn and keep
     // serving whatever DID build, same as any other dev-mode warning.
