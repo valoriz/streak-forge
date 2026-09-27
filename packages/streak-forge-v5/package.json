@@ -1,0 +1,35 @@
+{
+  "name": "streak-forge",
+  "version": "5.0.0-alpha.0",
+  "description": "Dev server + pre-build engine for Streak.js — annotation-based widget/handler registry, live-reload dev server, TSX->JS + per-widget CSS-purge pre-build. Produces .prebuild/ for streak-boot to build/serve.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./globals": {
+      "types": "./src/ambient-globals.d.ts",
+      "default": "./src/globals.ts"
+    },
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+  },
+  "bin": {
+    "streak-forge": "./bin/streak-forge.ts"
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "typescript": "^5.6.0",
+    "chokidar": "^5.0.0",
+    "purgecss": "^6.0.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "license": "Apache-2.0",
+  "private": true
+}
