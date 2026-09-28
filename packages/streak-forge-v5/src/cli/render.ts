@@ -1,5 +1,11 @@
 import { statSync } from "node:fs";
-import { renderToString, Dynamic, isKind, type VNodeChild, type DynamicProps } from "../jsx.js";
+import {
+  renderToString,
+  Dynamic,
+  isKind,
+  type VNodeChild,
+  type DynamicProps,
+} from "../jsx";
 
 /** Dynamically imports a widget/component/html/head/body/rootLayout's own
  *  module and calls its exported function with `props`. Every entry in a
@@ -13,11 +19,18 @@ import { renderToString, Dynamic, isKind, type VNodeChild, type DynamicProps } f
  *  long-running process that imports the SAME file more than once (`dev`,
  *  re-importing on every file-change rebuild) would otherwise get the
  *  FIRST-loaded module back forever, silently ignoring every edit. */
-async function importAndCall(entry: { filePath: string; exportName: string }, props: Record<string, unknown>): Promise<unknown> {
+async function importAndCall(
+  entry: { filePath: string; exportName: string },
+  props: Record<string, unknown>,
+): Promise<unknown> {
   const version = statSync(entry.filePath).mtimeMs;
-  const mod = (await import(`${entry.filePath}?v=${version}`)) as Record<string, (props: unknown) => unknown>;
+  const mod = (await import(`${entry.filePath}?v=${version}`)) as Record<
+    string,
+    (props: unknown) => unknown
+  >;
   const fn = mod[entry.exportName];
-  if (!fn) throw new Error(`${entry.filePath}: no export named "${entry.exportName}"`);
+  if (!fn)
+    throw new Error(`${entry.filePath}: no export named "${entry.exportName}"`);
   return fn(props);
 }
 
@@ -28,7 +41,9 @@ function isVNodeChild(value: unknown): value is VNodeChild {
     typeof value === "number" ||
     typeof value === "boolean" ||
     Array.isArray(value) ||
-    (typeof value === "object" && value !== undefined && "type" in (value as object))
+    (typeof value === "object" &&
+      value !== undefined &&
+      "type" in (value as object))
   );
 }
 
@@ -45,7 +60,8 @@ function isVNodeChild(value: unknown): value is VNodeChild {
  * markup a real build would extract into that block's own fragment.
  */
 function expandDynamicForSample(node: VNodeChild): VNodeChild {
-  if (node === null || node === undefined || typeof node !== "object") return node;
+  if (node === null || node === undefined || typeof node !== "object")
+    return node;
   if (Array.isArray(node)) return node.map(expandDynamicForSample);
   if (isKind(node.type, Dynamic)) {
     const { children } = node.props as unknown as DynamicProps;
@@ -53,7 +69,10 @@ function expandDynamicForSample(node: VNodeChild): VNodeChild {
   }
   const children = node.props?.children as VNodeChild;
   if (children === undefined) return node;
-  return { type: node.type, props: { ...node.props, children: expandDynamicForSample(children) } };
+  return {
+    type: node.type,
+    props: { ...node.props, children: expandDynamicForSample(children) },
+  };
 }
 
 /**
@@ -68,9 +87,14 @@ function expandDynamicForSample(node: VNodeChild): VNodeChild {
  * dynamicClasses, which streak-forge's dummy-element injection already
  * covers, so those just contribute no extra sample markup.
  */
-export async function renderSample(entry: { filePath: string; exportName: string }): Promise<string> {
+export async function renderSample(entry: {
+  filePath: string;
+  exportName: string;
+}): Promise<string> {
   const result = await importAndCall(entry, {});
-  return isVNodeChild(result) ? renderToString(expandDynamicForSample(result)) : "";
+  return isVNodeChild(result)
+    ? renderToString(expandDynamicForSample(result))
+    : "";
 }
 
 /**

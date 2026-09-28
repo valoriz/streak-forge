@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { removeStaleHashedFiles } from "./fs-utils.js";
+import { removeStaleHashedFiles } from "./fs-utils";
 import { join } from "node:path";
-import type { BundleGenResult } from "./types.js";
+import type { BundleGenResult } from "./types";
 
 /**
  * Bundles a widget/handler/component's TSX/TS source (plus every local
@@ -47,7 +47,14 @@ const CACHE_DIR = ".streak-forge-cache/js";
 export async function generateBundle(
   target: BundleTarget,
   outDir: string,
-  kindDir: "widgets" | "handlers" | "components" | "html" | "head" | "body" | "rootLayout",
+  kindDir:
+    | "widgets"
+    | "handlers"
+    | "components"
+    | "html"
+    | "head"
+    | "body"
+    | "rootLayout",
   options: BundleOptions = {},
 ): Promise<BundleGenResult> {
   const baseFileName = `${target.name}.${target.fileHash}.js`;
@@ -78,12 +85,17 @@ export async function generateBundle(
 
   if (!result.success) {
     const messages = result.logs.map((log) => String(log)).join("\n");
-    throw new Error(`streak-forge: failed to bundle "${target.name}" (${target.filePath}):\n${messages}`);
+    throw new Error(
+      `streak-forge: failed to bundle "${target.name}" (${target.filePath}):\n${messages}`,
+    );
   }
 
-  const output = result.outputs.find((o) => o.kind === "entry-point") ?? result.outputs[0];
+  const output =
+    result.outputs.find((o) => o.kind === "entry-point") ?? result.outputs[0];
   if (!output) {
-    throw new Error(`streak-forge: bundling "${target.name}" (${target.filePath}) produced no output`);
+    throw new Error(
+      `streak-forge: bundling "${target.name}" (${target.filePath}) produced no output`,
+    );
   }
   const js = await output.text();
 

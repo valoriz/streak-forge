@@ -1,12 +1,32 @@
-import { fullScan, saveRegistry } from "./registry.js";
-import { generateWidgetCss, generateCommonCss, collectGlobalClasses, findUndeclaredBracketClasses, shortScopePrefix, type PurgeEngine } from "./css-purge.js";
-import { generateBundle, type BundleOptions } from "./js-bundle.js";
-import { hashOf } from "./hash.js";
-import { minifyCss } from "./minify.js";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, readdirSync } from "node:fs";
+import { fullScan, saveRegistry } from "./registry";
+import {
+  generateWidgetCss,
+  generateCommonCss,
+  collectGlobalClasses,
+  findUndeclaredBracketClasses,
+  shortScopePrefix,
+  type PurgeEngine,
+} from "./css-purge";
+import { generateBundle, type BundleOptions } from "./js-bundle";
+import { hashOf } from "./hash";
+import { minifyCss } from "./minify";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  cpSync,
+  readdirSync,
+} from "node:fs";
 import { join, dirname, basename } from "node:path";
-import { removeStaleHashedFiles } from "./fs-utils.js";
-import type { Registry, WidgetMeta, ComponentMeta, ShellMeta, CssGenResult } from "./types.js";
+import { removeStaleHashedFiles } from "./fs-utils";
+import type {
+  Registry,
+  WidgetMeta,
+  ComponentMeta,
+  ShellMeta,
+  CssGenResult,
+} from "./types";
 
 export interface PreBuildOptions {
   widgetsDir: string;
@@ -46,7 +66,9 @@ export interface PreBuildOptions {
    *  rendered HTML used only to seed the purge scan (real per-instance data
    *  doesn't matter here — CSS output is data-independent by design, see
    *  the dynamicClasses rule). */
-  renderSample: (entry: WidgetMeta | ComponentMeta | ShellMeta) => Promise<string>;
+  renderSample: (
+    entry: WidgetMeta | ComponentMeta | ShellMeta,
+  ) => Promise<string>;
   /** true = hard-fail the build on lint violations (undeclared bracket
    *  classes). Matches streak-forge's own strict-validator style. */
   strict: boolean;
@@ -88,7 +110,8 @@ export interface PreBuildResult {
   lintErrors: string[];
 }
 
-type PurgeCategory = "widgets" | "components" | "html" | "head" | "body" | "rootLayout";
+type PurgeCategory =
+  "widgets" | "components" | "html" | "head" | "body" | "rootLayout";
 
 /**
  * Full pre-build pipeline, mirrors streak-forge's own stage order
@@ -105,10 +128,20 @@ type PurgeCategory = "widgets" | "components" | "html" | "head" | "body" | "root
  * streak-forge itself — this only adds the registry + CSS + JS-bundle +
  * cache layer on top.
  */
-export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildResult> {
-  const registry = fullScan(options.widgetsDir, options.handlersDir, options.componentsDir, options.shellDir);
+export async function runPreBuild(
+  options: PreBuildOptions,
+): Promise<PreBuildResult> {
+  const registry = fullScan(
+    options.widgetsDir,
+    options.handlersDir,
+    options.componentsDir,
+    options.shellDir,
+  );
 
-  const purgeCategories: Array<{ kindDir: PurgeCategory; entries: (WidgetMeta | ComponentMeta | ShellMeta)[] }> = [
+  const purgeCategories: Array<{
+    kindDir: PurgeCategory;
+    entries: (WidgetMeta | ComponentMeta | ShellMeta)[];
+  }> = [
     { kindDir: "widgets", entries: Object.values(registry.widgets) },
     { kindDir: "components", entries: Object.values(registry.components) },
     { kindDir: "html", entries: Object.values(registry.html) },
@@ -121,7 +154,10 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
   for (const { entries } of purgeCategories) {
     for (const entry of entries) {
       const source = readFileSync(entry.filePath, "utf-8");
-      const undeclared = findUndeclaredBracketClasses(source, entry.dynamicClasses);
+      const undeclared = findUndeclaredBracketClasses(
+        source,
+        entry.dynamicClasses,
+      );
       if (undeclared.length > 0) {
         lintErrors.push(
           `${entry.filePath}: bracket-syntax class(es) ${undeclared.join(", ")} used but not declared in dynamicClasses`,
@@ -142,7 +178,9 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
   // loud and immediate, instead of two widgets silently sharing (and
   // corrupting) each other's styles in the shipped output.
   if (options.scopeClasses) {
-    const allTypes = purgeCategories.flatMap(({ entries }) => entries.map((e) => e.type));
+    const allTypes = purgeCategories.flatMap(({ entries }) =>
+      entries.map((e) => e.type),
+    );
     const seenByPrefix = new Map<string, string>();
     for (const type of allTypes) {
       const prefix = shortScopePrefix(type);
@@ -163,10 +201,21 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
   // entry's own folder; if not, streak-forge creates a synthetic "Common"
   // one so there's always a single file every page can load once instead
   // of every widget repeating it.
-  const globalClasses = collectGlobalClasses(purgeCategories.flatMap(({ entries }) => entries));
-  const commonCssText = await generateCommonCss(options.purgeEngine, options.fullCssPath, [...globalClasses]);
+  const globalClasses = collectGlobalClasses(
+    purgeCategories.flatMap(({ entries }) => entries),
+  );
+  const commonCssText = await generateCommonCss(
+    options.purgeEngine,
+    options.fullCssPath,
+    [...globalClasses],
+  );
   const headType = Object.keys(registry.head)[0] ?? "Common";
-  const commonCss = writeCommonCss(commonCssText, options.outDir, headType, options.minify ?? false);
+  const commonCss = writeCommonCss(
+    commonCssText,
+    options.outDir,
+    headType,
+    options.minify ?? false,
+  );
   mirrorToPublic(options.outDir, commonCss.fileName, commonCss.css);
 
   const cssResults: CssGenResult[] = [];
@@ -186,37 +235,88 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
         globalClasses,
       );
       cssResults.push(result);
-      if (result.fileName) mirrorToPublic(options.outDir, result.fileName, result.css);
-      const publicEntryDir = join(options.outDir, "public", kindDir, entry.type);
-      removeStaleHashedFiles(publicEntryDir, entry.type, ".css", result.fileName ? basename(result.fileName) : null);
+      if (result.fileName)
+        mirrorToPublic(options.outDir, result.fileName, result.css);
+      const publicEntryDir = join(
+        options.outDir,
+        "public",
+        kindDir,
+        entry.type,
+      );
+      removeStaleHashedFiles(
+        publicEntryDir,
+        entry.type,
+        ".css",
+        result.fileName ? basename(result.fileName) : null,
+      );
     }
   }
 
   const bundleResults = [];
   if (options.bundle !== false) {
     const bundleOptions = options.bundle ?? {};
-    const bundleCategories: Array<{ kindDir: PurgeCategory | "handlers"; items: { filePath: string; name: string }[] }> = [
-      { kindDir: "widgets", items: Object.values(registry.widgets).map((w) => ({ filePath: w.filePath, name: w.type })) },
+    const bundleCategories: Array<{
+      kindDir: PurgeCategory | "handlers";
+      items: { filePath: string; name: string }[];
+    }> = [
+      {
+        kindDir: "widgets",
+        items: Object.values(registry.widgets).map((w) => ({
+          filePath: w.filePath,
+          name: w.type,
+        })),
+      },
       {
         kindDir: "handlers",
-        items: Object.values(registry.handlers).map((h) => ({ filePath: h.filePath, name: h.exportName })),
+        items: Object.values(registry.handlers).map((h) => ({
+          filePath: h.filePath,
+          name: h.exportName,
+        })),
       },
       {
         kindDir: "components",
-        items: Object.values(registry.components).map((c) => ({ filePath: c.filePath, name: c.type })),
+        items: Object.values(registry.components).map((c) => ({
+          filePath: c.filePath,
+          name: c.type,
+        })),
       },
-      { kindDir: "html", items: Object.values(registry.html).map((e) => ({ filePath: e.filePath, name: e.type })) },
-      { kindDir: "head", items: Object.values(registry.head).map((e) => ({ filePath: e.filePath, name: e.type })) },
-      { kindDir: "body", items: Object.values(registry.body).map((e) => ({ filePath: e.filePath, name: e.type })) },
+      {
+        kindDir: "html",
+        items: Object.values(registry.html).map((e) => ({
+          filePath: e.filePath,
+          name: e.type,
+        })),
+      },
+      {
+        kindDir: "head",
+        items: Object.values(registry.head).map((e) => ({
+          filePath: e.filePath,
+          name: e.type,
+        })),
+      },
+      {
+        kindDir: "body",
+        items: Object.values(registry.body).map((e) => ({
+          filePath: e.filePath,
+          name: e.type,
+        })),
+      },
       {
         kindDir: "rootLayout",
-        items: Object.values(registry.rootLayout).map((e) => ({ filePath: e.filePath, name: e.type })),
+        items: Object.values(registry.rootLayout).map((e) => ({
+          filePath: e.filePath,
+          name: e.type,
+        })),
       },
     ];
     for (const { kindDir, items } of bundleCategories) {
       for (const item of items) {
         const result = await generateBundle(
-          { filePath: item.filePath, name: item.name, fileHash: registry.fileHashes[item.filePath] ?? "" },
+          {
+            filePath: item.filePath,
+            name: item.name,
+            fileHash: registry.fileHashes[item.filePath] ?? "",
+          },
           options.outDir,
           kindDir,
           bundleOptions,
@@ -238,7 +338,9 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
   // Hand-authored static assets (images, fonts, favicon, ...) — passthrough
   // copy, same as streak-forge's own pre-build step.
   if (options.publicDir && existsSync(options.publicDir)) {
-    cpSync(options.publicDir, join(options.outDir, "public"), { recursive: true });
+    cpSync(options.publicDir, join(options.outDir, "public"), {
+      recursive: true,
+    });
   }
 
   saveRegistry(registry, options.outDir, options.projectRoot);
@@ -256,7 +358,12 @@ export async function runPreBuild(options: PreBuildOptions): Promise<PreBuildRes
  *  generateWidgetCss call still dedups against (see PreBuildOptions.minify
  *  and generateWidgetCss's own doc comment on why that comparison must
  *  never see minified text on either side). */
-function writeCommonCss(css: string, outDir: string, type: string, minify: boolean): CssGenResult {
+function writeCommonCss(
+  css: string,
+  outDir: string,
+  type: string,
+  minify: boolean,
+): CssGenResult {
   const hash = hashOf(css);
   const baseFileName = `${type}.common.${hash}.css`;
   const dir = join(outDir, "head", type);
@@ -268,17 +375,34 @@ function writeCommonCss(css: string, outDir: string, type: string, minify: boole
   for (const root of [join(outDir, "head"), join(outDir, "public", "head")]) {
     if (!existsSync(root)) continue;
     for (const headType of readdirSync(root)) {
-      const keep = headType === type && root === join(outDir, "head") ? baseFileName : null;
-      removeStaleHashedFiles(join(root, headType), `${headType}.common`, ".css", keep);
+      const keep =
+        headType === type && root === join(outDir, "head")
+          ? baseFileName
+          : null;
+      removeStaleHashedFiles(
+        join(root, headType),
+        `${headType}.common`,
+        ".css",
+        keep,
+      );
     }
   }
-  return { widgetType: type, fileName: `head/${type}/${baseFileName}`, css: finalCss, fromCache: false };
+  return {
+    widgetType: type,
+    fileName: `head/${type}/${baseFileName}`,
+    css: finalCss,
+    fromCache: false,
+  };
 }
 
 /** Mirrors a generated file (CSS or JS text) into outDir/public/ at the
  *  same relative path as its primary, registry-colocated copy — additive
  *  only, never a move, so saveRegistry/loadRegistry's paths stay untouched. */
-function mirrorToPublic(outDir: string, fileName: string, content: string): void {
+function mirrorToPublic(
+  outDir: string,
+  fileName: string,
+  content: string,
+): void {
   const dest = join(outDir, "public", fileName);
   mkdirSync(dirname(dest), { recursive: true });
   writeFileSync(dest, content);

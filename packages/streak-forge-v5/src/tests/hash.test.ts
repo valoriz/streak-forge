@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hashOf, hashValue } from "../hash.js";
+import { hashOf, hashValue } from "../hash";
 
 describe("hash", () => {
   test("hashOf is deterministic", () => {

@@ -1,5 +1,11 @@
 import { describe, expect, test, afterEach } from "bun:test";
-import { rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  rmSync,
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   buildPages,
@@ -14,11 +20,24 @@ import {
   pageUrlFromJsonPath,
   resolveShortAssetPath,
   type RenderInstance,
-} from "../page-build.js";
-import { shortScopePrefix } from "../css-purge.js";
-import { handler, resetHandlerCache } from "../hoc.js";
-import { WidgetPlaceholder, ComponentPlaceholder, Dynamic, Fragment, Script, type VNode } from "../jsx.js";
-import type { Registry, WidgetMeta, ShellMeta, ComponentMeta, StreakBootSitemap } from "../types.js";
+} from "../page-build";
+import { shortScopePrefix } from "../css-purge";
+import { handler, resetHandlerCache } from "../hoc";
+import {
+  WidgetPlaceholder,
+  ComponentPlaceholder,
+  Dynamic,
+  Fragment,
+  Script,
+  type VNode,
+} from "../jsx";
+import type {
+  Registry,
+  WidgetMeta,
+  ShellMeta,
+  ComponentMeta,
+  StreakBootSitemap,
+} from "../types";
 
 const OUT_DIR = join(import.meta.dir, "page-build-scratch");
 
@@ -101,7 +120,10 @@ const ButtonWithScript = (props: { label: string }): VNode => ({
 
 const render: RenderInstance = async (meta, props) => {
   if (meta.filePath.endsWith("Badge.tsx")) {
-    return { type: "span", props: { children: (props.label as string) ?? "Badge" } };
+    return {
+      type: "span",
+      props: { children: (props.label as string) ?? "Badge" },
+    };
   }
   if (meta.filePath.endsWith("Card.tsx")) {
     // Inline widgets receive `{ data: page.metadata }` now, not their own
@@ -113,17 +135,28 @@ const render: RenderInstance = async (meta, props) => {
     // same as renderToString already does.
     return {
       type: "div",
-      props: { children: [`Card:${name}`, { type: ButtonWithScript, props: { label: "Buy" } }] },
+      props: {
+        children: [
+          `Card:${name}`,
+          { type: ButtonWithScript, props: { label: "Buy" } },
+        ],
+      },
     };
   }
   if (meta.filePath.endsWith("AppShell.tsx")) {
     if (meta.exportName === "AppHtml") return { lang: "en" };
-    if (meta.exportName === "AppHead") return { type: "title", props: { children: "Test" } };
+    if (meta.exportName === "AppHead")
+      return { type: "title", props: { children: "Test" } };
     if (meta.exportName === "AppBody") return { className: "shell-body" };
     // rootLayout
     const layout: VNode = {
       type: Fragment,
-      props: { children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" }), WidgetPlaceholder({ id: "card-1", type: "Card" })] },
+      props: {
+        children: [
+          WidgetPlaceholder({ id: "badge-1", type: "Badge" }),
+          WidgetPlaceholder({ id: "card-1", type: "Card" }),
+        ],
+      },
     };
     return layout;
   }
@@ -184,43 +217,101 @@ describe("page-build.readSitemap", () => {
 
 describe("page-build.buildPages", () => {
   test("shared widget builds once under widgets/<Type>/<id>/ (next to that type's CSS); page-specific widgets build under their own page's pages/<folder>/widgets/<id>/", async () => {
-    const { pageManifests, sharedBuilt } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests, sharedBuilt } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
 
     expect(sharedBuilt).toEqual(["SaleBadge"]);
-    expect(existsSync(join(OUT_DIR, "widgets/Badge/SaleBadge/content.json"))).toBe(true);
-    expect(existsSync(join(OUT_DIR, "widgets/Badge/SaleBadge/index.html"))).toBe(true);
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/card-1/content.json"))).toBe(true);
-    expect(existsSync(join(OUT_DIR, "pages/page-2/widgets/card-1/content.json"))).toBe(true);
+    expect(
+      existsSync(join(OUT_DIR, "widgets/Badge/SaleBadge/content.json")),
+    ).toBe(true);
+    expect(
+      existsSync(join(OUT_DIR, "widgets/Badge/SaleBadge/index.html")),
+    ).toBe(true);
+    expect(
+      existsSync(join(OUT_DIR, "pages/index/widgets/card-1/content.json")),
+    ).toBe(true);
+    expect(
+      existsSync(join(OUT_DIR, "pages/page-2/widgets/card-1/content.json")),
+    ).toBe(true);
     // No duplicate build of the shared widget under either page's own folder.
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/badge-1"))).toBe(false);
-    expect(existsSync(join(OUT_DIR, "pages/page-2/widgets/badge-1"))).toBe(false);
+    expect(existsSync(join(OUT_DIR, "pages/index/widgets/badge-1"))).toBe(
+      false,
+    );
+    expect(existsSync(join(OUT_DIR, "pages/page-2/widgets/badge-1"))).toBe(
+      false,
+    );
 
     expect(pageManifests).toHaveLength(2);
     const home = pageManifests.find((m) => m.url === "/")!;
     expect(home.widgets).toEqual([
-      { id: "badge-1", type: "Badge", shared: true, path: "widgets/Badge/SaleBadge", lazy: false, cssHref: null },
-      { id: "card-1", type: "Card", shared: false, path: "pages/index/widgets/card-1", lazy: false, cssHref: null },
+      {
+        id: "badge-1",
+        type: "Badge",
+        shared: true,
+        path: "widgets/Badge/SaleBadge",
+        lazy: false,
+        cssHref: null,
+      },
+      {
+        id: "card-1",
+        type: "Card",
+        shared: false,
+        path: "pages/index/widgets/card-1",
+        lazy: false,
+        cssHref: null,
+      },
     ]);
 
     // Page-specific content actually differs per page (real per-page props),
     // and the SAME id "card-1" on both pages never collides since each
     // lives under its own page's own folder.
-    const cardA = JSON.parse(readFileSync(join(OUT_DIR, "pages/index/widgets/card-1/content.json"), "utf-8"));
-    const cardB = JSON.parse(readFileSync(join(OUT_DIR, "pages/page-2/widgets/card-1/content.json"), "utf-8"));
+    const cardA = JSON.parse(
+      readFileSync(
+        join(OUT_DIR, "pages/index/widgets/card-1/content.json"),
+        "utf-8",
+      ),
+    );
+    const cardB = JSON.parse(
+      readFileSync(
+        join(OUT_DIR, "pages/page-2/widgets/card-1/content.json"),
+        "utf-8",
+      ),
+    );
     expect(cardA.html).toContain("Card:A");
     expect(cardB.html).toContain("Card:B");
   });
 
   test("writes html/head/body shell files once per rootLayout type, shared across pages (dev-style: inlineCss false, per-file <link>s)", async () => {
-    await buildPages({ registry, sitemap, outDir: OUT_DIR, render, cssHrefs: ["/common.css"] });
+    await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      cssHrefs: ["/common.css"],
+    });
 
-    const htmlFile = readFileSync(join(OUT_DIR, "html/AppShell/index.html"), "utf-8");
+    const htmlFile = readFileSync(
+      join(OUT_DIR, "html/AppShell/index.html"),
+      "utf-8",
+    );
     expect(htmlFile).toBe('<html lang="en"><head></head><body></body></html>');
 
-    const headFile = readFileSync(join(OUT_DIR, "head/AppShell/index.html"), "utf-8");
-    expect(headFile).toBe('<head><title>Test</title><link rel="stylesheet" href="/common.css"></head>');
+    const headFile = readFileSync(
+      join(OUT_DIR, "head/AppShell/index.html"),
+      "utf-8",
+    );
+    expect(headFile).toBe(
+      '<head><title>Test</title><link rel="stylesheet" href="/common.css"></head>',
+    );
 
-    const bodyFile = readFileSync(join(OUT_DIR, "body/AppShell/index.html"), "utf-8");
+    const bodyFile = readFileSync(
+      join(OUT_DIR, "body/AppShell/index.html"),
+      "utf-8",
+    );
     // Real placeholder MARKERS, not the resolved widget HTML — body/index.html
     // stays shell-type-scoped (same for every page using this shell), the
     // actual per-page widget content only gets spliced in at compose time.
@@ -233,7 +324,8 @@ describe("page-build.buildPages", () => {
   test("a page with metadata gets its own head.html, rendered with { data: metadata }; composePageFromFiles uses it", async () => {
     const seoRender: RenderInstance = async (meta, props) => {
       if (meta.exportName === "AppHead") {
-        const name = (props.data as { name?: string } | undefined)?.name ?? "Default";
+        const name =
+          (props.data as { name?: string } | undefined)?.name ?? "Default";
         return { type: "title", props: { children: `Title ${name}` } };
       }
       return render(meta, props);
@@ -242,21 +334,36 @@ describe("page-build.buildPages", () => {
       shared: sitemap.shared,
       pages: [
         sitemap.pages[0]!,
-        { url: "/no-meta", rootLayout: "AppShell", widgets: sitemap.pages[0]!.widgets },
+        {
+          url: "/no-meta",
+          rootLayout: "AppShell",
+          widgets: sitemap.pages[0]!.widgets,
+        },
       ],
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: seoSitemap, outDir: OUT_DIR, render: seoRender });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: seoSitemap,
+      outDir: OUT_DIR,
+      render: seoRender,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     const noMeta = pageManifests.find((m) => m.url === "/no-meta")!;
 
     expect(home.headPath).toBe("pages/index/head.html");
-    expect(readFileSync(join(OUT_DIR, "pages/index/head.html"), "utf-8")).toBe("<head><title>Title A</title></head>");
-    expect(composePageFromFiles(home, OUT_DIR)).toContain("<title>Title A</title>");
+    expect(readFileSync(join(OUT_DIR, "pages/index/head.html"), "utf-8")).toBe(
+      "<head><title>Title A</title></head>",
+    );
+    expect(composePageFromFiles(home, OUT_DIR)).toContain(
+      "<title>Title A</title>",
+    );
 
     // No metadata: shared shell head, rendered with {}.
     expect(noMeta.headPath).toBeUndefined();
     expect(existsSync(join(OUT_DIR, "pages/no-meta/head.html"))).toBe(false);
-    expect(composePageFromFiles(noMeta, OUT_DIR)).toContain("<title>Title Default</title>");
+    expect(composePageFromFiles(noMeta, OUT_DIR)).toContain(
+      "<title>Title Default</title>",
+    );
   });
 
   test("handlerCachePerPage: a handler runs once per page render (shared by that page's widgets), not once per whole build", async () => {
@@ -274,12 +381,23 @@ describe("page-build.buildPages", () => {
       return render(meta, props);
     };
 
-    await buildPages({ registry, sitemap, outDir: OUT_DIR, render: cachedRender, handlerCachePerPage: true });
+    await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: cachedRender,
+      handlerCachePerPage: true,
+    });
     expect(runs).toBe(2); // two pages, one run each
 
     runs = 0;
     resetHandlerCache();
-    await buildPages({ registry, sitemap, outDir: OUT_DIR, render: cachedRender });
+    await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: cachedRender,
+    });
     expect(runs).toBe(1); // default: one cache for the whole build
   });
 
@@ -301,7 +419,9 @@ describe("page-build.buildPages", () => {
       ],
       shared: sitemap.shared,
     };
-    await expect(buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render })).rejects.toThrow(
+    await expect(
+      buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render }),
+    ).rejects.toThrow(
       /sitemap widget "extra-1" has no matching <WidgetPlaceholder/,
     );
   });
@@ -309,9 +429,17 @@ describe("page-build.buildPages", () => {
   test("throws when a WidgetPlaceholder has no matching sitemap widget", async () => {
     // Layout has two placeholders (badge-1, card-1); sitemap only supplies one.
     const badSitemap: StreakBootSitemap = {
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "card-1", type: "Card" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [{ id: "card-1", type: "Card" }],
+        },
+      ],
     };
-    await expect(buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render })).rejects.toThrow(
+    await expect(
+      buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render }),
+    ).rejects.toThrow(
       /rootLayout has <WidgetPlaceholder id="badge-1"\/> with no matching entry/,
     );
   });
@@ -319,15 +447,37 @@ describe("page-build.buildPages", () => {
   test("a ref widget's id defaults to the ref value when omitted", async () => {
     const refSitemap: StreakBootSitemap = {
       shared: sitemap.shared,
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ ref: "SaleBadge" }, { id: "card-1", type: "Card" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [{ ref: "SaleBadge" }, { id: "card-1", type: "Card" }],
+        },
+      ],
     };
     const badRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("AppShell.tsx") && !["AppHtml", "AppHead", "AppBody"].includes(meta.exportName)) {
-        return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "SaleBadge", type: "Badge" }), WidgetPlaceholder({ id: "card-1", type: "Card" })] } };
+      if (
+        meta.filePath.endsWith("AppShell.tsx") &&
+        !["AppHtml", "AppHead", "AppBody"].includes(meta.exportName)
+      ) {
+        return {
+          type: Fragment,
+          props: {
+            children: [
+              WidgetPlaceholder({ id: "SaleBadge", type: "Badge" }),
+              WidgetPlaceholder({ id: "card-1", type: "Card" }),
+            ],
+          },
+        };
       }
       return render(meta, props);
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: refSitemap, outDir: OUT_DIR, render: badRender });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: refSitemap,
+      outDir: OUT_DIR,
+      render: badRender,
+    });
     const home = pageManifests[0]!;
     expect(home.widgets.find((w) => w.type === "Badge")).toEqual({
       id: "SaleBadge",
@@ -341,15 +491,31 @@ describe("page-build.buildPages", () => {
 
   test("throws when a shared ref points at an undeclared shared id", async () => {
     const badSitemap: StreakBootSitemap = {
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "badge-1", ref: "does-not-exist" }, { id: "card-1", type: "Card" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [
+            { id: "badge-1", ref: "does-not-exist" },
+            { id: "card-1", type: "Card" },
+          ],
+        },
+      ],
     };
-    await expect(buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render })).rejects.toThrow(/unknown shared id/);
+    await expect(
+      buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render }),
+    ).rejects.toThrow(/unknown shared id/);
   });
 });
 
 describe("page-build.composePageFromFiles — pure fs + string splicing, no render() needed", () => {
   test("splices html skeleton + head + body + widget files together, unescaped (dev-style: direct <script src> tags, the old way)", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     const page2 = pageManifests.find((m) => m.url === "/page-2")!;
 
@@ -374,10 +540,18 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
   });
 
   test("inlineCss: true (build/serve) — links a single deferred root.js instead; app.js loads common.js itself, programmatically", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     const html = composePageFromFiles(home, OUT_DIR);
-    expect(html).toContain(`<script src="/__streak/root.js?v=${home.version}" defer></script>`);
+    expect(html).toContain(
+      `<script src="/__streak/root.js?v=${home.version}" defer></script>`,
+    );
     expect(html).not.toContain("/common.js");
   });
 
@@ -396,7 +570,12 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
         },
       ],
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests[0]!;
     expect(home.widgets.find((w) => w.id === "card-1")!.lazy).toBe(true);
 
@@ -407,12 +586,19 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
     // build time either (Card.tsx's render was still called once, during
     // buildPages, to persist its own content.html file — but that file is
     // never spliced in here).
-    expect(html).toContain('<div data-widget-placeholder="card-1" data-widget-type="Card"></div>');
+    expect(html).toContain(
+      '<div data-widget-placeholder="card-1" data-widget-type="Card"></div>',
+    );
     expect(html).not.toContain("Card:A");
   });
 
   test("never writes a combined page HTML file anywhere — composing is read-only", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
 
     composePageFromFiles(home, OUT_DIR);
@@ -425,21 +611,38 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
 
   test("hasScript: false means no <script> tag", async () => {
     const scriptlessRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("Badge.tsx")) return { type: "span", props: { children: props.label as string } };
+      if (meta.filePath.endsWith("Badge.tsx"))
+        return { type: "span", props: { children: props.label as string } };
       if (meta.filePath.endsWith("AppShell.tsx")) {
         if (meta.exportName === "AppHtml") return {};
         if (meta.exportName === "AppHead") return null;
         if (meta.exportName === "AppBody") return {};
-        return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })] } };
+        return {
+          type: Fragment,
+          props: {
+            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+          },
+        };
       }
       throw new Error(`no case for ${meta.filePath}`);
     };
     const scriptlessSitemap: StreakBootSitemap = {
       shared: [{ id: "PlainBadge", type: "Badge", props: { label: "Plain" } }],
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "badge-1", ref: "PlainBadge" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+        },
+      ],
     };
 
-    const { pageManifests } = await buildPages({ registry, sitemap: scriptlessSitemap, outDir: OUT_DIR, render: scriptlessRender });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: scriptlessSitemap,
+      outDir: OUT_DIR,
+      render: scriptlessRender,
+    });
     const home = pageManifests[0]!;
     expect(home.hasScript).toBe(false);
 
@@ -469,26 +672,53 @@ describe("page-build buildPages({ spa: true }) — index.json + spa-router.js, o
 
     await buildPages({ registry, sitemap, outDir: OUT_DIR, render, spa: true });
     expect(existsSync(join(OUT_DIR, "__streak/spa-router.js"))).toBe(true);
-    const content = readFileSync(join(OUT_DIR, "__streak/spa-router.js"), "utf-8");
+    const content = readFileSync(
+      join(OUT_DIR, "__streak/spa-router.js"),
+      "utf-8",
+    );
     expect(content).toContain("jsonUrlFor");
   });
 
   test("composePageFromFiles links spa-router.js (+ root/app) only when spa: true, even with zero lazy widgets", async () => {
-    const { pageManifests: spaManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, spa: true, inlineCss: true });
+    const { pageManifests: spaManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      spa: true,
+      inlineCss: true,
+    });
     const spaHome = spaManifests.find((m) => m.url === "/")!;
     expect(spaHome.spa).toBe(true);
     const spaHtml = composePageFromFiles(spaHome, OUT_DIR);
-    expect(spaHtml).toContain(`<script src="/__streak/root.js?v=${spaHome.version}" defer></script>`);
-    expect(spaHtml).toContain(`<script src="/__streak/spa-router.js?v=${spaHome.version}" defer></script>`);
+    expect(spaHtml).toContain(
+      `<script src="/__streak/root.js?v=${spaHome.version}" defer></script>`,
+    );
+    expect(spaHtml).toContain(
+      `<script src="/__streak/spa-router.js?v=${spaHome.version}" defer></script>`,
+    );
 
-    const { pageManifests: plainManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests: plainManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const plainHome = plainManifests.find((m) => m.url === "/")!;
     expect(plainHome.spa).toBe(false);
-    expect(composePageFromFiles(plainHome, OUT_DIR)).not.toContain("/__streak/spa-router.js");
+    expect(composePageFromFiles(plainHome, OUT_DIR)).not.toContain(
+      "/__streak/spa-router.js",
+    );
   });
 
   test("composePageAsJson returns inner head/body content + attrs, matching composePageFromFiles' own pieces", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
 
     const json = composePageAsJson(home, OUT_DIR);
@@ -513,19 +743,36 @@ describe("page-build buildPages({ spa: true }) — index.json + spa-router.js, o
   test("composePageAsJson's scriptHref is null when the page has no script bundle", async () => {
     const scriptlessSitemap: StreakBootSitemap = {
       shared: [{ id: "PlainBadge", type: "Badge", props: { label: "Plain" } }],
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "badge-1", ref: "PlainBadge" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+        },
+      ],
     };
     const scriptlessRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("Badge.tsx")) return { type: "span", props: { children: props.label as string } };
+      if (meta.filePath.endsWith("Badge.tsx"))
+        return { type: "span", props: { children: props.label as string } };
       if (meta.filePath.endsWith("AppShell.tsx")) {
         if (meta.exportName === "AppHtml") return {};
         if (meta.exportName === "AppHead") return null;
         if (meta.exportName === "AppBody") return {};
-        return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })] } };
+        return {
+          type: Fragment,
+          props: {
+            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+          },
+        };
       }
       throw new Error(`no case for ${meta.filePath}`);
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: scriptlessSitemap, outDir: OUT_DIR, render: scriptlessRender });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: scriptlessSitemap,
+      outDir: OUT_DIR,
+      render: scriptlessRender,
+    });
     const home = pageManifests[0]!;
     expect(composePageAsJson(home, OUT_DIR).scriptHref).toBeNull();
   });
@@ -538,11 +785,20 @@ describe("page-build buildPages({ inlineCss: true }) — build/serve's combined 
     // disk, so this needs real files there, not just a synthetic
     // registry/render (which the top-of-file fixture never writes any for).
     mkdirSync(join(OUT_DIR, "head/AppShell"), { recursive: true });
-    writeFileSync(join(OUT_DIR, "head/AppShell/AppShell.common.abc123.css"), "/* common */ body{margin:0}");
+    writeFileSync(
+      join(OUT_DIR, "head/AppShell/AppShell.common.abc123.css"),
+      "/* common */ body{margin:0}",
+    );
     mkdirSync(join(OUT_DIR, "widgets/Badge"), { recursive: true });
-    writeFileSync(join(OUT_DIR, "widgets/Badge/Badge.def456.css"), ".badge{color:red}");
+    writeFileSync(
+      join(OUT_DIR, "widgets/Badge/Badge.def456.css"),
+      ".badge{color:red}",
+    );
     mkdirSync(join(OUT_DIR, "widgets/Card"), { recursive: true });
-    writeFileSync(join(OUT_DIR, "widgets/Card/Card.ghi789.css"), ".card{color:blue}");
+    writeFileSync(
+      join(OUT_DIR, "widgets/Card/Card.ghi789.css"),
+      ".card{color:blue}",
+    );
 
     const lazySitemap: StreakBootSitemap = {
       shared: sitemap.shared,
@@ -558,12 +814,21 @@ describe("page-build buildPages({ inlineCss: true }) — build/serve's combined 
         },
       ],
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const home = pageManifests[0]!;
     expect(home.inlineCss).toBe(true);
 
     // head/AppShell/index.html itself stays CSS-free — nothing baked in at build time.
-    const headFile = readFileSync(join(OUT_DIR, "head/AppShell/index.html"), "utf-8");
+    const headFile = readFileSync(
+      join(OUT_DIR, "head/AppShell/index.html"),
+      "utf-8",
+    );
     expect(headFile).not.toContain("<style");
     expect(headFile).not.toContain("<link");
 
@@ -575,7 +840,13 @@ describe("page-build buildPages({ inlineCss: true }) — build/serve's combined 
   });
 
   test("inlineCss: false (default) — composePageFromFiles adds no <style>, dev's baked <link>s (if any) pass through untouched", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, cssHrefs: ["/common.css"] });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      cssHrefs: ["/common.css"],
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     expect(home.inlineCss).toBe(false);
     const composed = composePageFromFiles(home, OUT_DIR);
@@ -589,17 +860,30 @@ describe("page-build buildPages({ inlineCss: true }) — build/serve's combined 
         return {
           type: Fragment,
           props: {
-            children: [{ type: "title", props: { children: "Test" } }, "   extra   whitespace   ", { type: "meta", props: { charSet: "utf-8" } }],
+            children: [
+              { type: "title", props: { children: "Test" } },
+              "   extra   whitespace   ",
+              { type: "meta", props: { charSet: "utf-8" } },
+            ],
           },
         };
       }
       return render(meta, props);
     };
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render: whitespaceRender, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: whitespaceRender,
+      inlineCss: true,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
 
     const CRITICAL_CSS_PLACEHOLDER = "<!--streak-critical-css-->";
-    const headFile = readFileSync(join(OUT_DIR, "head/AppShell/index.html"), "utf-8");
+    const headFile = readFileSync(
+      join(OUT_DIR, "head/AppShell/index.html"),
+      "utf-8",
+    );
     expect(headFile).toContain(CRITICAL_CSS_PLACEHOLDER);
     // Minification genuinely ran — the raw multi-space text node got
     // collapsed to single spaces, proving this isn't a no-op.
@@ -633,12 +917,19 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
   };
 
   test("returns a real executable script embedding the lazy widget's own resolved HTML + script, not spliced into the page", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests[0]!;
 
     const fragment = composeLazyWidgetFragment(home, "card-1", OUT_DIR);
     expect(fragment).not.toBeNull();
-    expect(fragment).toContain('querySelector("[data-widget-placeholder=\\"card-1\\"]")');
+    expect(fragment).toContain(
+      'querySelector("[data-widget-placeholder=\\"card-1\\"]")',
+    );
     expect(fragment).toContain("Card:A");
     expect(fragment).toContain("<button>Buy</button>");
     expect(fragment).toContain("console.log(options.label)");
@@ -648,19 +939,42 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
     // A widget with two root elements (backdrop + drawer) must keep both.
     const twoRootRender: RenderInstance = async (meta, props) =>
       meta.filePath.endsWith("Card.tsx")
-        ? { type: Fragment, props: { children: [{ type: "div", props: { id: "backdrop" } }, { type: "aside", props: { id: "drawer" } }] } }
+        ? {
+            type: Fragment,
+            props: {
+              children: [
+                { type: "div", props: { id: "backdrop" } },
+                { type: "aside", props: { id: "drawer" } },
+              ],
+            },
+          }
         : render(meta, props);
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render: twoRootRender });
-    const fragment = composeLazyWidgetFragment(pageManifests[0]!, "card-1", OUT_DIR)!;
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render: twoRootRender,
+    });
+    const fragment = composeLazyWidgetFragment(
+      pageManifests[0]!,
+      "card-1",
+      OUT_DIR,
+    )!;
 
     // Run the fragment against a minimal fake DOM and record what replaced the placeholder.
     let replacedWith: string[] = [];
-    const placeholder = { replaceWith: (...nodes: { id: string }[]) => { replacedWith = nodes.map((n) => n.id); } };
+    const placeholder = {
+      replaceWith: (...nodes: { id: string }[]) => {
+        replacedWith = nodes.map((n) => n.id);
+      },
+    };
     const fakeDocument = {
       querySelector: () => placeholder,
       createElement: () => ({
         set innerHTML(html: string) {
-          this.childNodes = [...html.matchAll(/id="([^"]+)"/g)].map((m) => ({ id: m[1]! }));
+          this.childNodes = [...html.matchAll(/id="([^"]+)"/g)].map((m) => ({
+            id: m[1]!,
+          }));
         },
         childNodes: [] as { id: string }[],
       }),
@@ -670,9 +984,16 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
   });
 
   test("returns null for an unknown id and for a non-lazy widget's id", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests[0]!;
-    expect(composeLazyWidgetFragment(home, "does-not-exist", OUT_DIR)).toBeNull();
+    expect(
+      composeLazyWidgetFragment(home, "does-not-exist", OUT_DIR),
+    ).toBeNull();
     // badge-1 is eager, not lazy — the client runtime never needs it.
     expect(composeLazyWidgetFragment(home, "badge-1", OUT_DIR)).toBeNull();
   });
@@ -681,14 +1002,25 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
     // Real CSS file at the path findOwnCssFile expects (see the
     // inlineCss:true describe block below for the same pattern).
     mkdirSync(join(OUT_DIR, "widgets/Card"), { recursive: true });
-    writeFileSync(join(OUT_DIR, "widgets/Card/Card.ghi789.css"), ".card{color:blue}");
+    writeFileSync(
+      join(OUT_DIR, "widgets/Card/Card.ghi789.css"),
+      ".card{color:blue}",
+    );
 
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const home = pageManifests[0]!;
     const card = home.widgets.find((w) => w.id === "card-1")!;
     expect(card.cssHref).toBe("widgets/Card/Card.ghi789.css");
 
-    const content = JSON.parse(readFileSync(join(OUT_DIR, card.path, "content.json"), "utf-8"));
+    const content = JSON.parse(
+      readFileSync(join(OUT_DIR, card.path, "content.json"), "utf-8"),
+    );
     expect(content.cssHref).toBe("widgets/Card/Card.ghi789.css");
     expect(content.html).toContain("Card:A");
     expect(content.html).toContain("<button>Buy</button>");
@@ -704,16 +1036,29 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
   });
 
   test("composePageFromFiles stamps a lazy widget's marker with its own content.json path — build/serve only, not dev", async () => {
-    const { pageManifests: devManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests: devManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const devHtml = composePageFromFiles(devManifests[0]!, OUT_DIR);
     expect(devHtml).not.toContain("data-widget-src");
     expect(devHtml).toContain('data-widget-placeholder="card-1"');
 
-    const { pageManifests: builtManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: builtManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const builtHome = builtManifests[0]!;
     const card = builtHome.widgets.find((w) => w.id === "card-1")!;
     const builtHtml = composePageFromFiles(builtHome, OUT_DIR);
-    expect(builtHtml).toContain(`data-widget-src="/${card.path}/content.json?v=${builtHome.version}"`);
+    expect(builtHtml).toContain(
+      `data-widget-src="/${card.path}/content.json?v=${builtHome.version}"`,
+    );
   });
 
   test("dev mode links dev-runtime.js BEFORE the direct common.js tag — an eager widget's Script may call a gDom global synchronously, so it must already be defined", async () => {
@@ -731,7 +1076,12 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
         },
       ],
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: orderSitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: orderSitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests[0]!;
     expect(home.hasScript).toBe(true); // Card's Script, eager
 
@@ -744,74 +1094,162 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
   });
 
   test("PageManifest.version is a deterministic fingerprint of this page's own content — same content -> same version, different content -> different version", async () => {
-    const { pageManifests: first } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: first } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const v1 = first[0]!.version;
     expect(v1).toBeTruthy();
 
     // Rebuilding with identical sitemap/render output is deterministic.
-    const { pageManifests: rebuilt } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: rebuilt } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     expect(rebuilt[0]!.version).toBe(v1);
 
     // A page-specific widget's content changing (different metadata ->
     // different rendered Card html) changes the version, even though
     // nothing about the URL/path structure changed.
-    const changedSitemap: StreakBootSitemap = { ...lazySitemap, pages: [{ ...lazySitemap.pages[0]!, metadata: { name: "CHANGED" } }] };
-    const { pageManifests: changed } = await buildPages({ registry, sitemap: changedSitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const changedSitemap: StreakBootSitemap = {
+      ...lazySitemap,
+      pages: [{ ...lazySitemap.pages[0]!, metadata: { name: "CHANGED" } }],
+    };
+    const { pageManifests: changed } = await buildPages({
+      registry,
+      sitemap: changedSitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     expect(changed[0]!.version).not.toBe(v1);
   });
 
   test("a SHARED lazy widget's marker gets the short /w/<id>/... URL (build only) — resolveShortAssetPath + w-index.json round-trip to the real path", async () => {
     const sharedLazySitemap: StreakBootSitemap = {
       shared: sitemap.shared,
-      pages: [{ url: "/", rootLayout: "AppShell", metadata: { name: "A" }, widgets: [{ id: "badge-1", ref: "SaleBadge", loadingStrategy: "lazy" }, { id: "card-1", type: "Card" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          metadata: { name: "A" },
+          widgets: [
+            { id: "badge-1", ref: "SaleBadge", loadingStrategy: "lazy" },
+            { id: "card-1", type: "Card" },
+          ],
+        },
+      ],
     };
 
     // dev: no short prefix, no w-index.json at all.
-    const { pageManifests: devManifests } = await buildPages({ registry, sitemap: sharedLazySitemap, outDir: OUT_DIR, render });
-    expect(composePageFromFiles(devManifests[0]!, OUT_DIR)).not.toContain("data-widget-src");
+    const { pageManifests: devManifests } = await buildPages({
+      registry,
+      sitemap: sharedLazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
+    expect(composePageFromFiles(devManifests[0]!, OUT_DIR)).not.toContain(
+      "data-widget-src",
+    );
     expect(existsSync(join(OUT_DIR, "w-index.json"))).toBe(false);
 
     // build: short /w/SaleBadge/content.json, resolvable back to the real path.
-    const { pageManifests: builtManifests } = await buildPages({ registry, sitemap: sharedLazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: builtManifests } = await buildPages({
+      registry,
+      sitemap: sharedLazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const builtHome = builtManifests[0]!;
     const builtHtml = composePageFromFiles(builtHome, OUT_DIR);
-    expect(builtHtml).toContain(`data-widget-src="/w/SaleBadge/content.json?v=${builtHome.version}"`);
+    expect(builtHtml).toContain(
+      `data-widget-src="/w/SaleBadge/content.json?v=${builtHome.version}"`,
+    );
 
-    const wIndex = JSON.parse(readFileSync(join(OUT_DIR, "w-index.json"), "utf-8"));
+    const wIndex = JSON.parse(
+      readFileSync(join(OUT_DIR, "w-index.json"), "utf-8"),
+    );
     expect(wIndex.SaleBadge).toBe("widgets/Badge/SaleBadge");
 
-    expect(resolveShortAssetPath(OUT_DIR, "/w/SaleBadge/content.json")).toBe("widgets/Badge/SaleBadge/content.json");
-    expect(resolveShortAssetPath(OUT_DIR, "/w/does-not-exist/content.json")).toBeNull();
-    expect(resolveShortAssetPath(OUT_DIR, "/c/banner-panel/content.json")).toBe("dynamic/banner-panel/content.json");
-    expect(resolveShortAssetPath(OUT_DIR, "/pages/index/index.html")).toBeNull();
+    expect(resolveShortAssetPath(OUT_DIR, "/w/SaleBadge/content.json")).toBe(
+      "widgets/Badge/SaleBadge/content.json",
+    );
+    expect(
+      resolveShortAssetPath(OUT_DIR, "/w/does-not-exist/content.json"),
+    ).toBeNull();
+    expect(resolveShortAssetPath(OUT_DIR, "/c/banner-panel/content.json")).toBe(
+      "dynamic/banner-panel/content.json",
+    );
+    expect(
+      resolveShortAssetPath(OUT_DIR, "/pages/index/index.html"),
+    ).toBeNull();
   });
 
   test("composePageFromFiles links the runtime when the page has a lazy widget — dev-style single dev-runtime.js tag by default, a single deferred root.js tag under inlineCss: true", async () => {
-    const { pageManifests: lazyManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests: lazyManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const lazyHome = lazyManifests[0]!;
-    expect(composePageFromFiles(lazyHome, OUT_DIR)).toContain('<script src="/__streak/dev-runtime.js"></script>');
+    expect(composePageFromFiles(lazyHome, OUT_DIR)).toContain(
+      '<script src="/__streak/dev-runtime.js"></script>',
+    );
 
-    const { pageManifests: builtLazyManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: builtLazyManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const builtLazyHome = builtLazyManifests[0]!;
-    expect(composePageFromFiles(builtLazyHome, OUT_DIR)).toContain(`<script src="/__streak/root.js?v=${builtLazyHome.version}" defer></script>`);
+    expect(composePageFromFiles(builtLazyHome, OUT_DIR)).toContain(
+      `<script src="/__streak/root.js?v=${builtLazyHome.version}" defer></script>`,
+    );
   });
 
   test("composePageFromFiles links nothing at all for a page with no script, no lazy widget, no Dynamic slot, no spa", async () => {
     const scriptlessSitemap: StreakBootSitemap = {
       shared: [{ id: "PlainBadge", type: "Badge", props: { label: "Plain" } }],
-      pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "badge-1", ref: "PlainBadge" }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+        },
+      ],
     };
     const scriptlessRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("Badge.tsx")) return { type: "span", props: { children: props.label as string } };
+      if (meta.filePath.endsWith("Badge.tsx"))
+        return { type: "span", props: { children: props.label as string } };
       if (meta.filePath.endsWith("AppShell.tsx")) {
         if (meta.exportName === "AppHtml") return {};
         if (meta.exportName === "AppHead") return null;
         if (meta.exportName === "AppBody") return {};
-        return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })] } };
+        return {
+          type: Fragment,
+          props: {
+            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+          },
+        };
       }
       throw new Error(`no case for ${meta.filePath}`);
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: scriptlessSitemap, outDir: OUT_DIR, render: scriptlessRender });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: scriptlessSitemap,
+      outDir: OUT_DIR,
+      render: scriptlessRender,
+    });
     const home = pageManifests[0]!;
     const html = composePageFromFiles(home, OUT_DIR);
     expect(html).not.toContain("/__streak/root.js");
@@ -823,24 +1261,38 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
     expect(existsSync(join(OUT_DIR, "__streak/root.js"))).toBe(true);
     expect(existsSync(join(OUT_DIR, "__streak/app.js"))).toBe(true);
     expect(existsSync(join(OUT_DIR, "__streak/asset-worker.js"))).toBe(true);
-    const rootContent = readFileSync(join(OUT_DIR, "__streak/root.js"), "utf-8");
+    const rootContent = readFileSync(
+      join(OUT_DIR, "__streak/root.js"),
+      "utf-8",
+    );
     expect(rootContent).toContain("addResourceToBody");
     const appContent = readFileSync(join(OUT_DIR, "__streak/app.js"), "utf-8");
     expect(appContent).toContain("data-widget-placeholder");
-    const workerContent = readFileSync(join(OUT_DIR, "__streak/asset-worker.js"), "utf-8");
+    const workerContent = readFileSync(
+      join(OUT_DIR, "__streak/asset-worker.js"),
+      "utf-8",
+    );
     expect(workerContent).toContain("LOAD_ASSET");
   });
 });
 
 describe("page-build Script collection — no combined file is ever persisted, joined fresh per request", () => {
   test("each widget instance persists its OWN script.js fragment; buildPages writes no combined per-page file", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
 
     expect(home.hasScript).toBe(true);
     // Card's own fragment — real, exact source text of the Script's
     // function, wrapped + called with (window, optionsJson).
-    const cardScript = readFileSync(join(OUT_DIR, "pages/index/widgets/card-1/script.js"), "utf-8");
+    const cardScript = readFileSync(
+      join(OUT_DIR, "pages/index/widgets/card-1/script.js"),
+      "utf-8",
+    );
     expect(cardScript).toContain("console.log(options.label)");
     expect(cardScript).toContain('{"label":"Buy"}');
     expect(cardScript).toContain("__fn(window,");
@@ -850,7 +1302,12 @@ describe("page-build Script collection — no combined file is ever persisted, j
   });
 
   test("composeScriptBundle joins non-lazy widgets' fragments fresh, in memory; composePageFromFiles points <script src> at its virtual href (dev-style) — or links the deferred root.js chain instead under inlineCss: true", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     const page2 = pageManifests.find((m) => m.url === "/page-2")!;
 
@@ -868,17 +1325,29 @@ describe("page-build Script collection — no combined file is ever persisted, j
     expect(pageScriptHref(page2.url)).toBe("/page-2/common.js");
 
     const html = composePageFromFiles(home, OUT_DIR);
-    expect(html).toContain('<script id="streak-common-script" src="/common.js"></script>');
+    expect(html).toContain(
+      '<script id="streak-common-script" src="/common.js"></script>',
+    );
     const html2 = composePageFromFiles(page2, OUT_DIR);
-    expect(html2).toContain('<script id="streak-common-script" src="/page-2/common.js"></script>');
+    expect(html2).toContain(
+      '<script id="streak-common-script" src="/page-2/common.js"></script>',
+    );
 
     // Under inlineCss: true, app.js computes the same href itself, at
     // runtime, from location.pathname — never a literal <script src> in
     // the composed HTML (see cli/app-script.ts).
-    const { pageManifests: builtManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests: builtManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const builtHome = builtManifests.find((m) => m.url === "/")!;
     const builtHtml = composePageFromFiles(builtHome, OUT_DIR);
-    expect(builtHtml).toContain(`<script src="/__streak/root.js?v=${builtHome.version}" defer></script>`);
+    expect(builtHtml).toContain(
+      `<script src="/__streak/root.js?v=${builtHome.version}" defer></script>`,
+    );
     expect(builtHtml).not.toContain("/common.js");
   });
 
@@ -897,7 +1366,12 @@ describe("page-build Script collection — no combined file is ever persisted, j
         },
       ],
     };
-    const { pageManifests } = await buildPages({ registry, sitemap: lazySitemap, outDir: OUT_DIR, render });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: lazySitemap,
+      outDir: OUT_DIR,
+      render,
+    });
     const home = pageManifests[0]!;
     // Card is the only Script source here, and it's lazy.
     expect(home.hasScript).toBe(false);
@@ -930,7 +1404,12 @@ describe("page-build common components — one level deep, declared in the sitem
       const label = (props.data as { label?: string } | undefined)?.label ?? "";
       return {
         type: "div",
-        props: { children: [`Panel:${label}`, ComponentPlaceholder({ id: "btn-1", type: "Button" })] },
+        props: {
+          children: [
+            `Panel:${label}`,
+            ComponentPlaceholder({ id: "btn-1", type: "Button" }),
+          ],
+        },
       };
     }
     if (meta.filePath.endsWith("Button.tsx")) {
@@ -938,7 +1417,10 @@ describe("page-build common components — one level deep, declared in the sitem
         type: Fragment,
         props: {
           children: [
-            { type: "button", props: { children: (props.label as string) ?? "" } },
+            {
+              type: "button",
+              props: { children: (props.label as string) ?? "" },
+            },
             Script({
               id: "btn-click",
               options: { label: props.label },
@@ -953,46 +1435,101 @@ describe("page-build common components — one level deep, declared in the sitem
       if (meta.exportName === "AppHtml") return {};
       if (meta.exportName === "AppHead") return null;
       if (meta.exportName === "AppBody") return {};
-      return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })] } };
+      return {
+        type: Fragment,
+        props: {
+          children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })],
+        },
+      };
     }
     throw new Error(`render: no case for ${meta.filePath}`);
   };
 
   function sitemapWithComponents(
-    components: { id: string; type: string; props?: Record<string, unknown>; loadingStrategy?: "lazy" }[],
+    components: {
+      id: string;
+      type: string;
+      props?: Record<string, unknown>;
+      loadingStrategy?: "lazy";
+    }[],
     panelMetadata: Record<string, unknown> = { label: "Hi" },
   ): StreakBootSitemap {
     return {
-      pages: [{ url: "/", rootLayout: "AppShell", metadata: panelMetadata, widgets: [{ id: "panel-1", type: "Panel", components }] }],
+      pages: [
+        {
+          url: "/",
+          rootLayout: "AppShell",
+          metadata: panelMetadata,
+          widgets: [{ id: "panel-1", type: "Panel", components }],
+        },
+      ],
     };
   }
 
   test("component builds under the widget's own instance folder, keeps an unresolved marker in the widget's own persisted HTML", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" } }]);
-    const { pageManifests } = await buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender });
+    const sitemap = sitemapWithComponents([
+      { id: "btn-1", type: "Button", props: { label: "Click A" } },
+    ]);
+    const { pageManifests } = await buildPages({
+      registry: componentRegistry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: componentRender,
+    });
     const home = pageManifests[0]!;
     const panel = home.widgets.find((w) => w.id === "panel-1")!;
 
     expect(panel.path).toBe("pages/index/widgets/panel-1");
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/index.html"))).toBe(true);
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/script.js"))).toBe(true);
+    expect(
+      existsSync(
+        join(
+          OUT_DIR,
+          "pages/index/widgets/panel-1/components/btn-1/index.html",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/script.js"),
+      ),
+    ).toBe(true);
 
     // The WIDGET's own persisted HTML keeps the marker, unresolved, at build time.
-    const widgetHtml = readFileSync(join(OUT_DIR, "pages/index/widgets/panel-1/index.html"), "utf-8");
+    const widgetHtml = readFileSync(
+      join(OUT_DIR, "pages/index/widgets/panel-1/index.html"),
+      "utf-8",
+    );
     expect(widgetHtml).toContain('data-component-placeholder="btn-1"');
     expect(widgetHtml).toContain('data-component-type="Button"');
     expect(widgetHtml).not.toContain("Click A");
 
     // The widget's own meta.json maps that marker to the component's real path.
-    const widgetMetaJson = JSON.parse(readFileSync(join(OUT_DIR, "pages/index/widgets/panel-1/meta.json"), "utf-8"));
+    const widgetMetaJson = JSON.parse(
+      readFileSync(
+        join(OUT_DIR, "pages/index/widgets/panel-1/meta.json"),
+        "utf-8",
+      ),
+    );
     expect(widgetMetaJson.components).toEqual([
-      { id: "btn-1", type: "Button", path: "pages/index/widgets/panel-1/components/btn-1", lazy: false },
+      {
+        id: "btn-1",
+        type: "Button",
+        path: "pages/index/widgets/panel-1/components/btn-1",
+        lazy: false,
+      },
     ]);
   });
 
   test("composePageFromFiles resolves the component marker at request time; composeScriptBundle includes its script", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" } }]);
-    const { pageManifests } = await buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender });
+    const sitemap = sitemapWithComponents([
+      { id: "btn-1", type: "Button", props: { label: "Click A" } },
+    ]);
+    const { pageManifests } = await buildPages({
+      registry: componentRegistry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: componentRender,
+    });
     const home = pageManifests[0]!;
 
     const html = composePageFromFiles(home, OUT_DIR);
@@ -1007,15 +1544,30 @@ describe("page-build common components — one level deep, declared in the sitem
   });
 
   test("two widgets using the same component type each get their own separately-built instance — no dedup", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" } }]);
+    const sitemap = sitemapWithComponents([
+      { id: "btn-1", type: "Button", props: { label: "Click A" } },
+    ]);
     sitemap.pages.push({
       url: "/page-2",
       rootLayout: "AppShell",
       metadata: { label: "Bye" },
-      widgets: [{ id: "panel-1", type: "Panel", components: [{ id: "btn-1", type: "Button", props: { label: "Click B" } }] }],
+      widgets: [
+        {
+          id: "panel-1",
+          type: "Panel",
+          components: [
+            { id: "btn-1", type: "Button", props: { label: "Click B" } },
+          ],
+        },
+      ],
     });
 
-    const { pageManifests } = await buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender });
+    const { pageManifests } = await buildPages({
+      registry: componentRegistry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: componentRender,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
     const page2 = pageManifests.find((m) => m.url === "/page-2")!;
 
@@ -1023,13 +1575,39 @@ describe("page-build common components — one level deep, declared in the sitem
     expect(composePageFromFiles(page2, OUT_DIR)).toContain("Click B");
 
     // Genuinely separate files, not a shared/deduped one.
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/index.html"))).toBe(true);
-    expect(existsSync(join(OUT_DIR, "pages/page-2/widgets/panel-1/components/btn-1/index.html"))).toBe(true);
+    expect(
+      existsSync(
+        join(
+          OUT_DIR,
+          "pages/index/widgets/panel-1/components/btn-1/index.html",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        join(
+          OUT_DIR,
+          "pages/page-2/widgets/panel-1/components/btn-1/index.html",
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("a lazy component keeps its marker unresolved and is excluded from the script bundle", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" }, loadingStrategy: "lazy" }]);
-    const { pageManifests } = await buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender });
+    const sitemap = sitemapWithComponents([
+      {
+        id: "btn-1",
+        type: "Button",
+        props: { label: "Click A" },
+        loadingStrategy: "lazy",
+      },
+    ]);
+    const { pageManifests } = await buildPages({
+      registry: componentRegistry,
+      sitemap,
+      outDir: OUT_DIR,
+      render: componentRender,
+    });
     const home = pageManifests[0]!;
 
     const html = composePageFromFiles(home, OUT_DIR);
@@ -1040,7 +1618,14 @@ describe("page-build common components — one level deep, declared in the sitem
 
   test("throws when a widget's <ComponentPlaceholder> has no matching sitemap components[] entry", async () => {
     const sitemap = sitemapWithComponents([]);
-    await expect(buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender })).rejects.toThrow(
+    await expect(
+      buildPages({
+        registry: componentRegistry,
+        sitemap,
+        outDir: OUT_DIR,
+        render: componentRender,
+      }),
+    ).rejects.toThrow(
       /has <ComponentPlaceholder id="btn-1"\/> with no matching entry/,
     );
   });
@@ -1050,38 +1635,70 @@ describe("page-build common components — one level deep, declared in the sitem
       { id: "btn-1", type: "Button", props: { label: "Click A" } },
       { id: "extra-1", type: "Button", props: { label: "Extra" } },
     ]);
-    await expect(buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: componentRender })).rejects.toThrow(
+    await expect(
+      buildPages({
+        registry: componentRegistry,
+        sitemap,
+        outDir: OUT_DIR,
+        render: componentRender,
+      }),
+    ).rejects.toThrow(
       /sitemap component "extra-1" has no matching <ComponentPlaceholder/,
     );
   });
 
   test("throws when a component's own render output contains another <ComponentPlaceholder> — one level only", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" } }]);
+    const sitemap = sitemapWithComponents([
+      { id: "btn-1", type: "Button", props: { label: "Click A" } },
+    ]);
     const nestedRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("Button.tsx")) return ComponentPlaceholder({ id: "nested-1", type: "Button" });
+      if (meta.filePath.endsWith("Button.tsx"))
+        return ComponentPlaceholder({ id: "nested-1", type: "Button" });
       return componentRender(meta, props);
     };
-    await expect(buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: nestedRender })).rejects.toThrow(
-      /components are one level deep only/,
-    );
+    await expect(
+      buildPages({
+        registry: componentRegistry,
+        sitemap,
+        outDir: OUT_DIR,
+        render: nestedRender,
+      }),
+    ).rejects.toThrow(/components are one level deep only/);
   });
 
   test("throws when a rootLayout directly contains a <ComponentPlaceholder> instead of a widget using one", async () => {
-    const sitemap = sitemapWithComponents([{ id: "btn-1", type: "Button", props: { label: "Click A" } }]);
+    const sitemap = sitemapWithComponents([
+      { id: "btn-1", type: "Button", props: { label: "Click A" } },
+    ]);
     const badRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("AppShell.tsx") && !["AppHtml", "AppHead", "AppBody"].includes(meta.exportName)) {
+      if (
+        meta.filePath.endsWith("AppShell.tsx") &&
+        !["AppHtml", "AppHead", "AppBody"].includes(meta.exportName)
+      ) {
         // Keeps the real WidgetPlaceholder (so the earlier widgets[]-vs-
         // placeholder cross-check still passes) but ALSO stray-adds a
         // ComponentPlaceholder directly in the rootLayout, which is what
         // this test means to catch.
         return {
           type: Fragment,
-          props: { children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" }), ComponentPlaceholder({ id: "stray-1", type: "Button" })] },
+          props: {
+            children: [
+              WidgetPlaceholder({ id: "panel-1", type: "Panel" }),
+              ComponentPlaceholder({ id: "stray-1", type: "Button" }),
+            ],
+          },
         };
       }
       return componentRender(meta, props);
     };
-    await expect(buildPages({ registry: componentRegistry, sitemap, outDir: OUT_DIR, render: badRender })).rejects.toThrow(
+    await expect(
+      buildPages({
+        registry: componentRegistry,
+        sitemap,
+        outDir: OUT_DIR,
+        render: badRender,
+      }),
+    ).rejects.toThrow(
       /<ComponentPlaceholder> can only be used inside a widget, not directly in a rootLayout/,
     );
   });
@@ -1107,7 +1724,13 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
 
   const scopedRender: RenderInstance = async (meta) => {
     if (meta.filePath.endsWith("Panel.tsx")) {
-      return { type: "div", props: { className: "card", children: [ComponentPlaceholder({ id: "btn-1", type: "Button" })] } };
+      return {
+        type: "div",
+        props: {
+          className: "card",
+          children: [ComponentPlaceholder({ id: "btn-1", type: "Button" })],
+        },
+      };
     }
     if (meta.filePath.endsWith("Button.tsx")) {
       return { type: "button", props: { className: "btn", children: "Buy" } };
@@ -1116,30 +1739,63 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
       if (meta.exportName === "AppHtml") return {};
       if (meta.exportName === "AppHead") return null;
       if (meta.exportName === "AppBody") return { className: "shell-body" };
-      return { type: "div", props: { className: "layout", children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })] } };
+      return {
+        type: "div",
+        props: {
+          className: "layout",
+          children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })],
+        },
+      };
     }
     throw new Error(`no case for ${meta.filePath}`);
   };
 
   const scopedSitemap: StreakBootSitemap = {
-    pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "panel-1", type: "Panel", components: [{ id: "btn-1", type: "Button" }] }] }],
+    pages: [
+      {
+        url: "/",
+        rootLayout: "AppShell",
+        widgets: [
+          {
+            id: "panel-1",
+            type: "Panel",
+            components: [{ id: "btn-1", type: "Button" }],
+          },
+        ],
+      },
+    ],
   };
 
   test("true: every class gets prefixed with a short deterministic code for its owner's own type — shell, widget, and component alike", async () => {
-    const { pageManifests } = await buildPages({ registry: scopedRegistry, sitemap: scopedSitemap, outDir: OUT_DIR, render: scopedRender, scopeClasses: true });
+    const { pageManifests } = await buildPages({
+      registry: scopedRegistry,
+      sitemap: scopedSitemap,
+      outDir: OUT_DIR,
+      render: scopedRender,
+      scopeClasses: true,
+    });
     const home = pageManifests[0]!;
 
     const panelPrefix = shortScopePrefix("Panel");
     const buttonPrefix = shortScopePrefix("Button");
     const shellPrefix = shortScopePrefix("AppShell");
 
-    const widgetHtml = readFileSync(join(OUT_DIR, "pages/index/widgets/panel-1/index.html"), "utf-8");
+    const widgetHtml = readFileSync(
+      join(OUT_DIR, "pages/index/widgets/panel-1/index.html"),
+      "utf-8",
+    );
     expect(widgetHtml).toContain(`class="${panelPrefix}__card"`);
 
-    const componentHtml = readFileSync(join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/index.html"), "utf-8");
+    const componentHtml = readFileSync(
+      join(OUT_DIR, "pages/index/widgets/panel-1/components/btn-1/index.html"),
+      "utf-8",
+    );
     expect(componentHtml).toContain(`class="${buttonPrefix}__btn"`);
 
-    const bodyFragment = readFileSync(join(OUT_DIR, "body/AppShell/index.html"), "utf-8");
+    const bodyFragment = readFileSync(
+      join(OUT_DIR, "body/AppShell/index.html"),
+      "utf-8",
+    );
     expect(bodyFragment).toContain(`class="${shellPrefix}__shell-body"`); // <body>'s own class
     expect(bodyFragment).toContain(`class="${shellPrefix}__layout"`); // rootLayout's own wrapper class
 
@@ -1159,20 +1815,43 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
     // "card" stays global too, since the rule lives once in the common bundle.
     const globalRegistry: Registry = {
       ...scopedRegistry,
-      widgets: { Panel: { ...widgetMeta("Panel"), dynamicClasses: ["card"], dynamicClassGroups: [["card"]] } },
+      widgets: {
+        Panel: {
+          ...widgetMeta("Panel"),
+          dynamicClasses: ["card"],
+          dynamicClassGroups: [["card"]],
+        },
+      },
     };
     const globalRender: RenderInstance = async (meta, props) => {
-      if (meta.filePath.endsWith("Button.tsx")) return { type: "button", props: { className: "btn card", children: "Buy" } };
+      if (meta.filePath.endsWith("Button.tsx"))
+        return {
+          type: "button",
+          props: { className: "btn card", children: "Buy" },
+        };
       return scopedRender(meta, props);
     };
-    const { pageManifests } = await buildPages({ registry: globalRegistry, sitemap: scopedSitemap, outDir: OUT_DIR, render: globalRender, scopeClasses: true });
+    const { pageManifests } = await buildPages({
+      registry: globalRegistry,
+      sitemap: scopedSitemap,
+      outDir: OUT_DIR,
+      render: globalRender,
+      scopeClasses: true,
+    });
     const composed = composePageFromFiles(pageManifests[0]!, OUT_DIR);
     expect(composed).toContain('class="card"');
-    expect(composed).toContain(`class="${shortScopePrefix("Button")}__btn card"`);
+    expect(composed).toContain(
+      `class="${shortScopePrefix("Button")}__btn card"`,
+    );
   });
 
   test("false (default): classes are left exactly as rendered, no prefix", async () => {
-    const { pageManifests } = await buildPages({ registry: scopedRegistry, sitemap: scopedSitemap, outDir: OUT_DIR, render: scopedRender });
+    const { pageManifests } = await buildPages({
+      registry: scopedRegistry,
+      sitemap: scopedSitemap,
+      outDir: OUT_DIR,
+      render: scopedRender,
+    });
     const home = pageManifests[0]!;
     const composed = composePageFromFiles(home, OUT_DIR);
     expect(composed).toContain('class="shell-body"');
@@ -1215,8 +1894,12 @@ describe("page-build Dynamic components — build-time extraction, on-demand fet
                 props: {
                   children: [
                     { type: "p", props: { children: "Secret panel content" } },
-                    // eslint-disable-next-line no-console
-                    Script({ id: "panel-script", options: {}, children: () => console.log("panel script ran") }),
+
+                    Script({
+                      id: "panel-script",
+                      options: {},
+                      children: () => console.log("panel script ran"),
+                    }),
                   ],
                 },
               },
@@ -1229,19 +1912,38 @@ describe("page-build Dynamic components — build-time extraction, on-demand fet
       if (meta.exportName === "AppHtml") return {};
       if (meta.exportName === "AppHead") return null;
       if (meta.exportName === "AppBody") return {};
-      return { type: Fragment, props: { children: [WidgetPlaceholder({ id: "banner-1", type: "Banner" })] } };
+      return {
+        type: Fragment,
+        props: {
+          children: [WidgetPlaceholder({ id: "banner-1", type: "Banner" })],
+        },
+      };
     }
     throw new Error(`no case for ${meta.filePath}`);
   };
 
   const dynSitemap: StreakBootSitemap = {
-    pages: [{ url: "/", rootLayout: "AppShell", widgets: [{ id: "banner-1", type: "Banner" }] }],
+    pages: [
+      {
+        url: "/",
+        rootLayout: "AppShell",
+        widgets: [{ id: "banner-1", type: "Banner" }],
+      },
+    ],
   };
 
   test("extracts the Dynamic block out of the owning widget's own persisted HTML, replacing it with an empty marker", async () => {
-    const { pageManifests } = await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender });
+    const { pageManifests } = await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+    });
 
-    const bannerHtml = readFileSync(join(OUT_DIR, "pages/index/widgets/banner-1/index.html"), "utf-8");
+    const bannerHtml = readFileSync(
+      join(OUT_DIR, "pages/index/widgets/banner-1/index.html"),
+      "utf-8",
+    );
     expect(bannerHtml).toContain("<h1>Banner</h1>");
     expect(bannerHtml).toContain('data-dynamic-slot="banner-panel"');
     expect(bannerHtml).not.toContain("Secret panel content");
@@ -1249,53 +1951,101 @@ describe("page-build Dynamic components — build-time extraction, on-demand fet
     // The Dynamic block's own Script is excluded from the owning widget's
     // own script.js (deferred right along with its markup) — Banner has
     // no OTHER Script, so it writes none at all.
-    expect(existsSync(join(OUT_DIR, "pages/index/widgets/banner-1/script.js"))).toBe(false);
+    expect(
+      existsSync(join(OUT_DIR, "pages/index/widgets/banner-1/script.js")),
+    ).toBe(false);
     const home = pageManifests[0]!;
     expect(home.hasScript).toBe(false);
   });
 
   test("persists the Dynamic block's own html+script flat, by id, independent of any page/widget", async () => {
-    await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender });
+    await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+    });
 
-    const dynHtml = readFileSync(join(OUT_DIR, "dynamic/banner-panel/index.html"), "utf-8");
+    const dynHtml = readFileSync(
+      join(OUT_DIR, "dynamic/banner-panel/index.html"),
+      "utf-8",
+    );
     expect(dynHtml).toContain("Secret panel content");
-    const dynScript = readFileSync(join(OUT_DIR, "dynamic/banner-panel/script.js"), "utf-8");
+    const dynScript = readFileSync(
+      join(OUT_DIR, "dynamic/banner-panel/script.js"),
+      "utf-8",
+    );
     expect(dynScript).toContain('console.log("panel script ran")');
   });
 
   test("content.json is self-sufficient for a direct client fetch too — no cssHref of its own (shares its owner's)", async () => {
-    await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender, inlineCss: true });
+    await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+      inlineCss: true,
+    });
 
-    const content = JSON.parse(readFileSync(join(OUT_DIR, "dynamic/banner-panel/content.json"), "utf-8"));
+    const content = JSON.parse(
+      readFileSync(join(OUT_DIR, "dynamic/banner-panel/content.json"), "utf-8"),
+    );
     expect(content.html).toContain("Secret panel content");
     expect(content.cssHref).toBeNull();
     expect(content.scriptHref).toBe("dynamic/banner-panel/script.js");
-    expect(readFileSync(join(OUT_DIR, content.scriptHref), "utf-8")).toContain('console.log("panel script ran")');
+    expect(readFileSync(join(OUT_DIR, content.scriptHref), "utf-8")).toContain(
+      'console.log("panel script ran")',
+    );
   });
 
   test("a Dynamic slot's marker gets stamped with its own content.json path — build/serve only, not dev", async () => {
-    const { pageManifests: devManifests } = await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender });
+    const { pageManifests: devManifests } = await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+    });
     const devHtml = composePageFromFiles(devManifests[0]!, OUT_DIR);
     expect(devHtml).not.toContain("data-dynamic-src");
     expect(devHtml).toContain('data-dynamic-slot="banner-panel"');
 
-    const { pageManifests: builtManifests } = await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender, inlineCss: true });
+    const { pageManifests: builtManifests } = await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+      inlineCss: true,
+    });
     const builtHtml = composePageFromFiles(builtManifests[0]!, OUT_DIR);
-    expect(builtHtml).toContain('data-dynamic-src="/c/banner-panel/content.json"');
+    expect(builtHtml).toContain(
+      'data-dynamic-src="/c/banner-panel/content.json"',
+    );
   });
 
   test("composeDynamicFragment reads it back by id as a real executable script; null for an unknown id", async () => {
-    await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender });
+    await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+    });
 
     const fragment = composeDynamicFragment("banner-panel", OUT_DIR);
-    expect(fragment).toContain('querySelector("[data-dynamic-slot=\\"banner-panel\\"]")');
+    expect(fragment).toContain(
+      'querySelector("[data-dynamic-slot=\\"banner-panel\\"]")',
+    );
     expect(fragment).toContain("Secret panel content");
     expect(fragment).toContain("panel script ran");
     expect(composeDynamicFragment("does-not-exist", OUT_DIR)).toBeNull();
   });
 
   test("composePageFromFiles links the client runtime for a Dynamic slot even with zero lazy widgets", async () => {
-    const { pageManifests } = await buildPages({ registry: dynRegistry, sitemap: dynSitemap, outDir: OUT_DIR, render: dynRender });
+    const { pageManifests } = await buildPages({
+      registry: dynRegistry,
+      sitemap: dynSitemap,
+      outDir: OUT_DIR,
+      render: dynRender,
+    });
     const home = pageManifests[0]!;
     expect(home.widgets.every((w) => !w.lazy)).toBe(true);
 

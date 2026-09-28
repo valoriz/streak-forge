@@ -1,4 +1,12 @@
-import { widget, handler, component, html, head, body, rootLayout } from "./hoc.js";
+import {
+  widget,
+  handler,
+  component,
+  html,
+  head,
+  body,
+  rootLayout,
+} from "./hoc";
 
 /**
  * Runtime half of the ambient globals declared in ambient-globals.d.ts.

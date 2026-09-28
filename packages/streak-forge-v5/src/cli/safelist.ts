@@ -1,4 +1,4 @@
-import { fullScan } from "../registry.js";
+import { fullScan } from "../registry";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -28,7 +28,9 @@ export interface WriteSafelistOptions {
  * in the safelist before the compiler ever runs — no amount of purging
  * afterward can add a rule the compiler never emitted.
  */
-export function writeDynamicClassesSafelist(options: WriteSafelistOptions): string[] {
+export function writeDynamicClassesSafelist(
+  options: WriteSafelistOptions,
+): string[] {
   const { root, widgetsDir, handlersDir, componentsDir, shellDir } = options;
   const registry = fullScan(widgetsDir, handlersDir, componentsDir, shellDir);
 
@@ -43,7 +45,10 @@ export function writeDynamicClassesSafelist(options: WriteSafelistOptions): stri
 
   const cacheDir = join(root, ".streak-forge-cache");
   mkdirSync(cacheDir, { recursive: true });
-  writeFileSync(join(cacheDir, "dynamic-classes.json"), JSON.stringify(safelist, null, 2));
+  writeFileSync(
+    join(cacheDir, "dynamic-classes.json"),
+    JSON.stringify(safelist, null, 2),
+  );
 
   return safelist;
 }

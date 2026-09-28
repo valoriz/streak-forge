@@ -1,5 +1,10 @@
-import type { WidgetHocMeta, HandlerHocMeta, ComponentHocMeta, ShellHocMeta } from "./types.js";
-import { hashValue } from "./hash.js";
+import type {
+  WidgetHocMeta,
+  HandlerHocMeta,
+  ComponentHocMeta,
+  ShellHocMeta,
+} from "./types";
+import { hashValue } from "./hash";
 
 /**
  * `widget(meta)(fn)` / `handler(meta)(fn)` / `component(meta)(fn)` —
@@ -27,7 +32,9 @@ import { hashValue } from "./hash.js";
 // the result is used as a JSX tag (<Button/>) — `any` keeps Fn's real
 // parameter/return types intact for the caller instead.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function widget<Fn extends (...args: any[]) => any>(_meta: WidgetHocMeta = {}) {
+export function widget<Fn extends (...args: any[]) => any>(
+  _meta: WidgetHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }
 
@@ -71,11 +78,14 @@ function handlerCaches(): HandlerCaches {
 /** Drops every memoized handler result — the next call of any handler
  *  runs it for real again. */
 export function resetHandlerCache(): void {
-  (globalThis as unknown as Record<symbol, HandlerCaches>)[CACHE_KEY] = new WeakMap();
+  (globalThis as unknown as Record<symbol, HandlerCaches>)[CACHE_KEY] =
+    new WeakMap();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function handler<Fn extends (...args: any[]) => any>(_meta: HandlerHocMeta = {}) {
+export function handler<Fn extends (...args: any[]) => any>(
+  _meta: HandlerHocMeta = {},
+) {
   return (fn: Fn): Fn => {
     const memoized = ((...args: Parameters<Fn>) => {
       const caches = handlerCaches();
@@ -105,7 +115,9 @@ export function handler<Fn extends (...args: any[]) => any>(_meta: HandlerHocMet
  * function components regardless.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function component<Fn extends (...args: any[]) => any>(_meta: ComponentHocMeta = {}) {
+export function component<Fn extends (...args: any[]) => any>(
+  _meta: ComponentHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }
 
@@ -124,17 +136,23 @@ export function component<Fn extends (...args: any[]) => any>(_meta: ComponentHo
  * file every page can load once instead of every widget repeating it.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function html<Fn extends (...args: any[]) => any>(_meta: ShellHocMeta = {}) {
+export function html<Fn extends (...args: any[]) => any>(
+  _meta: ShellHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function head<Fn extends (...args: any[]) => any>(_meta: ShellHocMeta = {}) {
+export function head<Fn extends (...args: any[]) => any>(
+  _meta: ShellHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function body<Fn extends (...args: any[]) => any>(_meta: ShellHocMeta = {}) {
+export function body<Fn extends (...args: any[]) => any>(
+  _meta: ShellHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }
 
@@ -149,6 +167,8 @@ export function body<Fn extends (...args: any[]) => any>(_meta: ShellHocMeta = {
  * same as html/head/body).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rootLayout<Fn extends (...args: any[]) => any>(_meta: ShellHocMeta = {}) {
+export function rootLayout<Fn extends (...args: any[]) => any>(
+  _meta: ShellHocMeta = {},
+) {
   return (fn: Fn): Fn => fn;
 }

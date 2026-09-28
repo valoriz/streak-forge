@@ -214,7 +214,12 @@ export interface SharedWidgetEntry {
  *  fetched by the widget's own code via an awaited `handler()` call. */
 export type SitemapWidgetEntry =
   | { id?: string; ref: string; loadingStrategy?: "lazy" }
-  | { id: string; type: string; loadingStrategy?: "lazy"; components?: SitemapComponentEntry[] };
+  | {
+      id: string;
+      type: string;
+      loadingStrategy?: "lazy";
+      components?: SitemapComponentEntry[];
+    };
 
 export interface SitemapPageEntry {
   url: string;

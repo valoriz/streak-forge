@@ -1,10 +1,22 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+} from "node:fs";
 import { join, dirname, resolve, relative, sep } from "node:path";
 import ts from "typescript";
-import type { Registry, WidgetMeta, HandlerMeta, ComponentMeta, ShellMeta } from "./types.js";
-import { hashOf } from "./hash.js";
-import { parseFile } from "./annotations.js";
-import { walkFiles } from "./fs-utils.js";
+import type {
+  Registry,
+  WidgetMeta,
+  HandlerMeta,
+  ComponentMeta,
+  ShellMeta,
+} from "./types";
+import { hashOf } from "./hash";
+import { parseFile } from "./annotations";
+import { walkFiles } from "./fs-utils";
 
 // Small top-level marker — just version + generatedAt. The actual
 // widget/handler/component/html/head/body payload lives one-folder-per-entry
@@ -41,12 +53,24 @@ interface PersistedEntry<T> {
  * doesn't pass them. `shellDir` is scanned for `html()`/`head()`/`body()`
  * — one dir, since a project normally has at most one of each.
  */
-export function fullScan(widgetsDir: string, handlersDir: string, componentsDir?: string, shellDir?: string): Registry {
+export function fullScan(
+  widgetsDir: string,
+  handlersDir: string,
+  componentsDir?: string,
+  shellDir?: string,
+): Registry {
   const widgetFiles = walkFiles(widgetsDir, [".tsx", ".ts"]);
   const handlerFiles = walkFiles(handlersDir, [".ts"]);
-  const componentFiles = componentsDir ? walkFiles(componentsDir, [".tsx", ".ts"]) : [];
+  const componentFiles = componentsDir
+    ? walkFiles(componentsDir, [".tsx", ".ts"])
+    : [];
   const shellFiles = shellDir ? walkFiles(shellDir, [".tsx", ".ts"]) : [];
-  const allFiles = [...widgetFiles, ...handlerFiles, ...componentFiles, ...shellFiles];
+  const allFiles = [
+    ...widgetFiles,
+    ...handlerFiles,
+    ...componentFiles,
+    ...shellFiles,
+  ];
 
   const widgets: Record<string, WidgetMeta> = {};
   const handlers: Record<string, HandlerMeta> = {};
@@ -113,7 +137,11 @@ function categories(registry: Registry) {
  * another machine or directory, and no local absolute path leaks into it.
  * loadRegistry resolves it back against its own `projectRoot`.
  */
-export function saveRegistry(registry: Registry, outDir = ".", projectRoot = process.cwd()): void {
+export function saveRegistry(
+  registry: Registry,
+  outDir = ".",
+  projectRoot = process.cwd(),
+): void {
   for (const { dir: dirName, record } of categories(registry)) {
     for (const [key, meta] of Object.entries(record)) {
       const dir = join(outDir, dirName, key);
@@ -129,7 +157,11 @@ export function saveRegistry(registry: Registry, outDir = ".", projectRoot = pro
   mkdirSync(outDir, { recursive: true });
   writeFileSync(
     join(outDir, REGISTRY_MARKER_PATH),
-    JSON.stringify({ version: registry.version, generatedAt: registry.generatedAt }, null, 2),
+    JSON.stringify(
+      { version: registry.version, generatedAt: registry.generatedAt },
+      null,
+      2,
+    ),
   );
 }
 
@@ -140,12 +172,20 @@ function toPortablePath(filePath: string, projectRoot: string): string {
 
 /** `filePath` in the returned metas (and `fileHashes` keys) is resolved
  *  against `projectRoot`; an older absolute path passes through as-is. */
-export function loadRegistry(outDir = ".", projectRoot = process.cwd()): Registry | null {
+export function loadRegistry(
+  outDir = ".",
+  projectRoot = process.cwd(),
+): Registry | null {
   const markerPath = join(outDir, REGISTRY_MARKER_PATH);
   if (!existsSync(markerPath)) return null;
-  const marker = JSON.parse(readFileSync(markerPath, "utf-8")) as { version: number; generatedAt: string };
+  const marker = JSON.parse(readFileSync(markerPath, "utf-8")) as {
+    version: number;
+    generatedAt: string;
+  };
   if (marker.version !== 1) {
-    throw new Error(`streak-boot.registry.json has version ${marker.version}, expected 1 — delete it and rerun a full scan.`);
+    throw new Error(
+      `streak-boot.registry.json has version ${marker.version}, expected 1 — delete it and rerun a full scan.`,
+    );
   }
 
   const widgets: Record<string, WidgetMeta> = {};
@@ -157,15 +197,22 @@ export function loadRegistry(outDir = ".", projectRoot = process.cwd()): Registr
   const rootLayout: Record<string, ShellMeta> = {};
   const fileHashes: Record<string, string> = {};
 
-  const load = <T extends { filePath: string }>(dirName: string, keyOf: (meta: T) => string, target: Record<string, T>) => {
+  const load = <T extends { filePath: string }>(
+    dirName: string,
+    keyOf: (meta: T) => string,
+    target: Record<string, T>,
+  ) => {
     const root = join(outDir, dirName);
     for (const key of safeReaddir(root)) {
       const metaPath = join(root, key, META_FILE);
       if (!existsSync(metaPath)) continue;
-      const entry = JSON.parse(readFileSync(metaPath, "utf-8")) as PersistedEntry<T>;
+      const entry = JSON.parse(
+        readFileSync(metaPath, "utf-8"),
+      ) as PersistedEntry<T>;
       entry.meta.filePath = resolve(projectRoot, entry.meta.filePath);
       target[keyOf(entry.meta)] = entry.meta;
-      if (entry.sourceFileHash) fileHashes[entry.meta.filePath] = entry.sourceFileHash;
+      if (entry.sourceFileHash)
+        fileHashes[entry.meta.filePath] = entry.sourceFileHash;
     }
   };
 
@@ -276,20 +323,35 @@ export function incrementalRescan(
   };
 }
 
-function findDirectImporters(targetFile: string, candidateFiles: string[]): string[] {
+function findDirectImporters(
+  targetFile: string,
+  candidateFiles: string[],
+): string[] {
   const targetBase = targetFile.replace(/\.(tsx|ts)$/, "");
   const importers: string[] = [];
 
   for (const file of candidateFiles) {
     if (file === targetFile || !existsSync(file)) continue;
     const content = readFileSync(file, "utf-8");
-    const sourceFile = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const sourceFile = ts.createSourceFile(
+      file,
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
     let imports = false;
 
     sourceFile.forEachChild((node) => {
-      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
         const spec = node.moduleSpecifier.text;
-        const resolved = resolve(dirname(file), spec).replace(/\.(tsx|ts)$/, "");
+        const resolved = resolve(dirname(file), spec).replace(
+          /\.(tsx|ts)$/,
+          "",
+        );
         if (resolved === targetBase) imports = true;
       }
     });

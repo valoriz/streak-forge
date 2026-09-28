@@ -1,10 +1,21 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { buildPages, type RenderInstance } from "../page-build.js";
-import { createMockWorkerServer } from "../cli/mock-worker-server.js";
-import { WidgetPlaceholder, Dynamic, Fragment, Script, type VNode } from "../jsx.js";
-import type { Registry, WidgetMeta, ShellMeta, StreakBootSitemap } from "../types.js";
+import { buildPages, type RenderInstance } from "../page-build";
+import { createMockWorkerServer } from "../cli/mock-worker-server";
+import {
+  WidgetPlaceholder,
+  Dynamic,
+  Fragment,
+  Script,
+  type VNode,
+} from "../jsx";
+import type {
+  Registry,
+  WidgetMeta,
+  ShellMeta,
+  StreakBootSitemap,
+} from "../types";
 
 // Real end-to-end check of the lazy-widget HTTP contract (server side):
 // buildPages() writes real fragment files to a scratch outDir, then a real
@@ -18,10 +29,25 @@ import type { Registry, WidgetMeta, ShellMeta, StreakBootSitemap } from "../type
 const OUT_DIR = join(import.meta.dir, "lazy-loading-scratch");
 
 function widgetMeta(type: string): WidgetMeta {
-  return { exportName: type, filePath: `/virtual/widgets/${type}.tsx`, type, kind: "static", dynamicClasses: [], dynamicClassGroups: [], sourceHash: "hash" };
+  return {
+    exportName: type,
+    filePath: `/virtual/widgets/${type}.tsx`,
+    type,
+    kind: "static",
+    dynamicClasses: [],
+    dynamicClassGroups: [],
+    sourceHash: "hash",
+  };
 }
 function shellMeta(type: string): ShellMeta {
-  return { exportName: type, filePath: `/virtual/shell/${type}.tsx`, type, dynamicClasses: [], dynamicClassGroups: [], sourceHash: "hash" };
+  return {
+    exportName: type,
+    filePath: `/virtual/shell/${type}.tsx`,
+    type,
+    dynamicClasses: [],
+    dynamicClassGroups: [],
+    sourceHash: "hash",
+  };
 }
 
 const registry: Registry = {
@@ -44,19 +70,30 @@ const render: RenderInstance = async (meta, props) => {
       props: {
         children: [
           { type: "p", props: { children: "hi" } },
-          Dynamic({ id: "hello-panel", children: { type: "p", props: { children: "Dynamic panel content" } } }),
+          Dynamic({
+            id: "hello-panel",
+            children: {
+              type: "p",
+              props: { children: "Dynamic panel content" },
+            },
+          }),
         ],
       },
     };
   }
   if (meta.filePath.endsWith("Bonus.tsx")) {
-    const fact = (props.data as { fact?: string } | undefined)?.fact ?? "default";
+    const fact =
+      (props.data as { fact?: string } | undefined)?.fact ?? "default";
     const node: VNode = {
       type: Fragment,
       props: {
         children: [
           { type: "p", props: { children: `Bonus:${fact}` } },
-          Script({ id: "bonus-script", options: { fact }, children: (_gDom, options) => console.log(options.fact) }),
+          Script({
+            id: "bonus-script",
+            options: { fact },
+            children: (_gDom, options) => console.log(options.fact),
+          }),
         ],
       },
     };
@@ -68,7 +105,12 @@ const render: RenderInstance = async (meta, props) => {
     if (meta.exportName === "AppBody") return {};
     return {
       type: Fragment,
-      props: { children: [WidgetPlaceholder({ id: "hello-1", type: "Hello" }), WidgetPlaceholder({ id: "bonus-1", type: "Bonus" })] },
+      props: {
+        children: [
+          WidgetPlaceholder({ id: "hello-1", type: "Hello" }),
+          WidgetPlaceholder({ id: "bonus-1", type: "Bonus" }),
+        ],
+      },
     };
   }
   throw new Error(`render: no case for ${meta.filePath}`);
@@ -100,16 +142,24 @@ describe("lazy widget loading — real HTTP round trip through createMockWorkerS
     expect(existsSync(join(OUT_DIR, "__streak/asset-worker.js"))).toBe(true);
     expect(existsSync(join(OUT_DIR, "__streak/dev-runtime.js"))).toBe(true);
 
-    const server = createMockWorkerServer({ outDir: OUT_DIR, port: 0, liveReload: false });
+    const server = createMockWorkerServer({
+      outDir: OUT_DIR,
+      port: 0,
+      liveReload: false,
+    });
     try {
       const base = `http://localhost:${server.port}`;
 
       const pageRes = await fetch(base + "/");
       const pageHtml = await pageRes.text();
       expect(pageHtml).toContain("<p>hi</p>");
-      expect(pageHtml).toContain('<div data-widget-placeholder="bonus-1" data-widget-type="Bonus"></div>');
+      expect(pageHtml).toContain(
+        '<div data-widget-placeholder="bonus-1" data-widget-type="Bonus"></div>',
+      );
       expect(pageHtml).not.toContain("Bonus:real");
-      expect(pageHtml).toContain('<script src="/__streak/dev-runtime.js"></script>');
+      expect(pageHtml).toContain(
+        '<script src="/__streak/dev-runtime.js"></script>',
+      );
 
       const runtimeRes = await fetch(base + "/__streak/dev-runtime.js");
       expect(runtimeRes.status).toBe(200);
@@ -122,15 +172,21 @@ describe("lazy widget loading — real HTTP round trip through createMockWorkerS
       // buildFragmentScript). Can't run it here (no DOM in this test env),
       // so this checks its source text directly, same as a browser would
       // receive verbatim via a real <script src>.
-      const fragmentRes = await fetch(base + "/__streak/lazy?page=%2F&id=bonus-1");
+      const fragmentRes = await fetch(
+        base + "/__streak/lazy?page=%2F&id=bonus-1",
+      );
       expect(fragmentRes.status).toBe(200);
       expect(fragmentRes.headers.get("content-type")).toBe("text/javascript");
       const fragmentSrc = await fragmentRes.text();
-      expect(fragmentSrc).toContain('querySelector("[data-widget-placeholder=\\"bonus-1\\"]")');
+      expect(fragmentSrc).toContain(
+        'querySelector("[data-widget-placeholder=\\"bonus-1\\"]")',
+      );
       expect(fragmentSrc).toContain("Bonus:real");
       expect(fragmentSrc).toContain("console.log(options.fact)");
 
-      const missingRes = await fetch(base + "/__streak/lazy?page=%2F&id=does-not-exist");
+      const missingRes = await fetch(
+        base + "/__streak/lazy?page=%2F&id=does-not-exist",
+      );
       expect(missingRes.status).toBe(404);
 
       // hello-1 is eager, not lazy — the runtime has no reason to fetch it,
@@ -149,10 +205,14 @@ describe("lazy widget loading — real HTTP round trip through createMockWorkerS
       expect(dynamicRes.status).toBe(200);
       expect(dynamicRes.headers.get("content-type")).toBe("text/javascript");
       const dynamicSrc = await dynamicRes.text();
-      expect(dynamicSrc).toContain('querySelector("[data-dynamic-slot=\\"hello-panel\\"]")');
+      expect(dynamicSrc).toContain(
+        'querySelector("[data-dynamic-slot=\\"hello-panel\\"]")',
+      );
       expect(dynamicSrc).toContain("Dynamic panel content");
 
-      const dynamicMissingRes = await fetch(base + "/__streak/dynamic?id=does-not-exist");
+      const dynamicMissingRes = await fetch(
+        base + "/__streak/dynamic?id=does-not-exist",
+      );
       expect(dynamicMissingRes.status).toBe(404);
     } finally {
       server.stop(true);
@@ -160,16 +220,30 @@ describe("lazy widget loading — real HTTP round trip through createMockWorkerS
   });
 
   test("build/serve: a versioned (?v=) asset URL comes back Cache-Control: immutable; the same URL without ?v= doesn't", async () => {
-    const { pageManifests } = await buildPages({ registry, sitemap, outDir: OUT_DIR, render, inlineCss: true });
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap,
+      outDir: OUT_DIR,
+      render,
+      inlineCss: true,
+    });
     const home = pageManifests.find((m) => m.url === "/")!;
 
-    const server = createMockWorkerServer({ outDir: OUT_DIR, port: 0, liveReload: false });
+    const server = createMockWorkerServer({
+      outDir: OUT_DIR,
+      port: 0,
+      liveReload: false,
+    });
     try {
       const base = `http://localhost:${server.port}`;
 
-      const versionedRes = await fetch(`${base}/__streak/root.js?v=${home.version}`);
+      const versionedRes = await fetch(
+        `${base}/__streak/root.js?v=${home.version}`,
+      );
       expect(versionedRes.status).toBe(200);
-      expect(versionedRes.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+      expect(versionedRes.headers.get("cache-control")).toBe(
+        "public, max-age=31536000, immutable",
+      );
 
       const unversionedRes = await fetch(`${base}/__streak/root.js`);
       expect(unversionedRes.status).toBe(200);

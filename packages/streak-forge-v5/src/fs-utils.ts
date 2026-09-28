@@ -36,9 +36,16 @@ export function walkFiles(dir: string, extensions: string[]): string[] {
  * readers that pick "the" `.css` file of an entry (findOwnCssFile) or link
  * every CSS file (dev's discoverCssHrefs) pick up old ones too.
  */
-export function removeStaleHashedFiles(dir: string, stem: string, ext: string, keep: string | null): void {
+export function removeStaleHashedFiles(
+  dir: string,
+  stem: string,
+  ext: string,
+  keep: string | null,
+): void {
   if (!existsSync(dir)) return;
-  const pattern = new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f]+${ext.replace(".", "\\.")}$`);
+  const pattern = new RegExp(
+    `^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.[0-9a-f]+${ext.replace(".", "\\.")}$`,
+  );
   for (const f of readdirSync(dir)) {
     if (f !== keep && pattern.test(f)) rmSync(join(dir, f), { force: true });
   }

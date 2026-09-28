@@ -11,8 +11,8 @@ import {
   resolveShortAssetPath,
   LAZY_FRAGMENT_HREF,
   DYNAMIC_FRAGMENT_HREF,
-} from "../page-build.js";
-import type { PageManifest } from "../types.js";
+} from "../page-build";
+import type { PageManifest } from "../types";
 
 /**
  * Stands in for a real edge Worker/static host, serving straight out of a
@@ -51,7 +51,12 @@ function contentType(path: string): string {
 }
 
 function loadManifest(outDir: string, pageUrl: string): PageManifest | null {
-  const manifestPath = join(outDir, "pages", cleanUrlToFolder(pageUrl), "meta.json");
+  const manifestPath = join(
+    outDir,
+    "pages",
+    cleanUrlToFolder(pageUrl),
+    "meta.json",
+  );
   if (!existsSync(manifestPath)) return null;
   return JSON.parse(readFileSync(manifestPath, "utf-8")) as PageManifest;
 }
@@ -101,7 +106,10 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
           },
         });
         return new Response(stream, {
-          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+          headers: {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+          },
         });
       }
 
@@ -115,9 +123,14 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
         const pageUrl = url.searchParams.get("page") ?? "/";
         const id = url.searchParams.get("id");
         const manifest = id ? loadManifest(outDir, pageUrl) : null;
-        const fragment = manifest && id ? composeLazyWidgetFragment(manifest, id, outDir) : null;
+        const fragment =
+          manifest && id
+            ? composeLazyWidgetFragment(manifest, id, outDir)
+            : null;
         if (!fragment) return new Response("Not found", { status: 404 });
-        return new Response(fragment, { headers: { "content-type": "text/javascript" } });
+        return new Response(fragment, {
+          headers: { "content-type": "text/javascript" },
+        });
       }
 
       // One <Dynamic> block's fragment — fetched (as a real script, same
@@ -128,7 +141,9 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
         const id = url.searchParams.get("id");
         const fragment = id ? composeDynamicFragment(id, outDir) : null;
         if (!fragment) return new Response("Not found", { status: 404 });
-        return new Response(fragment, { headers: { "content-type": "text/javascript" } });
+        return new Response(fragment, {
+          headers: { "content-type": "text/javascript" },
+        });
       }
 
       // The SPA router's own fetch target (cli/spa-router.ts) — same
@@ -148,12 +163,18 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
       // A page's combined script bundle — "/common.js", "/page-2/common.js"
       // — has no file on disk at all; recompose it in memory from every
       // non-lazy widget's own already-persisted script.js fragment.
-      if (pathname === `/${PAGE_SCRIPT_FILENAME}` || pathname.endsWith(`/${PAGE_SCRIPT_FILENAME}`)) {
-        const pageUrl = pathname.slice(0, -PAGE_SCRIPT_FILENAME.length - 1) || "/";
+      if (
+        pathname === `/${PAGE_SCRIPT_FILENAME}` ||
+        pathname.endsWith(`/${PAGE_SCRIPT_FILENAME}`)
+      ) {
+        const pageUrl =
+          pathname.slice(0, -PAGE_SCRIPT_FILENAME.length - 1) || "/";
         const manifest = loadManifest(outDir, pageUrl);
         if (!manifest) return new Response("Not found", { status: 404 });
         const js = composeScriptBundle(manifest, outDir);
-        return new Response(js, { headers: { "content-type": "text/javascript" } });
+        return new Response(js, {
+          headers: { "content-type": "text/javascript" },
+        });
       }
 
       const isPageRoute = extname(pathname) === "";
@@ -168,10 +189,17 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
       // DIFFERENT `?v=`, never the same URL serving stale bytes.
       if (!isPageRoute) {
         const shortPath = resolveShortAssetPath(outDir, pathname);
-        const assetPath = join(outDir, shortPath ?? pathname.replace(/^\/+/, ""));
-        if (!existsSync(assetPath)) return new Response("Not found", { status: 404 });
-        const headers: Record<string, string> = { "content-type": contentType(assetPath) };
-        if (url.searchParams.has("v")) headers["cache-control"] = "public, max-age=31536000, immutable";
+        const assetPath = join(
+          outDir,
+          shortPath ?? pathname.replace(/^\/+/, ""),
+        );
+        if (!existsSync(assetPath))
+          return new Response("Not found", { status: 404 });
+        const headers: Record<string, string> = {
+          "content-type": contentType(assetPath),
+        };
+        if (url.searchParams.has("v"))
+          headers["cache-control"] = "public, max-age=31536000, immutable";
         return new Response(readFileSync(assetPath), { headers });
       }
 
@@ -184,7 +212,8 @@ export function createMockWorkerServer(options: MockWorkerServerOptions) {
       // request — fs reads + string splicing only, no render()/dynamic
       // import, and the result is never written back to disk.
       let html = composePageFromFiles(manifest, outDir);
-      if (liveReload) html = html.replace("</body>", `${LIVE_RELOAD_SCRIPT}</body>`);
+      if (liveReload)
+        html = html.replace("</body>", `${LIVE_RELOAD_SCRIPT}</body>`);
       return new Response(html, { headers: { "content-type": "text/html" } });
     },
   });

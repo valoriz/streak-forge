@@ -1,16 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { writeFileSync, rmSync, mkdirSync, readFileSync } from "node:fs";
-import { fullScan, incrementalRescan, saveRegistry, loadRegistry } from "../registry.js";
-import { walkFiles } from "../fs-utils.js";
+import {
+  fullScan,
+  incrementalRescan,
+  saveRegistry,
+  loadRegistry,
+} from "../registry";
+import { walkFiles } from "../fs-utils";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
 
 describe("registry.fullScan", () => {
   test("scans widgets + handlers dirs into one registry, both widget kinds present", () => {
-    const registry = fullScan(join(FIXTURES, "widgets"), join(FIXTURES, "handlers"));
+    const registry = fullScan(
+      join(FIXTURES, "widgets"),
+      join(FIXTURES, "handlers"),
+    );
 
-    expect(Object.keys(registry.widgets).sort()).toEqual(["HelloBanner", "StaticBadge"]);
+    expect(Object.keys(registry.widgets).sort()).toEqual([
+      "HelloBanner",
+      "StaticBadge",
+    ]);
     expect(registry.widgets.HelloBanner!.kind).toBe("handler");
     expect(registry.widgets.StaticBadge!.kind).toBe("static");
     expect(Object.keys(registry.handlers)).toEqual(["HelloBannerHandler"]);
@@ -32,7 +43,10 @@ describe("registry.incrementalRescan", () => {
       `export const Foo = widget({})((props: any) => "<div>v1</div>");\n`,
     );
 
-    const registry = fullScan(join(scratch, "widgets"), join(scratch, "handlers"));
+    const registry = fullScan(
+      join(scratch, "widgets"),
+      join(scratch, "handlers"),
+    );
     expect(registry.widgets.Foo!.sourceHash).toBeDefined();
     const originalHash = registry.widgets.Foo!.sourceHash;
 
@@ -68,7 +82,10 @@ describe("registry.incrementalRescan", () => {
       `import { LABEL } from "./shared";\nexport const Dependent = widget({})(() => LABEL);\n`,
     );
 
-    const registry = fullScan(join(scratch, "widgets"), join(scratch, "handlers"));
+    const registry = fullScan(
+      join(scratch, "widgets"),
+      join(scratch, "handlers"),
+    );
     const originalHash = registry.widgets.Dependent!.sourceHash;
 
     // Only shared.ts changes — Dependent.tsx's own text is untouched.
@@ -95,17 +112,26 @@ describe("registry.saveRegistry / loadRegistry — portable paths", () => {
 
   test("meta.json stores filePath relative to the project root; loading resolves it against the given root", () => {
     rmSync(OUT, { recursive: true, force: true });
-    const registry = fullScan(join(FIXTURES, "widgets"), join(FIXTURES, "handlers"));
+    const registry = fullScan(
+      join(FIXTURES, "widgets"),
+      join(FIXTURES, "handlers"),
+    );
     saveRegistry(registry, OUT, import.meta.dir);
 
-    const persisted = JSON.parse(readFileSync(join(OUT, "widgets/HelloBanner/meta.json"), "utf-8"));
+    const persisted = JSON.parse(
+      readFileSync(join(OUT, "widgets/HelloBanner/meta.json"), "utf-8"),
+    );
     expect(persisted.meta.filePath).toBe("fixtures/widgets/HelloBanner.tsx");
 
     // Same output folder, loaded as if copied under another project root.
     const loaded = loadRegistry(OUT, "/elsewhere/project")!;
     const widget = loaded.widgets.HelloBanner!;
-    expect(widget.filePath).toBe("/elsewhere/project/fixtures/widgets/HelloBanner.tsx");
-    expect(loaded.fileHashes[widget.filePath]).toBe(registry.fileHashes[registry.widgets.HelloBanner!.filePath]);
+    expect(widget.filePath).toBe(
+      "/elsewhere/project/fixtures/widgets/HelloBanner.tsx",
+    );
+    expect(loaded.fileHashes[widget.filePath]).toBe(
+      registry.fileHashes[registry.widgets.HelloBanner!.filePath],
+    );
     rmSync(OUT, { recursive: true, force: true });
   });
 });

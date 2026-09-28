@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runHandlerSandboxed, DEFAULT_SANDBOX_POLICY } from "../sandbox.js";
+import { runHandlerSandboxed, DEFAULT_SANDBOX_POLICY } from "../sandbox";
 
 // KNOWN PRE-EXISTING BUG (confirmed present in the original streak-boot repo
 // too, not introduced by this split): the last test below

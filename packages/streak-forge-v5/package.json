@@ -1,7 +1,7 @@
 {
   "name": "streak-forge",
   "version": "5.0.0-alpha.0",
-  "description": "Dev server + pre-build engine for Streak.js — annotation-based widget/handler registry, live-reload dev server, TSX->JS + per-widget CSS-purge pre-build. Produces .prebuild/ for streak-boot to build/serve.",
+  "description": "Dev server + pre-build engine for Streak.js \u2014 annotation-based widget/handler registry, live-reload dev server, TSX->JS + per-widget CSS-purge pre-build. Produces .prebuild/ for streak-boot to build/serve.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -18,6 +18,7 @@
     "streak-forge": "./bin/streak-forge.ts"
   },
   "scripts": {
+    "lint": "eslint src bin",
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

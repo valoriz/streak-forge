@@ -1,14 +1,14 @@
 import { existsSync, cpSync, watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";
-import { runPreBuild } from "../build.js";
-import { readSitemap, buildPages } from "../page-build.js";
-import type { Registry } from "../types.js";
-import { defaultPurgeEngine } from "./purge-engine.js";
-import { renderSample, renderInstance } from "./render.js";
-import { discoverCssHrefs } from "./discover-css-hrefs.js";
-import { writeDynamicClassesSafelist } from "./safelist.js";
-import { createMockWorkerServer } from "./mock-worker-server.js";
-import { projectPaths } from "./conventions.js";
+import { runPreBuild } from "../build";
+import { readSitemap, buildPages } from "../page-build";
+import type { Registry } from "../types";
+import { defaultPurgeEngine } from "./purge-engine";
+import { renderSample, renderInstance } from "./render";
+import { discoverCssHrefs } from "./discover-css-hrefs";
+import { writeDynamicClassesSafelist } from "./safelist";
+import { createMockWorkerServer } from "./mock-worker-server";
+import { projectPaths } from "./conventions";
 
 /**
  * `streak-forge dev` — watches widgets/handlers/components/shell/sitemap,
@@ -48,14 +48,18 @@ export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
     root: paths.root,
     widgetsDir: paths.widgetsDir,
     handlersDir: paths.handlersDir,
-    componentsDir: existsSync(paths.componentsDir) ? paths.componentsDir : undefined,
+    componentsDir: existsSync(paths.componentsDir)
+      ? paths.componentsDir
+      : undefined,
     shellDir: existsSync(paths.shellDir) ? paths.shellDir : undefined,
   });
 
   const prebuild = await runPreBuild({
     widgetsDir: paths.widgetsDir,
     handlersDir: paths.handlersDir,
-    componentsDir: existsSync(paths.componentsDir) ? paths.componentsDir : undefined,
+    componentsDir: existsSync(paths.componentsDir)
+      ? paths.componentsDir
+      : undefined,
     shellDir: existsSync(paths.shellDir) ? paths.shellDir : undefined,
     publicDir: existsSync(paths.publicDir) ? paths.publicDir : undefined,
     outDir: paths.devDir,
@@ -80,7 +84,8 @@ export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
   // flat, registry-colocated path too), which is what made this easy to
   // miss until a passthrough-only asset was actually requested.
   const publicDir = join(paths.devDir, "public");
-  if (existsSync(publicDir)) cpSync(publicDir, paths.devDir, { recursive: true });
+  if (existsSync(publicDir))
+    cpSync(publicDir, paths.devDir, { recursive: true });
 
   // dev: simple per-file <link> list (no combine/inline logic) — good
   // enough for a loop that rebuilds on every save anyway. See
@@ -98,7 +103,11 @@ export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
     handlerCachePerPage: true,
   });
 
-  return { lintErrors: prebuild.lintErrors, registry: prebuild.registry, cssHrefs };
+  return {
+    lintErrors: prebuild.lintErrors,
+    registry: prebuild.registry,
+    cssHrefs,
+  };
 }
 
 /**
@@ -109,16 +118,27 @@ export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
  * page's head and widgets share that result. Returns false for a url that
  * isn't in the sitemap (the server then 404s as usual).
  */
-export async function renderDevPage(root: string, build: Pick<DevBuildResult, "registry" | "cssHrefs">, pageUrl: string): Promise<boolean> {
+export async function renderDevPage(
+  root: string,
+  build: Pick<DevBuildResult, "registry" | "cssHrefs">,
+  pageUrl: string,
+): Promise<boolean> {
   const paths = projectPaths(root);
   const sitemap = readSitemap(paths.sitemapPath);
   const wanted = pageUrl.replace(/\/+$/, "") || "/";
-  const page = sitemap.pages.find((p) => (p.url.replace(/\/+$/, "") || "/") === wanted);
+  const page = sitemap.pages.find(
+    (p) => (p.url.replace(/\/+$/, "") || "/") === wanted,
+  );
   if (!page) return false;
-  const refs = new Set(page.widgets.flatMap((w) => ("ref" in w ? [w.ref] : [])));
+  const refs = new Set(
+    page.widgets.flatMap((w) => ("ref" in w ? [w.ref] : [])),
+  );
   await buildPages({
     registry: build.registry,
-    sitemap: { shared: (sitemap.shared ?? []).filter((s) => refs.has(s.id)), pages: [page] },
+    sitemap: {
+      shared: (sitemap.shared ?? []).filter((s) => refs.has(s.id)),
+      pages: [page],
+    },
     outDir: paths.devDir,
     render: renderInstance,
     scopeClasses: true,
@@ -154,30 +174,39 @@ export async function runDevCommand(root: string): Promise<void> {
     }
   }
 
-  function watchDir(dir: string, onChange: (reason: string) => void): FSWatcher | undefined {
+  function watchDir(
+    dir: string,
+    onChange: (reason: string) => void,
+  ): FSWatcher | undefined {
     if (!existsSync(dir)) return undefined;
     // recursive: true — Bun/Node's fs.watch supports it on Linux/macOS,
     // which is all this reference dev server targets.
-    return watch(dir, { recursive: true }, (_event, filename) => onChange(filename ?? dir));
+    return watch(dir, { recursive: true }, (_event, filename) =>
+      onChange(filename ?? dir),
+    );
   }
 
   async function waitForFullCss(timeoutMs = 10000): Promise<void> {
     if (existsSync(paths.fullCssPath)) return;
-    console.log(`[dev] waiting for ${paths.fullCssPath} (run your CSS watcher alongside this, e.g. "bun run css-build -- --watch")...`);
+    console.info(
+      `[dev] waiting for ${paths.fullCssPath} (run your CSS watcher alongside this, e.g. "bun run css-build -- --watch")...`,
+    );
     const start = Date.now();
     while (!existsSync(paths.fullCssPath)) {
       if (Date.now() - start > timeoutMs) {
-        console.warn(`[dev] ${paths.fullCssPath} still missing after ${timeoutMs}ms — starting anyway; the next file-change rebuild will retry.`);
+        console.warn(
+          `[dev] ${paths.fullCssPath} still missing after ${timeoutMs}ms — starting anyway; the next file-change rebuild will retry.`,
+        );
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
 
-  console.log("[dev] initial build...");
+  console.info("[dev] initial build...");
   await waitForFullCss();
   await build();
-  console.log("[dev] build complete.");
+  console.info("[dev] build complete.");
 
   // liveReload: true — dev-only. No HMR here on purpose: these are
   // server-rendered HTML fragments, not a client-side component tree with
@@ -200,7 +229,9 @@ export async function runDevCommand(root: string): Promise<void> {
       }
     },
   });
-  console.log(`[dev] serving ${paths.devDir} at ${server.url} (live-reload on)`);
+  console.info(
+    `[dev] serving ${paths.devDir} at ${server.url} (live-reload on)`,
+  );
 
   let rebuilding = false;
   let pending = false;
@@ -210,11 +241,13 @@ export async function runDevCommand(root: string): Promise<void> {
       return;
     }
     rebuilding = true;
-    console.log(`[dev] change detected (${reason}) — rebuilding...`);
+    console.info(`[dev] change detected (${reason}) — rebuilding...`);
     const start = performance.now();
     build()
       .then(() => {
-        console.log(`[dev] rebuild complete (${Math.round(performance.now() - start)}ms).`);
+        console.info(
+          `[dev] rebuild complete (${Math.round(performance.now() - start)}ms).`,
+        );
         server.notifyReload();
       })
       .catch((err) => console.error("[dev] rebuild failed:", err))
@@ -246,10 +279,14 @@ export async function runDevCommand(root: string): Promise<void> {
     watchDir(paths.publicDir, onFsEvent),
   ].filter((w): w is FSWatcher => w !== undefined);
   if (existsSync(paths.sitemapPath)) {
-    watchers.push(watch(paths.sitemapPath, () => onFsEvent("streak.sitemap.json")));
+    watchers.push(
+      watch(paths.sitemapPath, () => onFsEvent("streak.sitemap.json")),
+    );
   }
 
-  console.log("[dev] watching for changes (widgets/handlers/components/shell/public/streak.sitemap.json)...");
+  console.info(
+    "[dev] watching for changes (widgets/handlers/components/shell/public/streak.sitemap.json)...",
+  );
 
   process.on("SIGINT", () => {
     for (const w of watchers) w.close();

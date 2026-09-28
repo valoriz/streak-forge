@@ -1,5 +1,5 @@
-import type { RenderedFragment, WidgetMeta } from "./types.js";
-import { hashValue } from "./hash.js";
+import type { RenderedFragment, WidgetMeta } from "./types";
+import { hashValue } from "./hash";
 
 /**
  * Two-tier cache (answers open doubt #1 — composed page cached whole, not
@@ -62,7 +62,11 @@ export function pageCacheKey(url: string): string {
 }
 
 export interface FragmentRenderer {
-  (widget: WidgetMeta, instanceId: string, data: unknown): Promise<{ html: string; cssFile: string | null }>;
+  (
+    widget: WidgetMeta,
+    instanceId: string,
+    data: unknown,
+  ): Promise<{ html: string; cssFile: string | null }>;
 }
 
 export async function getOrRenderFragment(
@@ -109,13 +113,26 @@ export async function getOrComposePage(
   const htmlParts: string[] = [];
 
   for (const { widget, instanceId, data } of instances) {
-    const fragment = await getOrRenderFragment(fragmentStore, widget, instanceId, data, render);
+    const fragment = await getOrRenderFragment(
+      fragmentStore,
+      widget,
+      instanceId,
+      data,
+      render,
+    );
     htmlParts.push(fragment.html);
     if (fragment.cssFile) cssFiles.push(fragment.cssFile);
   }
 
-  const composed = joinLayout({ html: htmlParts.join("\n"), cssFiles: [...new Set(cssFiles)] });
-  pageStore.set(pageKey, { html: composed, cssFile: null, cachedAt: Date.now() });
+  const composed = joinLayout({
+    html: htmlParts.join("\n"),
+    cssFiles: [...new Set(cssFiles)],
+  });
+  pageStore.set(pageKey, {
+    html: composed,
+    cssFile: null,
+    cachedAt: Date.now(),
+  });
   return composed;
 }
 

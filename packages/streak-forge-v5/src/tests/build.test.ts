@@ -1,8 +1,8 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { rmSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { runPreBuild } from "../build.js";
-import { removeStaleHashedFiles } from "../fs-utils.js";
+import { runPreBuild } from "../build";
+import { removeStaleHashedFiles } from "../fs-utils";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
 const OUT_DIR = join(import.meta.dir, "build-scratch");
@@ -40,7 +40,9 @@ describe("build.runPreBuild scopeClasses collision check", () => {
         bundle: false,
         scopeClasses: true,
       }),
-    ).rejects.toThrow(/scopeClasses prefix collision.*"Type105".*"Type126"|scopeClasses prefix collision.*"Type126".*"Type105"/);
+    ).rejects.toThrow(
+      /scopeClasses prefix collision.*"Type105".*"Type126"|scopeClasses prefix collision.*"Type126".*"Type105"/,
+    );
   });
 
   test("does NOT throw when scopeClasses is false (default) — the check only runs when scoping is actually used", async () => {
@@ -54,7 +56,10 @@ describe("build.runPreBuild scopeClasses collision check", () => {
       strict: true,
       bundle: false,
     });
-    expect(Object.keys(result.registry.widgets).sort()).toEqual(["Type105", "Type126"]);
+    expect(Object.keys(result.registry.widgets).sort()).toEqual([
+      "Type105",
+      "Type126",
+    ]);
   });
 
   test("no collision, no throw — distinct widgets with distinct prefixes build fine with scopeClasses: true", async () => {
@@ -69,7 +74,10 @@ describe("build.runPreBuild scopeClasses collision check", () => {
       bundle: false,
       scopeClasses: true,
     });
-    expect(Object.keys(result.registry.widgets).sort()).toEqual(["HelloBanner", "StaticBadge"]);
+    expect(Object.keys(result.registry.widgets).sort()).toEqual([
+      "HelloBanner",
+      "StaticBadge",
+    ]);
   });
 });
 
@@ -77,10 +85,21 @@ describe("fs-utils.removeStaleHashedFiles", () => {
   test("deletes older hashed builds of the same file, keeps the current one and unrelated files", () => {
     const dir = join(OUT_DIR, "widgets/Card");
     mkdirSync(dir, { recursive: true });
-    for (const f of ["Card.aaa111.css", "Card.bbb222.css", "Card.common.ccc333.css", "Cardx.ddd444.css", "meta.json"]) {
+    for (const f of [
+      "Card.aaa111.css",
+      "Card.bbb222.css",
+      "Card.common.ccc333.css",
+      "Cardx.ddd444.css",
+      "meta.json",
+    ]) {
       writeFileSync(join(dir, f), "x");
     }
     removeStaleHashedFiles(dir, "Card", ".css", "Card.bbb222.css");
-    expect(readdirSync(dir).sort()).toEqual(["Card.bbb222.css", "Card.common.ccc333.css", "Cardx.ddd444.css", "meta.json"]);
+    expect(readdirSync(dir).sort()).toEqual([
+      "Card.bbb222.css",
+      "Card.common.ccc333.css",
+      "Cardx.ddd444.css",
+      "meta.json",
+    ]);
   });
 });

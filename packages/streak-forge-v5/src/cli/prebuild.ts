@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { runPreBuild } from "../build.js";
-import { defaultPurgeEngine } from "./purge-engine.js";
-import { renderSample } from "./render.js";
-import { projectPaths } from "./conventions.js";
+import { runPreBuild } from "../build";
+import { defaultPurgeEngine } from "./purge-engine";
+import { renderSample } from "./render";
+import { projectPaths } from "./conventions";
 
 /**
  * `streak-forge prebuild` — TSX->JS conversion + per-widget CSS purge only
@@ -40,7 +40,9 @@ export async function runPrebuildCommand(root: string): Promise<void> {
   const result = await runPreBuild({
     widgetsDir: paths.widgetsDir,
     handlersDir: paths.handlersDir,
-    componentsDir: existsSync(paths.componentsDir) ? paths.componentsDir : undefined,
+    componentsDir: existsSync(paths.componentsDir)
+      ? paths.componentsDir
+      : undefined,
     shellDir: existsSync(paths.shellDir) ? paths.shellDir : undefined,
     publicDir: existsSync(paths.publicDir) ? paths.publicDir : undefined,
     outDir: paths.prebuildDir,
@@ -53,13 +55,21 @@ export async function runPrebuildCommand(root: string): Promise<void> {
     minify,
   });
 
-  console.log(`Widgets registered: ${Object.keys(result.registry.widgets).join(", ")}`);
-  console.log(`Handlers registered: ${Object.keys(result.registry.handlers).join(", ")}`);
-  console.log(`Components registered: ${Object.keys(result.registry.components).join(", ")}`);
-  console.log(
+  console.info(
+    `Widgets registered: ${Object.keys(result.registry.widgets).join(", ")}`,
+  );
+  console.info(
+    `Handlers registered: ${Object.keys(result.registry.handlers).join(", ")}`,
+  );
+  console.info(
+    `Components registered: ${Object.keys(result.registry.components).join(", ")}`,
+  );
+  console.info(
     `Shell registered: html=${Object.keys(result.registry.html)}, head=${Object.keys(result.registry.head)}, body=${Object.keys(result.registry.body)}, rootLayout=${Object.keys(result.registry.rootLayout)}`,
   );
-  console.log(`CSS files generated: ${result.cssResults.filter((r) => r.fileName).length}`);
-  console.log(`JS bundles generated: ${result.bundleResults.length}`);
-  console.log(`Lint errors: ${result.lintErrors.length}`);
+  console.info(
+    `CSS files generated: ${result.cssResults.filter((r) => r.fileName).length}`,
+  );
+  console.info(`JS bundles generated: ${result.bundleResults.length}`);
+  console.info(`Lint errors: ${result.lintErrors.length}`);
 }

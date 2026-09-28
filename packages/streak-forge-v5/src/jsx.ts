@@ -14,7 +14,8 @@
 export const Fragment = Symbol.for("streak-forge.fragment");
 const SCRIPT_BLOCK = Symbol.for("streak-forge.script-block");
 
-export type VNodeChild = VNode | string | number | boolean | null | undefined | VNodeChild[];
+export type VNodeChild =
+  VNode | string | number | boolean | null | undefined | VNodeChild[];
 
 export interface VNode {
   // `any` here on purpose, not `Record<string, unknown>`: a specific
@@ -23,12 +24,19 @@ export interface VNode {
   // widget/handler/component generics — `any` keeps real component prop
   // types usable as JSX tags instead of forcing every component to widen
   // its own props to Record<string, unknown>.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type: string | ((props: any) => VNodeChild) | typeof Fragment | typeof SCRIPT_BLOCK;
+
+  type:
+    | string
+    | ((props: any) => VNodeChild)
+    | typeof Fragment
+    | typeof SCRIPT_BLOCK;
   props: Record<string, unknown>;
 }
 
-export function jsx(type: VNode["type"], props: Record<string, unknown> | null): VNode {
+export function jsx(
+  type: VNode["type"],
+  props: Record<string, unknown> | null,
+): VNode {
   return { type, props: props ?? {} };
 }
 export const jsxs = jsx;
@@ -49,12 +57,33 @@ export namespace JSX {
 }
 
 const VOID_TAGS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
 ]);
-const SKIP_PROPS = new Set(["children", "dangerouslySetInnerHTML", "key", "ref"]);
+const SKIP_PROPS = new Set([
+  "children",
+  "dangerouslySetInnerHTML",
+  "key",
+  "ref",
+]);
 
 function escapeText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 function escapeAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -64,12 +93,19 @@ function escapeAttr(value: string): string {
 // "</script" -> "<\/script" and "<!--" -> "<\!--" is byte-equivalent to a
 // JS engine but invisible to the HTML parser. Same as v4 (streak-forge-legacy).
 function escapeRawTextElementContent(text: string): string {
-  return text.replace(/<!--/g, "<\\!--").replace(/<\/(script|style)/gi, "<\\/$1");
+  return text
+    .replace(/<!--/g, "<\\!--")
+    .replace(/<\/(script|style)/gi, "<\\/$1");
 }
 // <script>/<style> children are literal text — never HTML-escaped
 // (`if (a < b)` must stay `<`, not `&lt;`).
 function rawTextChildren(children: unknown): string {
-  if (children === null || children === undefined || typeof children === "boolean") return "";
+  if (
+    children === null ||
+    children === undefined ||
+    typeof children === "boolean"
+  )
+    return "";
   if (Array.isArray(children)) return children.map(rawTextChildren).join("");
   return String(children);
 }
@@ -92,7 +128,8 @@ export function renderAttrs(props: Record<string, unknown>): string {
     if (SKIP_PROPS.has(key) || /^on[A-Z]/.test(key)) continue; // event handlers are client-only; use a Script block
     const value = props[key];
     if (value === null || value === undefined || value === false) continue;
-    const attrName = key === "className" ? "class" : key === "htmlFor" ? "for" : key;
+    const attrName =
+      key === "className" ? "class" : key === "htmlFor" ? "for" : key;
     if (value === true) {
       out += ` ${attrName}`;
       continue;
@@ -107,10 +144,12 @@ export function renderAttrs(props: Record<string, unknown>): string {
 }
 
 export async function renderToString(node: VNodeChild): Promise<string> {
-  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (node === null || node === undefined || typeof node === "boolean")
+    return "";
   if (typeof node === "string") return escapeText(node);
   if (typeof node === "number") return String(node);
-  if (Array.isArray(node)) return (await Promise.all(node.map(renderToString))).join("");
+  if (Array.isArray(node))
+    return (await Promise.all(node.map(renderToString))).join("");
 
   const { type, props } = node;
   // An unresolved placeholder (page-build.ts's composePage didn't run
@@ -138,7 +177,9 @@ export async function renderToString(node: VNodeChild): Promise<string> {
   const attrs = renderAttrs(props ?? {});
   if (VOID_TAGS.has(type)) return `<${type}${attrs}>`;
   const isRawText = type === "script" || type === "style";
-  const innerHtml = (props?.dangerouslySetInnerHTML as { __html?: unknown } | undefined)?.__html;
+  const innerHtml = (
+    props?.dangerouslySetInnerHTML as { __html?: unknown } | undefined
+  )?.__html;
   let inner: string;
   if (innerHtml !== null && innerHtml !== undefined) inner = String(innerHtml);
   else if (isRawText) inner = rawTextChildren(children);
@@ -166,7 +207,10 @@ export interface WidgetPlaceholderProps {
  * `renderToString` pass.
  */
 export function WidgetPlaceholder(props: WidgetPlaceholderProps): VNode {
-  return { type: WidgetPlaceholder, props: props as unknown as Record<string, unknown> };
+  return {
+    type: WidgetPlaceholder,
+    props: props as unknown as Record<string, unknown>,
+  };
 }
 
 export interface ComponentPlaceholderProps {
@@ -191,7 +235,10 @@ export interface ComponentPlaceholderProps {
  * `ComponentPlaceholder` (page-build.ts's buildPages enforces this).
  */
 export function ComponentPlaceholder(props: ComponentPlaceholderProps): VNode {
-  return { type: ComponentPlaceholder, props: props as unknown as Record<string, unknown> };
+  return {
+    type: ComponentPlaceholder,
+    props: props as unknown as Record<string, unknown>,
+  };
 }
 
 export interface DynamicProps {
@@ -225,19 +272,30 @@ export function Dynamic(props: DynamicProps): VNode {
 // streak-forge) must still be recognized by the other (streak-boot's
 // page build). Same global Symbol.for key in both copies.
 const KIND = Symbol.for("streak-forge.kind");
-(WidgetPlaceholder as unknown as Record<symbol, string>)[KIND] = "widget-placeholder";
-(ComponentPlaceholder as unknown as Record<symbol, string>)[KIND] = "component-placeholder";
+(WidgetPlaceholder as unknown as Record<symbol, string>)[KIND] =
+  "widget-placeholder";
+(ComponentPlaceholder as unknown as Record<symbol, string>)[KIND] =
+  "component-placeholder";
 (Dynamic as unknown as Record<symbol, string>)[KIND] = "dynamic";
 
 /** True if `type` is `marker` itself, or the other package's copy of it. */
-export function isKind(type: unknown, marker: (props: never) => VNode): boolean {
+export function isKind(
+  type: unknown,
+  marker: (props: never) => VNode,
+): boolean {
   if (type === marker) return true;
   if (typeof type !== "function") return false;
   const kind = (type as unknown as Record<symbol, string | undefined>)[KIND];
-  return kind !== undefined && kind === (marker as unknown as Record<symbol, string | undefined>)[KIND];
+  return (
+    kind !== undefined &&
+    kind === (marker as unknown as Record<symbol, string | undefined>)[KIND]
+  );
 }
 
-export type PlaceholderResolver = (id: string, type: string) => Promise<VNodeChild> | VNodeChild;
+export type PlaceholderResolver = (
+  id: string,
+  type: string,
+) => Promise<VNodeChild> | VNodeChild;
 /** Either `WidgetPlaceholder` or `ComponentPlaceholder` — the marker
  *  function identity `resolvePlaceholders`/`collectPlaceholderIds` match
  *  against, kept generic so the identical walk serves both the page level
@@ -257,11 +315,24 @@ export type PlaceholderMarker = (props: any) => VNode;
  * component's internals. A tree with no matching placeholders round-trips
  * unchanged.
  */
-export async function resolvePlaceholders(node: VNodeChild, marker: PlaceholderMarker, resolve: PlaceholderResolver): Promise<VNodeChild> {
-  if (node === null || node === undefined || typeof node === "boolean" || typeof node === "string" || typeof node === "number") {
+export async function resolvePlaceholders(
+  node: VNodeChild,
+  marker: PlaceholderMarker,
+  resolve: PlaceholderResolver,
+): Promise<VNodeChild> {
+  if (
+    node === null ||
+    node === undefined ||
+    typeof node === "boolean" ||
+    typeof node === "string" ||
+    typeof node === "number"
+  ) {
     return node;
   }
-  if (Array.isArray(node)) return Promise.all(node.map((child) => resolvePlaceholders(child, marker, resolve)));
+  if (Array.isArray(node))
+    return Promise.all(
+      node.map((child) => resolvePlaceholders(child, marker, resolve)),
+    );
 
   const { type, props } = node;
   if (isKind(type, marker)) {
@@ -271,10 +342,18 @@ export async function resolvePlaceholders(node: VNodeChild, marker: PlaceholderM
 
   const children = props?.children as VNodeChild;
   if (children === undefined) return node;
-  return { type, props: { ...props, children: await resolvePlaceholders(children, marker, resolve) } };
+  return {
+    type,
+    props: {
+      ...props,
+      children: await resolvePlaceholders(children, marker, resolve),
+    },
+  };
 }
 
-export interface ScriptProps<O extends Record<string, unknown> = Record<string, unknown>> {
+export interface ScriptProps<
+  O extends Record<string, unknown> = Record<string, unknown>,
+> {
   id: string;
   /** The ONLY bridge from server-rendered values to browser code — the
    *  function is serialized via source-text extraction (see below), so
@@ -301,8 +380,13 @@ export interface ScriptProps<O extends Record<string, unknown> = Record<string, 
  * source by default; a fork wanting that would need the same build-time
  * transform streak-forge uses.
  */
-export function Script<O extends Record<string, unknown> = Record<string, unknown>>(props: ScriptProps<O>): VNode {
-  const fnSource = typeof props.children === "function" ? props.children.toString() : String(props.children);
+export function Script<
+  O extends Record<string, unknown> = Record<string, unknown>,
+>(props: ScriptProps<O>): VNode {
+  const fnSource =
+    typeof props.children === "function"
+      ? props.children.toString()
+      : String(props.children);
   const optionsJson = JSON.stringify(props.options ?? {});
   return { type: SCRIPT_BLOCK, props: { id: props.id, fnSource, optionsJson } };
 }
@@ -328,8 +412,17 @@ export interface CollectedScript {
  * buildPages, same scope as that instance's own renderToString call for
  * its content.json.
  */
-export async function collectScripts(node: VNodeChild, out: CollectedScript[] = []): Promise<CollectedScript[]> {
-  if (node === null || node === undefined || typeof node === "boolean" || typeof node === "string" || typeof node === "number") {
+export async function collectScripts(
+  node: VNodeChild,
+  out: CollectedScript[] = [],
+): Promise<CollectedScript[]> {
+  if (
+    node === null ||
+    node === undefined ||
+    typeof node === "boolean" ||
+    typeof node === "string" ||
+    typeof node === "number"
+  ) {
     return out;
   }
   if (Array.isArray(node)) {
@@ -342,7 +435,12 @@ export async function collectScripts(node: VNodeChild, out: CollectedScript[] = 
     out.push(props as unknown as CollectedScript);
     return out;
   }
-  if (isKind(type, WidgetPlaceholder) || isKind(type, ComponentPlaceholder) || isKind(type, Dynamic)) return out; // nothing to descend into
+  if (
+    isKind(type, WidgetPlaceholder) ||
+    isKind(type, ComponentPlaceholder) ||
+    isKind(type, Dynamic)
+  )
+    return out; // nothing to descend into
   if (typeof type === "function") {
     await collectScripts(await type(props), out);
     return out;

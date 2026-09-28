@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import { runSafelistCommand } from "../src/cli/safelist-command.js";
-import { runPrebuildCommand } from "../src/cli/prebuild.js";
-import { runDevCommand } from "../src/cli/dev.js";
+import { runSafelistCommand } from "../src/cli/safelist-command";
+import { runPrebuildCommand } from "../src/cli/prebuild";
+import { runDevCommand } from "../src/cli/dev";
 
 const USAGE = `streak-forge <command>
 

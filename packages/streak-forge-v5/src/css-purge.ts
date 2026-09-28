@@ -1,9 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { hashOf } from "./hash.js";
-import { minifyCss } from "./minify.js";
-import { removeStaleHashedFiles } from "./fs-utils.js";
-import type { CssGenResult, WidgetMeta, ComponentMeta, ShellMeta } from "./types.js";
+import { hashOf } from "./hash";
+import { minifyCss } from "./minify";
+import { removeStaleHashedFiles } from "./fs-utils";
+import type {
+  CssGenResult,
+  WidgetMeta,
+  ComponentMeta,
+  ShellMeta,
+} from "./types";
 
 /**
  * streak-forge does NOT reimplement Tailwind's JIT scanner or PurgeCSS —
@@ -19,10 +24,16 @@ import type { CssGenResult, WidgetMeta, ComponentMeta, ShellMeta } from "./types
  * shows a Tailwind CLI-backed one). This keeps streak-forge decoupled from any
  * one CSS toolchain — swap Tailwind for UnoCSS, vanilla PurgeCSS, whatever.
  */
-export type PurgeEngine = (params: { html: string; fullCssPath: string }) => Promise<string>;
+export type PurgeEngine = (params: {
+  html: string;
+  fullCssPath: string;
+}) => Promise<string>;
 
 /** The purge-relevant subset WidgetMeta/ComponentMeta/ShellMeta all satisfy. */
-type PurgeableMeta = Pick<WidgetMeta | ComponentMeta | ShellMeta, "type" | "dynamicClasses" | "sourceHash">;
+type PurgeableMeta = Pick<
+  WidgetMeta | ComponentMeta | ShellMeta,
+  "type" | "dynamicClasses" | "sourceHash"
+>;
 
 const CACHE_DIR = ".streak-forge-cache/css";
 
@@ -52,7 +63,9 @@ export async function generateCommonCss(
   // <html>/<body> never appear in any widget's own sample, so their base
   // rules (Tailwind's `html, :host { line-height: 1.5; font-family: ... }`)
   // would survive nowhere — they belong to the page-wide common bundle.
-  const dummy = globalClasses.length ? `<div class="${globalClasses.join(" ")}"></div>` : "";
+  const dummy = globalClasses.length
+    ? `<div class="${globalClasses.join(" ")}"></div>`
+    : "";
   const html = `<html><body>${dummy}</body></html>`;
   return stripCssComments(await purgeEngine({ html, fullCssPath }));
 }
@@ -66,7 +79,9 @@ export async function generateCommonCss(
  * global everywhere, so every element carrying it matches the one shared
  * rule in the common bundle (see generateCommonCss).
  */
-export function collectGlobalClasses(entries: Iterable<{ dynamicClasses: string[] }>): Set<string> {
+export function collectGlobalClasses(
+  entries: Iterable<{ dynamicClasses: string[] }>,
+): Set<string> {
   const set = new Set<string>();
   for (const e of entries) for (const cls of e.dynamicClasses) set.add(cls);
   return set;
@@ -108,15 +123,21 @@ export function subtractCommonRules(css: string, commonCss: string): string {
   collectRuleKeys(commonTree, "", commonKeys);
   const remaining = filterRules(parseCssTree(css), "", commonKeys);
   if (remaining.length === 0) return "";
-  const layerOrder = commonTree.filter((n) => n.kind === "stmt" && n.text.startsWith("@layer"));
+  const layerOrder = commonTree.filter(
+    (n) => n.kind === "stmt" && n.text.startsWith("@layer"),
+  );
   return serializeCss([...layerOrder, ...remaining]);
 }
 
-type CssNode = { kind: "stmt"; text: string } | { kind: "rule"; text: string } | { kind: "group"; head: string; children: CssNode[] };
+type CssNode =
+  | { kind: "stmt"; text: string }
+  | { kind: "rule"; text: string }
+  | { kind: "group"; head: string; children: CssNode[] };
 
 /** At-rules whose body is a list of rules (recursed into for dedup); any
  *  other at-rule with a body (@font-face, @keyframes, @property) is one rule. */
-const GROUPING_AT_RULE = /^@(layer|media|supports|container|scope|starting-style)\b/;
+const GROUPING_AT_RULE =
+  /^@(layer|media|supports|container|scope|starting-style)\b/;
 
 function parseCssTree(css: string): CssNode[] {
   const nodes: CssNode[] = [];
@@ -139,7 +160,12 @@ function parseCssTree(css: string): CssNode[] {
       j++;
     }
     const head = css.slice(i, brace).trim();
-    if (GROUPING_AT_RULE.test(head)) nodes.push({ kind: "group", head, children: parseCssTree(css.slice(brace + 1, j - 1)) });
+    if (GROUPING_AT_RULE.test(head))
+      nodes.push({
+        kind: "group",
+        head,
+        children: parseCssTree(css.slice(brace + 1, j - 1)),
+      });
     else if (head) nodes.push({ kind: "rule", text: css.slice(i, j).trim() });
     i = j;
   }
@@ -150,18 +176,35 @@ function ruleKey(path: string, text: string): string {
   return `${path}\u0000${text.replace(/\s+/g, " ")}`;
 }
 
-function collectRuleKeys(nodes: CssNode[], path: string, keys: Set<string>): void {
+function collectRuleKeys(
+  nodes: CssNode[],
+  path: string,
+  keys: Set<string>,
+): void {
   for (const n of nodes) {
-    if (n.kind === "group") collectRuleKeys(n.children, `${path}${n.head.replace(/\s+/g, " ")}\u0001`, keys);
+    if (n.kind === "group")
+      collectRuleKeys(
+        n.children,
+        `${path}${n.head.replace(/\s+/g, " ")}\u0001`,
+        keys,
+      );
     else keys.add(ruleKey(path, n.text));
   }
 }
 
-function filterRules(nodes: CssNode[], path: string, commonKeys: Set<string>): CssNode[] {
+function filterRules(
+  nodes: CssNode[],
+  path: string,
+  commonKeys: Set<string>,
+): CssNode[] {
   const out: CssNode[] = [];
   for (const n of nodes) {
     if (n.kind === "group") {
-      const children = filterRules(n.children, `${path}${n.head.replace(/\s+/g, " ")}\u0001`, commonKeys);
+      const children = filterRules(
+        n.children,
+        `${path}${n.head.replace(/\s+/g, " ")}\u0001`,
+        commonKeys,
+      );
       if (children.length > 0) out.push({ ...n, children });
     } else if (n.kind === "rule" && !commonKeys.has(ruleKey(path, n.text))) {
       out.push(n);
@@ -172,7 +215,13 @@ function filterRules(nodes: CssNode[], path: string, commonKeys: Set<string>): C
 }
 
 function serializeCss(nodes: CssNode[]): string {
-  return nodes.map((n) => (n.kind === "group" ? `${n.head} {\n${serializeCss(n.children)}\n}` : n.text)).join("\n");
+  return nodes
+    .map((n) =>
+      n.kind === "group"
+        ? `${n.head} {\n${serializeCss(n.children)}\n}`
+        : n.text,
+    )
+    .join("\n");
 }
 
 export async function generateWidgetCss(
@@ -181,7 +230,13 @@ export async function generateWidgetCss(
   purgeEngine: PurgeEngine,
   fullCssPath: string,
   outDir: string,
-  kindDir: "widgets" | "components" | "html" | "head" | "body" | "rootLayout" = "widgets",
+  kindDir:
+    | "widgets"
+    | "components"
+    | "html"
+    | "head"
+    | "body"
+    | "rootLayout" = "widgets",
   /** Subtracted from the result via subtractCommonRules — see
    *  generateCommonCss. Omit to skip dedup (e.g. for the common bundle's
    *  own generation, which has nothing to subtract from itself). */
@@ -234,13 +289,17 @@ export async function generateWidgetCss(
       ? `<div class="${widget.dynamicClasses.join(" ")}"></div>`
       : "";
     const scanHtml = `${renderedSampleHtml}\n${dummyMarkup}`;
-    rawCss = stripCssComments(await purgeEngine({ html: scanHtml, fullCssPath }));
+    rawCss = stripCssComments(
+      await purgeEngine({ html: scanHtml, fullCssPath }),
+    );
     writeFileSync(cacheFile, rawCss);
     fromCache = false;
   }
 
-  let css = commonCss !== undefined ? subtractCommonRules(rawCss, commonCss) : rawCss;
-  if (scopeClasses) css = prefixCssClasses(css, shortScopePrefix(widget.type), globalClasses);
+  let css =
+    commonCss !== undefined ? subtractCommonRules(rawCss, commonCss) : rawCss;
+  if (scopeClasses)
+    css = prefixCssClasses(css, shortScopePrefix(widget.type), globalClasses);
   if (minify) css = minifyCss(css);
 
   // Nothing survived purge/dedup (e.g. a widget with no classNames of its
@@ -307,11 +366,19 @@ export function shortScopePrefix(type: string): string {
  * a class ATTRIBUTE value actually needs. Callers pass a prefix — usually
  * `shortScopePrefix(type)`, not the raw type name (see its own doc comment).
  */
-export function prefixCssClasses(css: string, prefix: string, globalClasses: ReadonlySet<string> = new Set()): string {
+export function prefixCssClasses(
+  css: string,
+  prefix: string,
+  globalClasses: ReadonlySet<string> = new Set(),
+): string {
   return rewriteSelectorsInBlocks(css, prefix, globalClasses);
 }
 
-function rewriteSelectorsInBlocks(css: string, prefix: string, globalClasses: ReadonlySet<string>): string {
+function rewriteSelectorsInBlocks(
+  css: string,
+  prefix: string,
+  globalClasses: ReadonlySet<string>,
+): string {
   let out = "";
   let i = 0;
   while (i < css.length) {
@@ -352,9 +419,15 @@ function rewriteSelectorsInBlocks(css: string, prefix: string, globalClasses: Re
 // `.hover\:bg-blue-500:hover` captures the class token but not `:hover`.
 const CLASS_TOKEN = /\.((?:\\.|[^\s.,>+~()[\]{}\\:])+)/g;
 
-function prefixSelectorText(selector: string, prefix: string, globalClasses: ReadonlySet<string>): string {
+function prefixSelectorText(
+  selector: string,
+  prefix: string,
+  globalClasses: ReadonlySet<string>,
+): string {
   return selector.replace(CLASS_TOKEN, (match, className: string) =>
-    globalClasses.has(unescapeCssIdent(className)) ? match : `.${prefix}__${className}`,
+    globalClasses.has(unescapeCssIdent(className))
+      ? match
+      : `.${prefix}__${className}`,
   );
 }
 
@@ -362,7 +435,9 @@ function prefixSelectorText(selector: string, prefix: string, globalClasses: Rea
  *  token back to the literal class name an HTML attribute uses. */
 function unescapeCssIdent(ident: string): string {
   return ident
-    .replace(/\\([0-9a-fA-F]{1,6}) ?/g, (_m, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/\\([0-9a-fA-F]{1,6}) ?/g, (_m, hex: string) =>
+      String.fromCodePoint(parseInt(hex, 16)),
+    )
     .replace(/\\(.)/g, "$1");
 }
 
@@ -376,7 +451,11 @@ function unescapeCssIdent(ident: string): string {
  * purge SCAN itself (generateWidgetCss above), which needs the real,
  * unprefixed class names for Tailwind/PurgeCSS to recognize at all.
  */
-export function prefixHtmlClasses(html: string, prefix: string, globalClasses: ReadonlySet<string> = new Set()): string {
+export function prefixHtmlClasses(
+  html: string,
+  prefix: string,
+  globalClasses: ReadonlySet<string> = new Set(),
+): string {
   return html.replace(/class="([^"]*)"/g, (_match, classList: string) => {
     const prefixed = classList
       .split(/\s+/)
@@ -395,7 +474,10 @@ export function prefixHtmlClasses(html: string, prefix: string, globalClasses: R
  * annotation. Anything else must be plain inline style, not a Tailwind
  * arbitrary-value class.
  */
-export function findUndeclaredBracketClasses(sourceText: string, declared: string[]): string[] {
+export function findUndeclaredBracketClasses(
+  sourceText: string,
+  declared: string[],
+): string[] {
   const bracketClassPattern = /[a-zA-Z-]+-\[[^\]]+\]/g;
   const found = sourceText.match(bracketClassPattern) ?? [];
   const declaredSet = new Set(declared);

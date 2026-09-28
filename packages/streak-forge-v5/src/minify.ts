@@ -12,17 +12,25 @@ import { join, relative } from "node:path";
  */
 export function minifyCss(css: string): string {
   const strings: string[] = [];
-  const protectedCss = css.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, (match) => {
-    strings.push(match);
-    return `\u0000${strings.length - 1}\u0000`;
-  });
+  const protectedCss = css.replace(
+    /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g,
+    (match) => {
+      strings.push(match);
+      return `\u0000${strings.length - 1}\u0000`;
+    },
+  );
   const minified = protectedCss
     .replace(/\/\*[\s\S]*?\*\//g, "") // comments
     .replace(/\s+/g, " ") // collapse whitespace runs
     .replace(/\s*([{}:;,])\s*/g, "$1") // no space around structural characters
     .replace(/;}/g, "}") // drop the now-redundant trailing ;
     .trim();
-  return minified.replace(/\u0000(\d+)\u0000/g, (_, i: string) => strings[Number(i)]!);
+  return minified.replace(
+    // \u0000 delimits the placeholders set aside above — never real input.
+    // eslint-disable-next-line no-control-regex
+    /\u0000(\d+)\u0000/g,
+    (_, i: string) => strings[Number(i)]!,
+  );
 }
 
 /**
@@ -34,16 +42,24 @@ export function minifyCss(css: string): string {
  */
 export function minifyHtml(html: string): string {
   const blocks: string[] = [];
-  const protectedHtml = html.replace(/<(pre|textarea|script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
-    blocks.push(match);
-    return `\u0000${blocks.length - 1}\u0000`;
-  });
+  const protectedHtml = html.replace(
+    /<(pre|textarea|script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    (match) => {
+      blocks.push(match);
+      return `\u0000${blocks.length - 1}\u0000`;
+    },
+  );
   const minified = protectedHtml
     .replace(/<!--[\s\S]*?-->/g, "") // comments
     .replace(/>\s+</g, "><") // whitespace BETWEEN tags
     .replace(/\s+/g, " ") // any remaining whitespace runs (e.g. leading/trailing text)
     .trim();
-  return minified.replace(/\u0000(\d+)\u0000/g, (_, i: string) => blocks[Number(i)]!);
+  return minified.replace(
+    // \u0000 delimits the placeholders set aside above — never real input.
+    // eslint-disable-next-line no-control-regex
+    /\u0000(\d+)\u0000/g,
+    (_, i: string) => blocks[Number(i)]!,
+  );
 }
 
 /**
@@ -73,21 +89,34 @@ export function minifyHtml(html: string): string {
  * than relying on the default resolution) — verified 1:1, no gaps, no
  * extras, against a real multi-directory file set.
  */
-export async function minifyJsFiles(filePaths: string[], root: string): Promise<void> {
+export async function minifyJsFiles(
+  filePaths: string[],
+  root: string,
+): Promise<void> {
   if (filePaths.length === 0) return;
-  const result = await Bun.build({ entrypoints: filePaths, minify: true, root });
+  const result = await Bun.build({
+    entrypoints: filePaths,
+    minify: true,
+    root,
+  });
   if (!result.success) {
-    throw new Error(`minifyJsFiles: Bun.build failed — ${result.logs.map((l) => l.message).join("; ")}`);
+    throw new Error(
+      `minifyJsFiles: Bun.build failed — ${result.logs.map((l) => l.message).join("; ")}`,
+    );
   }
   const byRelativePath = new Map(filePaths.map((p) => [relative(root, p), p]));
   const entryOutputs = result.outputs.filter((o) => o.kind === "entry-point");
   if (entryOutputs.length !== filePaths.length) {
-    throw new Error(`minifyJsFiles: expected ${filePaths.length} entry-point output(s), got ${entryOutputs.length}`);
+    throw new Error(
+      `minifyJsFiles: expected ${filePaths.length} entry-point output(s), got ${entryOutputs.length}`,
+    );
   }
   for (const output of entryOutputs) {
     const sourcePath = byRelativePath.get(output.path);
     if (!sourcePath) {
-      throw new Error(`minifyJsFiles: could not map minified output "${output.path}" back to a source file`);
+      throw new Error(
+        `minifyJsFiles: could not map minified output "${output.path}" back to a source file`,
+      );
     }
     writeFileSync(sourcePath, await output.text());
   }
@@ -98,7 +127,10 @@ export async function minifyJsFiles(filePaths: string[], root: string): Promise<
  *  script.js/bundle.js a buildPages run wrote, for one batched
  *  minifyJsFiles call at the end (see page-build.ts's own call site)
  *  instead of a separate Bun.build call per file. */
-export function findFilesByBasename(dir: string, basenames: Set<string>): string[] {
+export function findFilesByBasename(
+  dir: string,
+  basenames: Set<string>,
+): string[] {
   const found: string[] = [];
   const walk = (current: string): void => {
     for (const entry of readdirSync(current)) {

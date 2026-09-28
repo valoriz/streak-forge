@@ -6,8 +6,8 @@ import {
   getOrComposePage,
   invalidatePage,
   invalidateFragment,
-} from "../html-cache.js";
-import type { WidgetMeta } from "../types.js";
+} from "../html-cache";
+import type { WidgetMeta } from "../types";
 
 const staticWidget: WidgetMeta = {
   exportName: "StaticBadge",
@@ -59,8 +59,20 @@ describe("html-cache.getOrRenderFragment", () => {
       return { html: "<div>x</div>", cssFile: null };
     };
 
-    await getOrRenderFragment(store, staticWidget, "i1", { label: "New" }, render);
-    await getOrRenderFragment(store, staticWidget, "i1", { label: "New" }, render);
+    await getOrRenderFragment(
+      store,
+      staticWidget,
+      "i1",
+      { label: "New" },
+      render,
+    );
+    await getOrRenderFragment(
+      store,
+      staticWidget,
+      "i1",
+      { label: "New" },
+      render,
+    );
 
     expect(renders).toBe(1);
   });
@@ -77,7 +89,13 @@ describe("html-cache two-tier page composition (open doubt #1)", () => {
       renderCalls++;
       return { html: `<w>${widget.type}</w>`, cssFile: `${widget.type}.css` };
     };
-    const joinLayout = ({ html, cssFiles }: { html: string; cssFiles: string[] }) => {
+    const joinLayout = ({
+      html,
+      cssFiles,
+    }: {
+      html: string;
+      cssFiles: string[];
+    }) => {
       joinCalls++;
       return `<page css="${cssFiles.join(",")}">${html}</page>`;
     };
@@ -87,8 +105,22 @@ describe("html-cache two-tier page composition (open doubt #1)", () => {
       { widget: handlerWidget, instanceId: "product-1", data: { price: 10 } },
     ];
 
-    const first = await getOrComposePage(pageStore, fragmentStore, "/product/1", instances, render, joinLayout);
-    const second = await getOrComposePage(pageStore, fragmentStore, "/product/1", instances, render, joinLayout);
+    const first = await getOrComposePage(
+      pageStore,
+      fragmentStore,
+      "/product/1",
+      instances,
+      render,
+      joinLayout,
+    );
+    const second = await getOrComposePage(
+      pageStore,
+      fragmentStore,
+      "/product/1",
+      instances,
+      render,
+      joinLayout,
+    );
 
     expect(first).toBe(second);
     expect(renderCalls).toBe(2); // rendered once per widget on the FIRST request only
@@ -98,12 +130,26 @@ describe("html-cache two-tier page composition (open doubt #1)", () => {
   test("invalidating one fragment does not invalidate the page cache automatically", async () => {
     const pageStore = new MemoryCacheStore();
     const fragmentStore = new MemoryCacheStore();
-    const render = async (widget: WidgetMeta) => ({ html: `<w>${widget.type}</w>`, cssFile: null });
+    const render = async (widget: WidgetMeta) => ({
+      html: `<w>${widget.type}</w>`,
+      cssFile: null,
+    });
     const joinLayout = ({ html }: { html: string }) => `<page>${html}</page>`;
-    const instances = [{ widget: handlerWidget, instanceId: "product-1", data: { price: 10 } }];
+    const instances = [
+      { widget: handlerWidget, instanceId: "product-1", data: { price: 10 } },
+    ];
 
-    await getOrComposePage(pageStore, fragmentStore, "/p", instances, render, joinLayout);
-    invalidateFragment(fragmentStore, handlerWidget, "product-1", { price: 10 });
+    await getOrComposePage(
+      pageStore,
+      fragmentStore,
+      "/p",
+      instances,
+      render,
+      joinLayout,
+    );
+    invalidateFragment(fragmentStore, handlerWidget, "product-1", {
+      price: 10,
+    });
 
     // Page cache still holds the stale composed page — caller must explicitly
     // invalidatePage() too. This is intentional: fragment invalidation and

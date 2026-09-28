@@ -1,7 +1,7 @@
 import chokidar from "chokidar";
-import type { Registry } from "./types.js";
-import { incrementalRescan } from "./registry.js";
-import { walkFiles } from "./fs-utils.js";
+import type { Registry } from "./types";
+import { incrementalRescan } from "./registry";
+import { walkFiles } from "./fs-utils";
 
 export interface DevWatchOptions {
   widgetsDir: string;
@@ -20,7 +20,10 @@ export interface DevWatchOptions {
  * function exists to plug streak-forge's registry into whatever watch
  * loop the host dev server already runs, not to replace it.
  */
-export function watchForChanges(registry: Registry, options: DevWatchOptions): () => void {
+export function watchForChanges(
+  registry: Registry,
+  options: DevWatchOptions,
+): () => void {
   const { widgetsDir, handlersDir, onRescan } = options;
   const watchedGlobs = [widgetsDir, handlersDir];
 

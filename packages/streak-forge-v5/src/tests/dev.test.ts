@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { runDevBuildOnce, renderDevPage } from "../cli/dev.js";
+import { runDevBuildOnce, renderDevPage } from "../cli/dev";
 
 const ROOT = join(import.meta.dir, "fixtures/dev-project");
 const DEV_DIR = join(ROOT, ".dev");

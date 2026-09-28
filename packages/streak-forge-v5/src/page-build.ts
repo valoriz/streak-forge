@@ -1,4 +1,12 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  readdirSync,
+  statSync,
+  rmSync,
+} from "node:fs";
 import { join, basename } from "node:path";
 import {
   renderToString,
@@ -13,15 +21,19 @@ import {
   type CollectedScript,
   type PlaceholderMarker,
   type DynamicProps,
-} from "./jsx.js";
-import { collectGlobalClasses, prefixHtmlClasses, shortScopePrefix } from "./css-purge.js";
-import { resetHandlerCache } from "./hoc.js";
-import { hashOf } from "./hash.js";
-import { minifyHtml, minifyJsFiles, findFilesByBasename } from "./minify.js";
-import { ROOT_SCRIPT_JS } from "./cli/root-script.js";
-import { APP_SCRIPT_JS } from "./cli/app-script.js";
-import { ASSET_WORKER_JS } from "./cli/asset-worker.js";
-import { SPA_ROUTER_JS } from "./cli/spa-router.js";
+} from "./jsx";
+import {
+  collectGlobalClasses,
+  prefixHtmlClasses,
+  shortScopePrefix,
+} from "./css-purge";
+import { resetHandlerCache } from "./hoc";
+import { hashOf } from "./hash";
+import { minifyHtml, minifyJsFiles, findFilesByBasename } from "./minify";
+import { ROOT_SCRIPT_JS } from "./cli/root-script";
+import { APP_SCRIPT_JS } from "./cli/app-script";
+import { ASSET_WORKER_JS } from "./cli/asset-worker";
+import { SPA_ROUTER_JS } from "./cli/spa-router";
 import type {
   Registry,
   StreakBootSitemap,
@@ -35,7 +47,7 @@ import type {
   ShellMeta,
   WidgetMeta,
   ComponentMeta,
-} from "./types.js";
+} from "./types";
 
 /**
  * Page build: streak.sitemap.json -> per-page manifest + a set of PERSISTED
@@ -236,7 +248,11 @@ const CRITICAL_CSS_PLACEHOLDER = "<!--streak-critical-css-->";
  *  works reliably once bundled, never executes arbitrary code. */
 export function readSitemap(filePath: string): StreakBootSitemap {
   const raw = JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
-  if (!raw || typeof raw !== "object" || !Array.isArray((raw as StreakBootSitemap).pages)) {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    !Array.isArray((raw as StreakBootSitemap).pages)
+  ) {
     throw new Error(`${filePath}: expected an object with a "pages" array`);
   }
   return raw as StreakBootSitemap;
@@ -325,7 +341,10 @@ export function cleanUrlToFolder(url: string): string {
  * caching/versioning concern (kept deliberately separate — see this
  * feature's own scoping).
  */
-export function resolveShortAssetPath(outDir: string, pathname: string): string | null {
+export function resolveShortAssetPath(
+  outDir: string,
+  pathname: string,
+): string | null {
   const parts = pathname.split("/").filter(Boolean);
   if (parts.length < 2) return null;
   const [prefix, id, ...rest] = parts;
@@ -333,7 +352,10 @@ export function resolveShortAssetPath(outDir: string, pathname: string): string 
   if (prefix === SHORT_WIDGET_DIR) {
     const wIndexPath = join(outDir, W_INDEX_FILE);
     if (!existsSync(wIndexPath)) return null;
-    const wIndex = JSON.parse(readFileSync(wIndexPath, "utf-8")) as Record<string, string>;
+    const wIndex = JSON.parse(readFileSync(wIndexPath, "utf-8")) as Record<
+      string,
+      string
+    >;
     const realPath = wIndex[id!];
     if (!realPath) return null;
     return join(realPath, ...rest);
@@ -351,19 +373,32 @@ export function cleanUrlToPublicPath(url: string): string {
   return url.replace(/^\/+|\/+$/g, "");
 }
 
-function lookupWidget(registry: Registry, type: string, context: string): WidgetMeta {
+function lookupWidget(
+  registry: Registry,
+  type: string,
+  context: string,
+): WidgetMeta {
   const meta = registry.widgets[type];
-  if (!meta) throw new Error(`${context}: no registered widget with type "${type}"`);
+  if (!meta)
+    throw new Error(`${context}: no registered widget with type "${type}"`);
   return meta;
 }
 
-function lookupComponent(registry: Registry, type: string, context: string): ComponentMeta {
+function lookupComponent(
+  registry: Registry,
+  type: string,
+  context: string,
+): ComponentMeta {
   const meta = registry.components[type];
-  if (!meta) throw new Error(`${context}: no registered component with type "${type}"`);
+  if (!meta)
+    throw new Error(`${context}: no registered component with type "${type}"`);
   return meta;
 }
 
-function resolveRootLayoutType(registry: Registry, page: SitemapPageEntry): ShellMeta {
+function resolveRootLayoutType(
+  registry: Registry,
+  page: SitemapPageEntry,
+): ShellMeta {
   const types = Object.keys(registry.rootLayout);
   const wanted = page.rootLayout ?? (types.length === 1 ? types[0] : undefined);
   if (!wanted) {
@@ -372,7 +407,10 @@ function resolveRootLayoutType(registry: Registry, page: SitemapPageEntry): Shel
     );
   }
   const meta = registry.rootLayout[wanted];
-  if (!meta) throw new Error(`page "${page.url}": rootLayout "${wanted}" is not a registered rootLayout() entry`);
+  if (!meta)
+    throw new Error(
+      `page "${page.url}": rootLayout "${wanted}" is not a registered rootLayout() entry`,
+    );
   return meta;
 }
 
@@ -443,7 +481,10 @@ function parseTagAttrs(attrsText: string): Record<string, string> {
   const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrsText))) {
-    attrs[m[1]!] = m[2]!.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    attrs[m[1]!] = m[2]!
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&");
   }
   return attrs;
 }
@@ -469,8 +510,16 @@ function placeholderMarkerHtml(id: string, type: string): string {
  *  URL is immutable-cacheable — same value for every asset THIS page
  *  stamps, changes together whenever this page rebuilds with different
  *  content. */
-function lazyPlaceholderMarkerHtml(id: string, type: string, widgetPath: string, shared: boolean, pageVersion: string): string {
-  const path = shared ? `/${SHORT_WIDGET_DIR}/${basename(widgetPath)}/${CONTENT_FILE}` : `/${widgetPath}/${CONTENT_FILE}`;
+function lazyPlaceholderMarkerHtml(
+  id: string,
+  type: string,
+  widgetPath: string,
+  shared: boolean,
+  pageVersion: string,
+): string {
+  const path = shared
+    ? `/${SHORT_WIDGET_DIR}/${basename(widgetPath)}/${CONTENT_FILE}`
+    : `/${widgetPath}/${CONTENT_FILE}`;
   const src = `${path}?v=${pageVersion}`;
   return `<div${renderAttrs({ [WIDGET_PLACEHOLDER_ATTR]: id, [WIDGET_TYPE_ATTR]: type, [WIDGET_SRC_ATTR]: src })}></div>`;
 }
@@ -490,8 +539,13 @@ function componentPlaceholderMarkerHtml(id: string, type: string): string {
  *  actually contains (every placeholder must have a matching entry, and
  *  vice versa). Mirrors resolvePlaceholders' walk but collects instead of
  *  replacing. */
-function collectPlaceholderIds(node: VNodeChild, marker: PlaceholderMarker, out: Set<string> = new Set()): Set<string> {
-  if (node === null || node === undefined || typeof node !== "object") return out;
+function collectPlaceholderIds(
+  node: VNodeChild,
+  marker: PlaceholderMarker,
+  out: Set<string> = new Set(),
+): Set<string> {
+  if (node === null || node === undefined || typeof node !== "object")
+    return out;
   if (Array.isArray(node)) {
     for (const child of node) collectPlaceholderIds(child, marker, out);
     return out;
@@ -521,7 +575,12 @@ function collectPlaceholderIds(node: VNodeChild, marker: PlaceholderMarker, out:
  * options, exactly matching streak-distiller's actual output shape.
  */
 function buildScriptBundle(scripts: CollectedScript[]): string {
-  return scripts.map((s) => `(function(){var __fn=(${s.fnSource});__fn(window,${s.optionsJson});})();`).join("\n");
+  return scripts
+    .map(
+      (s) =>
+        `(function(){var __fn=(${s.fnSource});__fn(window,${s.optionsJson});})();`,
+    )
+    .join("\n");
 }
 
 /** Class scoping for one build: false = off, or the project's global
@@ -530,7 +589,9 @@ function buildScriptBundle(scripts: CollectedScript[]): string {
 type Scope = false | { globalClasses: ReadonlySet<string> };
 
 function scopeHtml(html: string, type: string, scope: Scope): string {
-  return scope ? prefixHtmlClasses(html, shortScopePrefix(type), scope.globalClasses) : html;
+  return scope
+    ? prefixHtmlClasses(html, shortScopePrefix(type), scope.globalClasses)
+    : html;
 }
 
 /**
@@ -547,7 +608,9 @@ async function renderHeadDoc(
   inlineCss: boolean,
   cssHrefs: string[],
 ): Promise<string> {
-  const headVNode = headMeta ? ((await render(headMeta, props)) as VNodeChild) : null;
+  const headVNode = headMeta
+    ? ((await render(headMeta, props)) as VNodeChild)
+    : null;
   let headContentHtml = await renderToString(headVNode);
   // Minified BEFORE concatenating cssLinksHtml, never after — cssLinksHtml
   // is CRITICAL_CSS_PLACEHOLDER (an HTML COMMENT) when inlineCss: true,
@@ -562,7 +625,9 @@ async function renderHeadDoc(
   // inlineCss: false (dev) — restores the simple old behavior: every
   // discovered CSS file gets its own <link>, baked in once, same for every
   // page — good enough for a loop that rebuilds on every save anyway.
-  const cssLinksHtml = inlineCss ? CRITICAL_CSS_PLACEHOLDER : cssHrefs.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
+  const cssLinksHtml = inlineCss
+    ? CRITICAL_CSS_PLACEHOLDER
+    : cssHrefs.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
   let headDoc = `<head>${headContentHtml}${cssLinksHtml}</head>`;
   headDoc = scopeHtml(headDoc, shellType, scopeClasses);
   return headDoc;
@@ -589,7 +654,9 @@ async function writeShellFiles(
   const bodyMeta = registry.body[shellType];
   const rootLayoutMeta = registry.rootLayout[shellType];
 
-  const htmlAttrs = htmlMeta ? ((await render(htmlMeta, {})) as Record<string, unknown>) : {};
+  const htmlAttrs = htmlMeta
+    ? ((await render(htmlMeta, {})) as Record<string, unknown>)
+    : {};
   const htmlDir = join(outDir, "html", shellType);
   mkdirSync(htmlDir, { recursive: true });
   let htmlDoc = `<html${renderAttrs(htmlAttrs)}><head></head><body></body></html>`;
@@ -597,28 +664,53 @@ async function writeShellFiles(
   if (inlineCss) htmlDoc = minifyHtml(htmlDoc);
   writeFileSync(join(htmlDir, HTML_FILE), htmlDoc);
   const htmlTagMatch = htmlDoc.match(/^<html([^>]*)>/);
-  writeFileSync(join(htmlDir, ATTRS_FILE), JSON.stringify(htmlTagMatch ? parseTagAttrs(htmlTagMatch[1]!) : {}));
+  writeFileSync(
+    join(htmlDir, ATTRS_FILE),
+    JSON.stringify(htmlTagMatch ? parseTagAttrs(htmlTagMatch[1]!) : {}),
+  );
 
   const headDir = join(outDir, "head", shellType);
   mkdirSync(headDir, { recursive: true });
-  writeFileSync(join(headDir, HTML_FILE), await renderHeadDoc(headMeta, {}, shellType, render, scopeClasses, inlineCss, cssHrefs));
+  writeFileSync(
+    join(headDir, HTML_FILE),
+    await renderHeadDoc(
+      headMeta,
+      {},
+      shellType,
+      render,
+      scopeClasses,
+      inlineCss,
+      cssHrefs,
+    ),
+  );
 
-  const bodyAttrs = bodyMeta ? ((await render(bodyMeta, {})) as Record<string, unknown>) : {};
-  const layoutVNode = rootLayoutMeta ? ((await render(rootLayoutMeta, {})) as VNodeChild) : null;
+  const bodyAttrs = bodyMeta
+    ? ((await render(bodyMeta, {})) as Record<string, unknown>)
+    : {};
+  const layoutVNode = rootLayoutMeta
+    ? ((await render(rootLayoutMeta, {})) as VNodeChild)
+    : null;
   // Components can only be used inside a widget, never directly inside a
   // rootLayout — catch the mistake early with a clear message rather than
   // silently rendering an empty slot (renderToString's ComponentPlaceholder
   // guard would otherwise just swallow it).
-  const strayComponentIds = collectPlaceholderIds(layoutVNode, ComponentPlaceholder);
+  const strayComponentIds = collectPlaceholderIds(
+    layoutVNode,
+    ComponentPlaceholder,
+  );
   if (strayComponentIds.size > 0) {
     throw new Error(
       `rootLayout "${shellType}": <ComponentPlaceholder> can only be used inside a widget, not directly in a rootLayout (found: ${[...strayComponentIds].join(", ")})`,
     );
   }
-  const markedVNode = await resolvePlaceholders(layoutVNode, WidgetPlaceholder, (id, type) => ({
-    type: "div",
-    props: { [WIDGET_PLACEHOLDER_ATTR]: id, [WIDGET_TYPE_ATTR]: type },
-  }));
+  const markedVNode = await resolvePlaceholders(
+    layoutVNode,
+    WidgetPlaceholder,
+    (id, type) => ({
+      type: "div",
+      props: { [WIDGET_PLACEHOLDER_ATTR]: id, [WIDGET_TYPE_ATTR]: type },
+    }),
+  );
   let bodyContentHtml = await renderToString(markedVNode);
   // Safe to minify: WIDGET_PLACEHOLDER_ATTR markers are plain <div>
   // elements with no internal whitespace (built fresh, byte-identical,
@@ -633,7 +725,10 @@ async function writeShellFiles(
   bodyDoc = scopeHtml(bodyDoc, shellType, scopeClasses);
   writeFileSync(join(bodyDir, HTML_FILE), bodyDoc);
   const bodyTagMatch = bodyDoc.match(/^<body([^>]*)>/);
-  writeFileSync(join(bodyDir, ATTRS_FILE), JSON.stringify(bodyTagMatch ? parseTagAttrs(bodyTagMatch[1]!) : {}));
+  writeFileSync(
+    join(bodyDir, ATTRS_FILE),
+    JSON.stringify(bodyTagMatch ? parseTagAttrs(bodyTagMatch[1]!) : {}),
+  );
 }
 
 /**
@@ -658,9 +753,21 @@ async function writeShellFiles(
  * (no real example nests one inside the other), so order between them
  * doesn't matter; this just runs first for a simpler mental model.
  */
-async function extractDynamicBlocks(node: VNodeChild, outDir: string, ownerType: string, scopeClasses: Scope, inlineCss: boolean): Promise<VNodeChild> {
-  if (node === null || node === undefined || typeof node !== "object") return node;
-  if (Array.isArray(node)) return Promise.all(node.map((child) => extractDynamicBlocks(child, outDir, ownerType, scopeClasses, inlineCss)));
+async function extractDynamicBlocks(
+  node: VNodeChild,
+  outDir: string,
+  ownerType: string,
+  scopeClasses: Scope,
+  inlineCss: boolean,
+): Promise<VNodeChild> {
+  if (node === null || node === undefined || typeof node !== "object")
+    return node;
+  if (Array.isArray(node))
+    return Promise.all(
+      node.map((child) =>
+        extractDynamicBlocks(child, outDir, ownerType, scopeClasses, inlineCss),
+      ),
+    );
 
   if (isKind(node.type, Dynamic)) {
     const { id, children } = node.props as unknown as DynamicProps;
@@ -687,7 +794,8 @@ async function extractDynamicBlocks(node: VNodeChild, outDir: string, ownerType:
     // its OWNING widget's own persisted HTML, not a per-request page-shell
     // fragment (contrast WIDGET_SRC_ATTR, stamped later, per request).
     const props: Record<string, string> = { [DYNAMIC_SLOT_ATTR]: id };
-    if (inlineCss) props[DYNAMIC_SRC_ATTR] = `/${SHORT_DYNAMIC_DIR}/${id}/${CONTENT_FILE}`;
+    if (inlineCss)
+      props[DYNAMIC_SRC_ATTR] = `/${SHORT_DYNAMIC_DIR}/${id}/${CONTENT_FILE}`;
     return { type: "div", props };
   }
 
@@ -699,7 +807,19 @@ async function extractDynamicBlocks(node: VNodeChild, outDir: string, ownerType:
   // Dynamic usages this session ported follow that same shape.
   const children = node.props?.children as VNodeChild;
   if (children === undefined) return node;
-  return { type: node.type, props: { ...node.props, children: await extractDynamicBlocks(children, outDir, ownerType, scopeClasses, inlineCss) } };
+  return {
+    type: node.type,
+    props: {
+      ...node.props,
+      children: await extractDynamicBlocks(
+        children,
+        outDir,
+        ownerType,
+        scopeClasses,
+        inlineCss,
+      ),
+    },
+  };
 }
 
 /**
@@ -726,27 +846,45 @@ async function buildWidgetComponents(
   context: string,
   scopeClasses: Scope,
   inlineCss: boolean,
-): Promise<{ markedVNode: VNodeChild; components: WidgetComponentManifestEntry[] }> {
+): Promise<{
+  markedVNode: VNodeChild;
+  components: WidgetComponentManifestEntry[];
+}> {
   const strayWidgetIds = collectPlaceholderIds(vnode, WidgetPlaceholder);
   if (strayWidgetIds.size > 0) {
-    throw new Error(`${context}: <WidgetPlaceholder> can only be used inside a rootLayout, not inside a widget (found: ${[...strayWidgetIds].join(", ")})`);
+    throw new Error(
+      `${context}: <WidgetPlaceholder> can only be used inside a rootLayout, not inside a widget (found: ${[...strayWidgetIds].join(", ")})`,
+    );
   }
 
   const entries = componentEntries ?? [];
   const byId = new Map(entries.map((c) => [c.id, c]));
   const placeholderIds = collectPlaceholderIds(vnode, ComponentPlaceholder);
   for (const id of placeholderIds) {
-    if (!byId.has(id)) throw new Error(`${context}: has <ComponentPlaceholder id="${id}"/> with no matching entry in its sitemap components[]`);
+    if (!byId.has(id))
+      throw new Error(
+        `${context}: has <ComponentPlaceholder id="${id}"/> with no matching entry in its sitemap components[]`,
+      );
   }
   for (const id of byId.keys()) {
-    if (!placeholderIds.has(id)) throw new Error(`${context}: sitemap component "${id}" has no matching <ComponentPlaceholder id="${id}"/> in its own render output`);
+    if (!placeholderIds.has(id))
+      throw new Error(
+        `${context}: sitemap component "${id}" has no matching <ComponentPlaceholder id="${id}"/> in its own render output`,
+      );
   }
 
   const components: WidgetComponentManifestEntry[] = [];
   for (const c of entries) {
-    const meta = lookupComponent(registry, c.type, `${context}, component "${c.id}"`);
+    const meta = lookupComponent(
+      registry,
+      c.type,
+      `${context}, component "${c.id}"`,
+    );
     const cVnode = (await render(meta, c.props ?? {})) as VNodeChild;
-    const nestedComponentIds = collectPlaceholderIds(cVnode, ComponentPlaceholder);
+    const nestedComponentIds = collectPlaceholderIds(
+      cVnode,
+      ComponentPlaceholder,
+    );
     if (nestedComponentIds.size > 0) {
       throw new Error(
         `${context}, component "${c.id}" (type "${c.type}"): components are one level deep only — a component cannot itself use <ComponentPlaceholder> (found: ${[...nestedComponentIds].join(", ")})`,
@@ -756,14 +894,30 @@ async function buildWidgetComponents(
     cHtml = scopeHtml(cHtml, c.type, scopeClasses);
     if (inlineCss) cHtml = minifyHtml(cHtml);
     const path = join(widgetPath, COMPONENTS_DIR, c.id);
-    writeWidgetFiles(outDir, path, cHtml, await collectScripts(cVnode), [], findOwnCssFile(outDir, COMPONENTS_DIR, c.type));
-    components.push({ id: c.id, type: c.type, path, lazy: c.loadingStrategy === "lazy" });
+    writeWidgetFiles(
+      outDir,
+      path,
+      cHtml,
+      await collectScripts(cVnode),
+      [],
+      findOwnCssFile(outDir, COMPONENTS_DIR, c.type),
+    );
+    components.push({
+      id: c.id,
+      type: c.type,
+      path,
+      lazy: c.loadingStrategy === "lazy",
+    });
   }
 
-  const markedVNode = await resolvePlaceholders(vnode, ComponentPlaceholder, (id, type) => ({
-    type: "div",
-    props: { [COMPONENT_PLACEHOLDER_ATTR]: id, [COMPONENT_TYPE_ATTR]: type },
-  }));
+  const markedVNode = await resolvePlaceholders(
+    vnode,
+    ComponentPlaceholder,
+    (id, type) => ({
+      type: "div",
+      props: { [COMPONENT_PLACEHOLDER_ATTR]: id, [COMPONENT_TYPE_ATTR]: type },
+    }),
+  );
 
   return { markedVNode, components };
 }
@@ -773,10 +927,14 @@ async function buildWidgetComponents(
  *  reading a page's manifest, used at request time by
  *  resolveWidgetComponents/composeScriptBundle/buildPages' own hasScript
  *  check. Empty array (not a throw) when the widget uses no components. */
-function readWidgetComponentManifest(outDir: string, widgetPath: string): WidgetComponentManifestEntry[] {
+function readWidgetComponentManifest(
+  outDir: string,
+  widgetPath: string,
+): WidgetComponentManifestEntry[] {
   const metaPath = join(outDir, widgetPath, META_FILE);
   if (!existsSync(metaPath)) return [];
-  return (JSON.parse(readFileSync(metaPath, "utf-8")) as WidgetInstanceManifest).components;
+  return (JSON.parse(readFileSync(metaPath, "utf-8")) as WidgetInstanceManifest)
+    .components;
 }
 
 /**
@@ -787,8 +945,19 @@ function readWidgetComponentManifest(outDir: string, widgetPath: string): Widget
  * body shell files for that page's rootLayout type, and writes the page's
  * manifest to `outDir/pages/<url>/meta.json`.
  */
-export async function buildPages(options: BuildPagesOptions): Promise<BuildPagesResult> {
-  const { registry, sitemap, outDir, render, inlineCss = false, cssHrefs = [], spa = false, handlerCachePerPage = false } = options;
+export async function buildPages(
+  options: BuildPagesOptions,
+): Promise<BuildPagesResult> {
+  const {
+    registry,
+    sitemap,
+    outDir,
+    render,
+    inlineCss = false,
+    cssHrefs = [],
+    spa = false,
+    handlerCachePerPage = false,
+  } = options;
   const scopeClasses: Scope = options.scopeClasses
     ? {
         globalClasses: collectGlobalClasses([
@@ -806,9 +975,19 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
 
   if (handlerCachePerPage) resetHandlerCache();
   for (const shared of sitemap.shared ?? []) {
-    const meta = lookupWidget(registry, shared.type, `shared widget "${shared.id}"`);
+    const meta = lookupWidget(
+      registry,
+      shared.type,
+      `shared widget "${shared.id}"`,
+    );
     let vnode = (await render(meta, shared.props ?? {})) as VNodeChild;
-    vnode = await extractDynamicBlocks(vnode, outDir, shared.type, scopeClasses, inlineCss);
+    vnode = await extractDynamicBlocks(
+      vnode,
+      outDir,
+      shared.type,
+      scopeClasses,
+      inlineCss,
+    );
     const path = join(WIDGETS_DIR, shared.type, shared.id);
     wIndex[shared.id] = path;
     const { markedVNode, components } = await buildWidgetComponents(
@@ -825,7 +1004,14 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
     let html = await renderToString(markedVNode);
     html = scopeHtml(html, shared.type, scopeClasses);
     if (inlineCss) html = minifyHtml(html);
-    writeWidgetFiles(outDir, path, html, await collectScripts(markedVNode), components, findOwnCssFile(outDir, WIDGETS_DIR, shared.type));
+    writeWidgetFiles(
+      outDir,
+      path,
+      html,
+      await collectScripts(markedVNode),
+      components,
+      findOwnCssFile(outDir, WIDGETS_DIR, shared.type),
+    );
   }
   // Build/serve only — see W_INDEX_FILE's own doc comment. Written
   // unconditionally whenever there's at least one shared widget AND
@@ -848,40 +1034,97 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
       if ("ref" in w) {
         const id = w.id ?? w.ref;
         const shared = sharedById.get(w.ref);
-        if (!shared) throw new Error(`page "${page.url}": widget "${id}" refs unknown shared id "${w.ref}"`);
+        if (!shared)
+          throw new Error(
+            `page "${page.url}": widget "${id}" refs unknown shared id "${w.ref}"`,
+          );
         const path = join(WIDGETS_DIR, shared.type, shared.id);
-        widgets.push({ id, type: shared.type, shared: true, path, lazy, cssHref: findOwnCssFile(outDir, WIDGETS_DIR, shared.type) });
+        widgets.push({
+          id,
+          type: shared.type,
+          shared: true,
+          path,
+          lazy,
+          cssHref: findOwnCssFile(outDir, WIDGETS_DIR, shared.type),
+        });
       } else {
         const context = `page "${page.url}", widget "${w.id}"`;
         const meta = lookupWidget(registry, w.type, context);
-        let vnode = (await render(meta, { data: page.metadata ?? {} })) as VNodeChild;
-        vnode = await extractDynamicBlocks(vnode, outDir, w.type, scopeClasses, inlineCss);
+        let vnode = (await render(meta, {
+          data: page.metadata ?? {},
+        })) as VNodeChild;
+        vnode = await extractDynamicBlocks(
+          vnode,
+          outDir,
+          w.type,
+          scopeClasses,
+          inlineCss,
+        );
         const path = join(PAGES_DIR, folder, WIDGETS_DIR, w.id);
-        const { markedVNode, components } = await buildWidgetComponents(registry, vnode, w.components, render, outDir, path, context, scopeClasses, inlineCss);
+        const { markedVNode, components } = await buildWidgetComponents(
+          registry,
+          vnode,
+          w.components,
+          render,
+          outDir,
+          path,
+          context,
+          scopeClasses,
+          inlineCss,
+        );
         let html = await renderToString(markedVNode);
         html = scopeHtml(html, w.type, scopeClasses);
         if (inlineCss) html = minifyHtml(html);
         const widgetCssHref = findOwnCssFile(outDir, WIDGETS_DIR, w.type);
-        writeWidgetFiles(outDir, path, html, await collectScripts(markedVNode), components, widgetCssHref);
-        widgets.push({ id: w.id, type: w.type, shared: false, path, lazy, cssHref: widgetCssHref });
+        writeWidgetFiles(
+          outDir,
+          path,
+          html,
+          await collectScripts(markedVNode),
+          components,
+          widgetCssHref,
+        );
+        widgets.push({
+          id: w.id,
+          type: w.type,
+          shared: false,
+          path,
+          lazy,
+          cssHref: widgetCssHref,
+        });
       }
     }
 
     const layoutVNode = (await render(rootLayoutMeta, {})) as VNodeChild;
-    const placeholderIds = collectPlaceholderIds(layoutVNode, WidgetPlaceholder);
+    const placeholderIds = collectPlaceholderIds(
+      layoutVNode,
+      WidgetPlaceholder,
+    );
     for (const id of placeholderIds) {
       if (!widgets.some((w) => w.id === id)) {
-        throw new Error(`page "${page.url}": rootLayout has <WidgetPlaceholder id="${id}"/> with no matching entry in sitemap widgets[]`);
+        throw new Error(
+          `page "${page.url}": rootLayout has <WidgetPlaceholder id="${id}"/> with no matching entry in sitemap widgets[]`,
+        );
       }
     }
     for (const w of widgets) {
       if (!placeholderIds.has(w.id)) {
-        throw new Error(`page "${page.url}": sitemap widget "${w.id}" has no matching <WidgetPlaceholder id="${w.id}"/> in its rootLayout`);
+        throw new Error(
+          `page "${page.url}": sitemap widget "${w.id}" has no matching <WidgetPlaceholder id="${w.id}"/> in its rootLayout`,
+        );
       }
     }
 
     if (!shellsWritten.has(rootLayoutMeta.type)) {
-      await writeShellFiles(registry, rootLayoutMeta.type, render, outDir, scopeClasses, inlineCss, cssHrefs);
+      await writeShellFiles(
+        registry,
+        rootLayoutMeta.type,
+        render,
+        outDir,
+        scopeClasses,
+        inlineCss,
+        cssHrefs,
+      );
       shellsWritten.add(rootLayoutMeta.type);
     }
 
@@ -895,7 +1138,18 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
     const pageHeadPath = join(pageDir, PAGE_HEAD_FILE);
     let headPath: string | undefined;
     if (headMeta && page.metadata) {
-      writeFileSync(pageHeadPath, await renderHeadDoc(headMeta, { data: page.metadata }, rootLayoutMeta.type, render, scopeClasses, inlineCss, cssHrefs));
+      writeFileSync(
+        pageHeadPath,
+        await renderHeadDoc(
+          headMeta,
+          { data: page.metadata },
+          rootLayoutMeta.type,
+          render,
+          scopeClasses,
+          inlineCss,
+          cssHrefs,
+        ),
+      );
       headPath = join(PAGES_DIR, folder, PAGE_HEAD_FILE);
     } else {
       rmSync(pageHeadPath, { force: true });
@@ -910,16 +1164,34 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
     const hasScript = widgets.some((w) => {
       if (w.lazy) return false;
       if (existsSync(join(outDir, w.path, WIDGET_SCRIPT_FILE))) return true;
-      return readWidgetComponentManifest(outDir, w.path).some((c) => !c.lazy && existsSync(join(outDir, c.path, WIDGET_SCRIPT_FILE)));
+      return readWidgetComponentManifest(outDir, w.path).some(
+        (c) => !c.lazy && existsSync(join(outDir, c.path, WIDGET_SCRIPT_FILE)),
+      );
     });
 
     // Only resolved for build/serve (inlineCss) — dev links per-file
     // <link>s instead (writeShellFiles' own cssHrefs param, discovered from
     // public/ once up front), so a per-page combined list would go unused.
-    const pageCssHrefs = inlineCss ? collectCssHrefs(widgets, rootLayoutMeta.type, outDir) : [];
-    const version = computePageVersion(widgets, rootLayoutMeta.type, outDir, headPath);
+    const pageCssHrefs = inlineCss
+      ? collectCssHrefs(widgets, rootLayoutMeta.type, outDir)
+      : [];
+    const version = computePageVersion(
+      widgets,
+      rootLayoutMeta.type,
+      outDir,
+      headPath,
+    );
 
-    const manifest: PageManifest = { url: page.url, rootLayoutType: rootLayoutMeta.type, widgets, hasScript, inlineCss, spa, cssHrefs: pageCssHrefs, version };
+    const manifest: PageManifest = {
+      url: page.url,
+      rootLayoutType: rootLayoutMeta.type,
+      widgets,
+      hasScript,
+      inlineCss,
+      spa,
+      cssHrefs: pageCssHrefs,
+      version,
+    };
     if (headPath) manifest.headPath = headPath;
     writeFileSync(join(pageDir, META_FILE), JSON.stringify(manifest, null, 2));
     pageManifests.push(manifest);
@@ -936,7 +1208,10 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
   writeFileSync(join(runtimeDir, APP_SCRIPT_FILE), APP_SCRIPT_JS);
   writeFileSync(join(runtimeDir, ASSET_WORKER_FILE), ASSET_WORKER_JS);
   // dev-only combined file — see DEV_RUNTIME_FILE's own doc comment.
-  writeFileSync(join(runtimeDir, DEV_RUNTIME_FILE), `${ROOT_SCRIPT_JS}\n${APP_SCRIPT_JS}`);
+  writeFileSync(
+    join(runtimeDir, DEV_RUNTIME_FILE),
+    `${ROOT_SCRIPT_JS}\n${APP_SCRIPT_JS}`,
+  );
   // Opt-in — only written (and so only servable/linkable) when spa: true,
   // matching real streak-forge's own "one file, one loader statement"
   // opt-in design (see cli/spa-router.ts's own doc comment).
@@ -951,7 +1226,14 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
   // specifically needs that). DEV_RUNTIME_FILE is deliberately excluded —
   // it's dev-only (see its own doc comment), never linked in build/serve.
   if (inlineCss) {
-    const jsBasenames = new Set([WIDGET_SCRIPT_FILE, WIDGET_BUNDLE_FILE, ROOT_SCRIPT_FILE, APP_SCRIPT_FILE, ASSET_WORKER_FILE, SPA_ROUTER_FILE]);
+    const jsBasenames = new Set([
+      WIDGET_SCRIPT_FILE,
+      WIDGET_BUNDLE_FILE,
+      ROOT_SCRIPT_FILE,
+      APP_SCRIPT_FILE,
+      ASSET_WORKER_FILE,
+      SPA_ROUTER_FILE,
+    ]);
     await minifyJsFiles(findFilesByBasename(outDir, jsBasenames), outDir);
   }
 
@@ -963,13 +1245,20 @@ export async function buildPages(options: BuildPagesOptions): Promise<BuildPages
  *  themselves contain a ComponentPlaceholder, enforced at build time by
  *  buildWidgetComponents). A widget with no components (no meta.json)
  *  round-trips its HTML unchanged. */
-function resolveWidgetComponents(html: string, widgetPath: string, outDir: string): string {
+function resolveWidgetComponents(
+  html: string,
+  widgetPath: string,
+  outDir: string,
+): string {
   let out = html;
   for (const c of readWidgetComponentManifest(outDir, widgetPath)) {
     if (c.lazy) continue; // leave the marker as-is for later client-side resolution
     const marker = componentPlaceholderMarkerHtml(c.id, c.type);
     const componentHtmlPath = join(outDir, c.path, HTML_FILE);
-    if (!existsSync(componentHtmlPath)) throw new Error(`resolveWidgetComponents: missing ${componentHtmlPath} — did buildPages run first?`);
+    if (!existsSync(componentHtmlPath))
+      throw new Error(
+        `resolveWidgetComponents: missing ${componentHtmlPath} — did buildPages run first?`,
+      );
     out = out.split(marker).join(readFileSync(componentHtmlPath, "utf-8"));
   }
   return out;
@@ -981,10 +1270,16 @@ function resolveWidgetComponents(html: string, widgetPath: string, outDir: strin
  *  already use (`<Type>.<hash>.css`), just discovered by directory listing
  *  instead of threading the hash through. Returned path is relative to
  *  outDir, matching what a `<link href>`/inline `<style>` read both need. */
-function findOwnCssFile(outDir: string, kindDir: string, type: string): string | null {
+function findOwnCssFile(
+  outDir: string,
+  kindDir: string,
+  type: string,
+): string | null {
   const dir = join(outDir, kindDir, type);
   if (!existsSync(dir)) return null;
-  const file = readdirSync(dir).find((f) => f.endsWith(".css") && !f.includes(".common."));
+  const file = readdirSync(dir).find(
+    (f) => f.endsWith(".css") && !f.includes(".common."),
+  );
   return file ? join(kindDir, type, file) : null;
 }
 
@@ -1020,7 +1315,11 @@ function findCommonCssFile(outDir: string): string | null {
  * comment. A `Set` guards against listing the same file twice (two eager
  * widgets sharing a type, or a component reused across widgets).
  */
-function collectCssHrefs(widgets: PageWidgetManifestEntry[], shellType: string, outDir: string): string[] {
+function collectCssHrefs(
+  widgets: PageWidgetManifestEntry[],
+  shellType: string,
+  outDir: string,
+): string[] {
   const seen = new Set<string>();
   const hrefs: string[] = [];
   const add = (relPath: string | null): void => {
@@ -1053,7 +1352,12 @@ function collectCssHrefs(widgets: PageWidgetManifestEntry[], shellType: string, 
  * content.json, in a fixed order, joined with a separator that can't
  * appear in either (so two different splits never hash the same).
  */
-function computePageVersion(widgets: PageWidgetManifestEntry[], shellType: string, outDir: string, headPath?: string): string {
+function computePageVersion(
+  widgets: PageWidgetManifestEntry[],
+  shellType: string,
+  outDir: string,
+  headPath?: string,
+): string {
   const parts: string[] = [];
   for (const kindDir of ["html", "head", "body", "rootLayout"]) {
     parts.push(readFileOr(join(outDir, kindDir, shellType, HTML_FILE), ""));
@@ -1074,7 +1378,9 @@ function computePageVersion(widgets: PageWidgetManifestEntry[], shellType: strin
  * left to "check and maybe not find" per request.
  */
 function collectInlineCss(manifest: PageManifest, outDir: string): string {
-  return manifest.cssHrefs.map((href) => readFileSync(join(outDir, href), "utf-8")).join("\n");
+  return manifest.cssHrefs
+    .map((href) => readFileSync(join(outDir, href), "utf-8"))
+    .join("\n");
 }
 
 /**
@@ -1096,10 +1402,19 @@ function collectInlineCss(manifest: PageManifest, outDir: string): string {
  *  need, so the two can never drift apart on what "this page" actually
  *  contains — they only differ in how they ASSEMBLE these pieces (one
  *  whole HTML string vs a JSON shape with head/body kept separate). */
-function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: string; bodyHtml: string; closingScripts: string } {
+function resolvePageParts(
+  manifest: PageManifest,
+  outDir: string,
+): { headHtml: string; bodyHtml: string; closingScripts: string } {
   const shellType = manifest.rootLayoutType;
-  const headHtml = readFileOr(join(outDir, manifest.headPath ?? join("head", shellType, HTML_FILE)), "<head></head>");
-  let bodyHtml = readFileOr(join(outDir, "body", shellType, HTML_FILE), "<body></body>");
+  const headHtml = readFileOr(
+    join(outDir, manifest.headPath ?? join("head", shellType, HTML_FILE)),
+    "<head></head>",
+  );
+  let bodyHtml = readFileOr(
+    join(outDir, "body", shellType, HTML_FILE),
+    "<body></body>",
+  );
 
   for (const w of manifest.widgets) {
     if (w.lazy) {
@@ -1112,13 +1427,26 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
       // used everywhere else in this function.
       if (manifest.inlineCss) {
         const marker = placeholderMarkerHtml(w.id, w.type);
-        bodyHtml = bodyHtml.split(marker).join(lazyPlaceholderMarkerHtml(w.id, w.type, w.path, w.shared, manifest.version));
+        bodyHtml = bodyHtml
+          .split(marker)
+          .join(
+            lazyPlaceholderMarkerHtml(
+              w.id,
+              w.type,
+              w.path,
+              w.shared,
+              manifest.version,
+            ),
+          );
       }
       continue;
     }
     const marker = placeholderMarkerHtml(w.id, w.type);
     const widgetPath = join(outDir, w.path, HTML_FILE);
-    if (!existsSync(widgetPath)) throw new Error(`resolvePageParts: missing ${widgetPath} — did buildPages run first?`);
+    if (!existsSync(widgetPath))
+      throw new Error(
+        `resolvePageParts: missing ${widgetPath} — did buildPages run first?`,
+      );
     let widgetHtml = readFileSync(widgetPath, "utf-8");
     widgetHtml = resolveWidgetComponents(widgetHtml, w.path, outDir);
     bodyHtml = bodyHtml.split(marker).join(widgetHtml);
@@ -1131,8 +1459,13 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
   // for them. Never written to disk anywhere — computed fresh right here,
   // per request, from each widget's own already-persisted (and
   // independently cacheable/rebuildable) CSS file — see collectInlineCss.
-  const combinedCss = manifest.inlineCss ? collectInlineCss(manifest, outDir) : "";
-  const headWithCss = headHtml.replace(CRITICAL_CSS_PLACEHOLDER, combinedCss ? `<style id="streak-inline-css">${combinedCss}</style>` : "");
+  const combinedCss = manifest.inlineCss
+    ? collectInlineCss(manifest, outDir)
+    : "";
+  const headWithCss = headHtml.replace(
+    CRITICAL_CSS_PLACEHOLDER,
+    combinedCss ? `<style id="streak-inline-css">${combinedCss}</style>` : "",
+  );
 
   // Same dev-vs-build split as inlineCss (see BuildPagesOptions.inlineCss's
   // own doc comment) — the Lighthouse-motivated loading chain is a
@@ -1140,7 +1473,10 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
   // paying for indirection there just makes local debugging harder to
   // reason about for no real benefit.
   let closingScripts = "";
-  const needsRuntime = manifest.spa || manifest.widgets.some((w) => w.lazy) || bodyHtml.includes(DYNAMIC_SLOT_ATTR);
+  const needsRuntime =
+    manifest.spa ||
+    manifest.widgets.some((w) => w.lazy) ||
+    bodyHtml.includes(DYNAMIC_SLOT_ATTR);
 
   if (manifest.inlineCss) {
     // build/serve: matching real streak-forge exactly — the page links ONE
@@ -1157,7 +1493,8 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
     // fingerprint, so the CDN/browser can treat this exact URL as
     // immutable-cacheable (a content change here means a new ?v= on the
     // next request, not the same URL serving stale content).
-    if (manifest.hasScript || needsRuntime) closingScripts += `<script src="${ROOT_SCRIPT_HREF}?v=${manifest.version}" defer></script>`;
+    if (manifest.hasScript || needsRuntime)
+      closingScripts += `<script src="${ROOT_SCRIPT_HREF}?v=${manifest.version}" defer></script>`;
   } else {
     // dev: the old, simple way — direct, un-deferred tags, no chain, no
     // indirection through addResourceToBody, and (unlike build/serve) no
@@ -1179,8 +1516,10 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
     // parsed, see cli/app-script.ts) checks for this exact id first and
     // skips its own load when it finds it, so common.js never runs twice
     // (once from this direct tag, once from the runtime).
-    if (needsRuntime) closingScripts += `<script src="${DEV_RUNTIME_HREF}"></script>`;
-    if (manifest.hasScript) closingScripts += `<script id="streak-common-script" src="${pageScriptHref(manifest.url)}"></script>`;
+    if (needsRuntime)
+      closingScripts += `<script src="${DEV_RUNTIME_HREF}"></script>`;
+    if (manifest.hasScript)
+      closingScripts += `<script id="streak-common-script" src="${pageScriptHref(manifest.url)}"></script>`;
   }
   // spa-router.js stays its own separate, directly-linked script (not
   // chained through app.js) — same "one file, one loader statement, opt-in
@@ -1194,13 +1533,25 @@ function resolvePageParts(manifest: PageManifest, outDir: string): { headHtml: s
   return { headHtml: headWithCss, bodyHtml, closingScripts };
 }
 
-export function composePageFromFiles(manifest: PageManifest, outDir: string): string {
+export function composePageFromFiles(
+  manifest: PageManifest,
+  outDir: string,
+): string {
   const shellType = manifest.rootLayoutType;
-  const htmlSkeleton = readFileOr(join(outDir, "html", shellType, HTML_FILE), "<html><head></head><body></body></html>");
-  const { headHtml, bodyHtml, closingScripts } = resolvePageParts(manifest, outDir);
+  const htmlSkeleton = readFileOr(
+    join(outDir, "html", shellType, HTML_FILE),
+    "<html><head></head><body></body></html>",
+  );
+  const { headHtml, bodyHtml, closingScripts } = resolvePageParts(
+    manifest,
+    outDir,
+  );
 
-  let composed = htmlSkeleton.replace("<head></head>", headHtml).replace("<body></body>", bodyHtml);
-  if (closingScripts) composed = composed.replace("</body>", `${closingScripts}</body>`);
+  let composed = htmlSkeleton
+    .replace("<head></head>", headHtml)
+    .replace("<body></body>", bodyHtml);
+  if (closingScripts)
+    composed = composed.replace("</body>", `${closingScripts}</body>`);
   return composed;
 }
 
@@ -1211,7 +1562,9 @@ export function composePageFromFiles(manifest: PageManifest, outDir: string): st
  *  cli/spa-router.ts), unlike composePageFromFiles' own htmlSkeleton
  *  splice, which wants the whole tag. */
 function stripOuterTag(html: string, tag: string): string {
-  return html.replace(new RegExp(`^<${tag}[^>]*>`), "").replace(new RegExp(`</${tag}>$`), "");
+  return html
+    .replace(new RegExp(`^<${tag}[^>]*>`), "")
+    .replace(new RegExp(`</${tag}>$`), "");
 }
 
 /**
@@ -1240,10 +1593,17 @@ export interface ComposedPageJson {
   scriptHref: string | null;
 }
 
-export function composePageAsJson(manifest: PageManifest, outDir: string): ComposedPageJson {
+export function composePageAsJson(
+  manifest: PageManifest,
+  outDir: string,
+): ComposedPageJson {
   const shellType = manifest.rootLayoutType;
-  const htmlAttributes = JSON.parse(readFileOr(join(outDir, "html", shellType, ATTRS_FILE), "{}")) as Record<string, string>;
-  const bodyAttributes = JSON.parse(readFileOr(join(outDir, "body", shellType, ATTRS_FILE), "{}")) as Record<string, string>;
+  const htmlAttributes = JSON.parse(
+    readFileOr(join(outDir, "html", shellType, ATTRS_FILE), "{}"),
+  ) as Record<string, string>;
+  const bodyAttributes = JSON.parse(
+    readFileOr(join(outDir, "body", shellType, ATTRS_FILE), "{}"),
+  ) as Record<string, string>;
   const { headHtml, bodyHtml } = resolvePageParts(manifest, outDir);
 
   return {
@@ -1252,7 +1612,10 @@ export function composePageAsJson(manifest: PageManifest, outDir: string): Compo
     bodyAttributes,
     bodyHtml: stripOuterTag(bodyHtml, "body"),
     // Build/serve: the page's own version, same ?v= as its other assets.
-    scriptHref: manifest.hasScript ? pageScriptHref(manifest.url) + (manifest.inlineCss ? `?v=${manifest.version}` : "") : null,
+    scriptHref: manifest.hasScript
+      ? pageScriptHref(manifest.url) +
+        (manifest.inlineCss ? `?v=${manifest.version}` : "")
+      : null,
   };
 }
 
@@ -1306,7 +1669,10 @@ function widgetScriptParts(outDir: string, widgetPath: string): string[] {
  * enough to redo on every request rather than precompute and persist a
  * combined file.
  */
-export function composeScriptBundle(manifest: PageManifest, outDir: string): string {
+export function composeScriptBundle(
+  manifest: PageManifest,
+  outDir: string,
+): string {
   const parts: string[] = [];
   for (const w of manifest.widgets) {
     if (w.lazy) continue;
@@ -1333,7 +1699,12 @@ export function composeScriptBundle(manifest: PageManifest, outDir: string): str
  * failed — either way, the widget still appears, just possibly unstyled
  * for an instant on a failed load rather than never at all).
  */
-function buildFragmentScript(selector: string, html: string, script: string, cssHref: string | null): string {
+function buildFragmentScript(
+  selector: string,
+  html: string,
+  script: string,
+  cssHref: string | null,
+): string {
   return `(function(){
   var el = document.querySelector(${JSON.stringify(selector)});
   function show(){
@@ -1368,14 +1739,29 @@ function buildFragmentScript(selector: string, html: string, script: string, css
  * null for an unknown id or a non-lazy one — callers (the HTTP route) turn
  * that into a 404.
  */
-export function composeLazyWidgetFragment(manifest: PageManifest, widgetId: string, outDir: string): string | null {
-  const w = manifest.widgets.find((entry) => entry.id === widgetId && entry.lazy);
+export function composeLazyWidgetFragment(
+  manifest: PageManifest,
+  widgetId: string,
+  outDir: string,
+): string | null {
+  const w = manifest.widgets.find(
+    (entry) => entry.id === widgetId && entry.lazy,
+  );
   if (!w) return null;
   const widgetHtmlPath = join(outDir, w.path, HTML_FILE);
   if (!existsSync(widgetHtmlPath)) return null;
-  const html = resolveWidgetComponents(readFileSync(widgetHtmlPath, "utf-8"), w.path, outDir);
+  const html = resolveWidgetComponents(
+    readFileSync(widgetHtmlPath, "utf-8"),
+    w.path,
+    outDir,
+  );
   const script = widgetScriptParts(outDir, w.path).join("\n");
-  return buildFragmentScript(`[${WIDGET_PLACEHOLDER_ATTR}="${widgetId}"]`, html, script, w.cssHref ? `/${w.cssHref}` : null);
+  return buildFragmentScript(
+    `[${WIDGET_PLACEHOLDER_ATTR}="${widgetId}"]`,
+    html,
+    script,
+    w.cssHref ? `/${w.cssHref}` : null,
+  );
 }
 
 /**
@@ -1387,15 +1773,25 @@ export function composeLazyWidgetFragment(manifest: PageManifest, widgetId: stri
  * just a direct file read. Returns null for an unknown id, same contract
  * as composeLazyWidgetFragment (callers turn that into a 404).
  */
-export function composeDynamicFragment(id: string, outDir: string): string | null {
+export function composeDynamicFragment(
+  id: string,
+  outDir: string,
+): string | null {
   const dir = join(DYNAMIC_DIR, id);
   const htmlPath = join(outDir, dir, HTML_FILE);
   if (!existsSync(htmlPath)) return null;
   const html = readFileSync(htmlPath, "utf-8");
   const scriptPath = join(outDir, dir, WIDGET_SCRIPT_FILE);
-  const script = existsSync(scriptPath) ? readFileSync(scriptPath, "utf-8") : "";
+  const script = existsSync(scriptPath)
+    ? readFileSync(scriptPath, "utf-8")
+    : "";
   // Dynamic content shares its owning widget's CSS file (already loaded —
   // inlined if the owner is eager, or already pushed by the owner's own
   // lazy fetch if not) — no separate CSS push needed here.
-  return buildFragmentScript(`[${DYNAMIC_SLOT_ATTR}="${id}"]`, html, script, null);
+  return buildFragmentScript(
+    `[${DYNAMIC_SLOT_ATTR}="${id}"]`,
+    html,
+    script,
+    null,
+  );
 }

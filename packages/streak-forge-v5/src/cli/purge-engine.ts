@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { PurgeCSS } from "purgecss";
-import type { PurgeEngine } from "../css-purge.js";
+import type { PurgeEngine } from "../css-purge";
 
 /** Every attribute name used in an attribute selector of the full CSS file
  *  (`[data-active="true"]`, `[aria-expanded="true"]`, `[type="button"]`) —
@@ -10,8 +10,17 @@ function attributeSelectorNames(fullCssPath: string): string[] {
   const { mtimeMs } = statSync(fullCssPath);
   const cached = attributeCache.get(fullCssPath);
   if (cached?.mtimeMs === mtimeMs) return cached.names;
-  const selectors = readFileSync(fullCssPath, "utf-8").replace(/\{[^{}]*\}/g, "{}");
-  const names = [...new Set([...selectors.matchAll(/\[\s*([a-zA-Z_][-\w]*)\s*(?:[~|^$*]?=|\])/g)].map((m) => m[1]!))];
+  const selectors = readFileSync(fullCssPath, "utf-8").replace(
+    /\{[^{}]*\}/g,
+    "{}",
+  );
+  const names = [
+    ...new Set(
+      [...selectors.matchAll(/\[\s*([a-zA-Z_][-\w]*)\s*(?:[~|^$*]?=|\])/g)].map(
+        (m) => m[1]!,
+      ),
+    ),
+  ];
   attributeCache.set(fullCssPath, { mtimeMs, names });
   return names;
 }
@@ -36,7 +45,10 @@ function attributeSelectorNames(fullCssPath: string): string[] {
  * streak-forge itself before calling this), keep only the rules that HTML
  * actually uses.
  */
-export const defaultPurgeEngine: PurgeEngine = async ({ html, fullCssPath }) => {
+export const defaultPurgeEngine: PurgeEngine = async ({
+  html,
+  fullCssPath,
+}) => {
   const [result] = await new PurgeCSS().purge({
     content: [{ raw: html, extension: "html" }],
     css: [fullCssPath],
@@ -47,7 +59,8 @@ export const defaultPurgeEngine: PurgeEngine = async ({ html, fullCssPath }) => 
     // This is Tailwind's own documented PurgeCSS extractor for exactly
     // this reason — keeps a Tailwind class's full token (colons, dots,
     // slashes) intact instead of the default word-boundary split.
-    defaultExtractor: (content) => content.match(/[^<>"'`\s]*[^<>"'`\s:]/g) || [],
+    defaultExtractor: (content) =>
+      content.match(/[^<>"'`\s]*[^<>"'`\s:]/g) || [],
     // Attribute selectors are decided by their classes alone. Otherwise a
     // Tailwind attribute variant (`data-[active=true]:border-black` →
     // `.data-\[active\=true\]\:border-black[data-active="true"]`) is

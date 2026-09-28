@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { parseFile } from "../annotations.js";
+import { parseFile } from "../annotations";
 import { join } from "node:path";
 
 const FIXTURES = join(import.meta.dir, "fixtures");
 
 describe("annotations.parseFile", () => {
   test("parses @widget + @handler-binding + @dynamicClasses on HelloBanner", () => {
-    const { widgets, handlers } = parseFile(join(FIXTURES, "widgets/HelloBanner.tsx"));
+    const { widgets, handlers } = parseFile(
+      join(FIXTURES, "widgets/HelloBanner.tsx"),
+    );
 
     expect(widgets).toHaveLength(1);
     const w = widgets[0]!;
@@ -14,7 +16,13 @@ describe("annotations.parseFile", () => {
     expect(w.kind).toBe("handler");
     expect(w.handlerName).toBe("HelloBannerHandler");
     expect(w.dynamicClasses).toEqual(
-      expect.arrayContaining(["bg-red-500", "bg-blue-500", "bg-green-500", "text-sm", "text-lg"]),
+      expect.arrayContaining([
+        "bg-red-500",
+        "bg-blue-500",
+        "bg-green-500",
+        "text-sm",
+        "text-lg",
+      ]),
     );
     expect(w.dynamicClassGroups).toHaveLength(2);
     expect(handlers).toHaveLength(0); // no bare @handler tag in this file
@@ -29,7 +37,9 @@ describe("annotations.parseFile", () => {
   });
 
   test("bare @handler tag registers a handler, scope defaults correctly", () => {
-    const { handlers } = parseFile(join(FIXTURES, "handlers/HelloBannerHandler.ts"));
+    const { handlers } = parseFile(
+      join(FIXTURES, "handlers/HelloBannerHandler.ts"),
+    );
     expect(handlers).toHaveLength(1);
     expect(handlers[0]!.exportName).toBe("HelloBannerHandler");
     expect(handlers[0]!.scope).toBe("widget");

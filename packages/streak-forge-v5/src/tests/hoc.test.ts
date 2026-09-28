@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { handler, widget, component, resetHandlerCache } from "../hoc.js";
+import { handler, widget, component, resetHandlerCache } from "../hoc";
 
 // handler() is the one HOC with real runtime behavior (memoization) — see
 // its own doc comment in hoc.ts. widget()/component() stay pure identity

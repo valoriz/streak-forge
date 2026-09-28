@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { writeDynamicClassesSafelist } from "./safelist.js";
-import { projectPaths } from "./conventions.js";
+import { writeDynamicClassesSafelist } from "./safelist";
+import { projectPaths } from "./conventions";
 
 /** `streak-forge safelist` — writes .streak-forge-cache/dynamic-classes.json
  *  only, nothing else. Meant to run immediately before the project's own
@@ -13,8 +13,12 @@ export function runSafelistCommand(root: string): void {
     root: paths.root,
     widgetsDir: paths.widgetsDir,
     handlersDir: paths.handlersDir,
-    componentsDir: existsSync(paths.componentsDir) ? paths.componentsDir : undefined,
+    componentsDir: existsSync(paths.componentsDir)
+      ? paths.componentsDir
+      : undefined,
     shellDir: existsSync(paths.shellDir) ? paths.shellDir : undefined,
   });
-  console.log(`Wrote ${safelist.length} dynamic class(es) to .streak-forge-cache/dynamic-classes.json`);
+  console.info(
+    `Wrote ${safelist.length} dynamic class(es) to .streak-forge-cache/dynamic-classes.json`,
+  );
 }
