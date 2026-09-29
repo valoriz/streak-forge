@@ -7,6 +7,14 @@
 
 export type WidgetKind = "static" | "handler";
 
+/** Build-time widget render cache mode — `widget({ cache })`:
+ *  - "none" (default): never cached, rendered every time.
+ *  - "type": one cached output per widget type per build. The widget must
+ *    take no props (enforced by widget()'s types), so its output can't vary.
+ *  - "props": cached per widget type + hash of its props. Props must be
+ *    JSON-safe (enforced by widget()'s types). */
+export type WidgetCacheMode = "none" | "type" | "props";
+
 export interface WidgetMeta {
   /** Exported function/const name in the source file. */
   exportName: string;
@@ -28,6 +36,8 @@ export interface WidgetMeta {
   dynamicClassGroups: string[][];
   /** Hash of (source text + dynamicClasses) — the cache key for widget-level CSS gen. */
   sourceHash: string;
+  /** From `widget({ cache })`. Absent = "none". */
+  cache?: WidgetCacheMode;
 }
 
 export interface HandlerMeta {
@@ -134,6 +144,9 @@ export interface WidgetHocMeta {
   /** CSS purge safelist — literal classnames only assembled at runtime
    *  (e.g. `bg-${color}-500`), grouped for documentation, flattened before purge. */
   dynamicClasses?: string[][];
+  /** Build-time render cache mode — see WidgetCacheMode. Must be a string
+   *  literal (read from the source at build time). Default "none". */
+  cache?: WidgetCacheMode;
 }
 
 /** Meta object passed to the global `handler(meta)` HOC — see hoc.ts. */

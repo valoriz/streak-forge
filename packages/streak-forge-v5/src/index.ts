@@ -9,6 +9,7 @@ export * from "./sandbox";
 export * from "./dev-server";
 export * from "./build";
 export * from "./hoc";
+export * from "./json-safe";
 export * from "./jsx";
 export * from "./page-build";
 export {

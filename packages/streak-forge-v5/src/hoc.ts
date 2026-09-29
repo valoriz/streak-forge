@@ -5,6 +5,7 @@ import type {
   ShellHocMeta,
 } from "./types";
 import { hashValue } from "./hash";
+import { jsonSafetyIssue, type JsonSafe } from "./json-safe";
 
 /**
  * `widget(meta)(fn)` / `handler(meta)(fn)` / `component(meta)(fn)` —
@@ -31,11 +32,27 @@ import { hashValue } from "./hash";
 // collapses inference to `never` for the wrapped function's parameters when
 // the result is used as a JSX tag (<Button/>) — `any` keeps Fn's real
 // parameter/return types intact for the caller instead.
+//
+// `cache` is checked against the wrapped function's props at compile time:
+// "type" caches one output per widget type, so the widget must take no
+// props at all (nothing could make two renders differ); "props" hashes the
+// props into the cache key, so they must be JSON-safe. Fn is generic on the
+// inner call so it's inferred from the wrapped function, with `M` (the meta
+// literal) already known.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function widget<Fn extends (...args: any[]) => any>(
-  _meta: WidgetHocMeta = {},
-) {
-  return (fn: Fn): Fn => fn;
+type WidgetCacheCheck<M extends WidgetHocMeta, Fn extends (...args: any[]) => any> = M["cache"] extends "type"
+  ? Parameters<Fn> extends []
+    ? unknown
+    : { 'widget({ cache: "type" }) must take no props: its output is cached once per widget type': never }
+  : M["cache"] extends "props"
+    ? Parameters<Fn>[0] extends JsonSafe<Parameters<Fn>[0]>
+      ? unknown
+      : { 'widget({ cache: "props" }) props must be JSON-safe: they are hashed into the cache key': never }
+    : unknown;
+
+export function widget<const M extends WidgetHocMeta = WidgetHocMeta>(_meta: M = {} as M) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <Fn extends (...args: any[]) => any>(fn: Fn & WidgetCacheCheck<M, Fn>): Fn => fn;
 }
 
 /** One cache per wrapped handler FUNCTION (not per handler NAME — two
@@ -82,11 +99,39 @@ export function resetHandlerCache(): void {
     new WeakMap();
 }
 
+/** `Fn` when its (awaited) result is JSON-safe (see json-safe.ts), else
+ *  `Fn` plus a required property named after the rule — so a handler
+ *  returning e.g. a `Date` fails to compile with that name in the error. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function handler<Fn extends (...args: any[]) => any>(
-  _meta: HandlerHocMeta = {},
-) {
-  return (fn: Fn): Fn => {
+type JsonReturning<Fn extends (...args: any[]) => any> =
+  Awaited<ReturnType<Fn>> extends JsonSafe<Awaited<ReturnType<Fn>>>
+    ? Fn
+    : Fn & {
+        "handler() must return JSON-safe data: plain objects, arrays, strings, finite numbers, booleans, null (no Date, Map, Set, class instances, functions)": never;
+      };
+
+// Handlers already warned about (once each) by warnIfNotJsonSafe.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const warnedHandlers = new WeakSet<(...args: any[]) => any>();
+
+/** Runtime half of the JSON-safety rule, for results the types can't see
+ *  (`any` from `res.json()`, casts). Warns instead of throwing: the
+ *  in-process memo works with any value, only a shared/persisted cache
+ *  can't store it. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function warnIfNotJsonSafe(fn: (...args: any[]) => any, value: unknown): void {
+  if (warnedHandlers.has(fn)) return;
+  const issue = jsonSafetyIssue(value);
+  if (!issue) return;
+  warnedHandlers.add(fn);
+  console.warn(`handler ${fn.name || "(anonymous)"}: result is not JSON-safe (${issue}); it can only be memoized in-process.`);
+}
+
+// The generic sits on the inner call (not on handler() itself) so Fn is
+// inferred from the wrapped function, not fixed at `handler(meta)`.
+export function handler(_meta: HandlerHocMeta = {}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <Fn extends (...args: any[]) => any>(fn: Fn & JsonReturning<Fn>): Fn => {
     const memoized = ((...args: Parameters<Fn>) => {
       const caches = handlerCaches();
       let cache = caches.get(fn);
@@ -98,6 +143,11 @@ export function handler<Fn extends (...args: any[]) => any>(
       if (cache.has(key)) return cache.get(key);
       const result = fn(...args);
       cache.set(key, result);
+      // Rejections are the caller's to handle; this branch only inspects values.
+      Promise.resolve(result).then(
+        (value) => warnIfNotJsonSafe(fn, value),
+        () => {},
+      );
       return result;
     }) as Fn;
     return memoized;

@@ -5,6 +5,7 @@ import type {
   HandlerMeta,
   ComponentMeta,
   ShellMeta,
+  WidgetCacheMode,
 } from "./types";
 import { hashOf } from "./hash";
 
@@ -47,6 +48,7 @@ interface WidgetHocCall {
   kind: "widget";
   handlerName?: string;
   dynamicClassGroups: string[][];
+  cache?: WidgetCacheMode;
 }
 
 interface HandlerHocCall {
@@ -109,6 +111,7 @@ export function parseFile(filePath: string): {
           dynamicClasses: flat,
           dynamicClassGroups: call.dynamicClassGroups,
           sourceHash: hashOf(nodeText + JSON.stringify(flat)),
+          ...(call.cache ? { cache: call.cache } : {}),
         });
       }
 
@@ -216,6 +219,7 @@ function matchHocCall(
       handlerName: readStringProp(meta, "handler"),
       dynamicClassGroups:
         readStringArrayArrayProp(meta, "dynamicClasses", filePath) ?? [],
+      cache: readCacheProp(meta, filePath),
     };
   }
   if (name === "component") {
@@ -262,6 +266,25 @@ function readScopeProp(
   return value === "widget" || value === "common" || value === "middleware"
     ? value
     : undefined;
+}
+
+const WIDGET_CACHE_MODES: readonly WidgetCacheMode[] = ["none", "type", "props"];
+
+/** `cache` must be a string literal: it's read here, from source, at build
+ *  time — a variable or expression would silently fall back to "none". */
+function readCacheProp(
+  obj: ts.ObjectLiteralExpression | undefined,
+  filePath: string,
+): WidgetCacheMode | undefined {
+  const init = findProp(obj, "cache");
+  if (!init) return undefined;
+  const value = ts.isStringLiteralLike(init) ? init.text : undefined;
+  if (!value || !(WIDGET_CACHE_MODES as readonly string[]).includes(value)) {
+    throw new Error(
+      `${filePath}: widget "cache" must be one of ${WIDGET_CACHE_MODES.map((m) => `"${m}"`).join(", ")} as a string literal`,
+    );
+  }
+  return value as WidgetCacheMode;
 }
 
 function readStringArrayArrayProp(
