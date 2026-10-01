@@ -4,7 +4,8 @@ import { runPreBuild } from "../build";
 import { readSitemap, buildPages } from "../page-build";
 import type { Registry } from "../types";
 import { defaultPurgeEngine } from "./purge-engine";
-import { renderSample, renderInstance } from "./render";
+import { renderInstance } from "./render";
+import { sourceSampleFor } from "./source-sample";
 import { discoverCssHrefs } from "./discover-css-hrefs";
 import { writeDynamicClassesSafelist } from "./safelist";
 import { createMockWorkerServer } from "./mock-worker-server";
@@ -70,7 +71,8 @@ export async function runDevBuildOnce(root: string): Promise<DevBuildResult> {
     // shouldn't take the whole dev server down — just warn and keep
     // serving whatever DID build, same as any other dev-mode warning.
     strict: false,
-    renderSample,
+    // Same source scan as prebuild, so dev's purged CSS matches a real build.
+    renderSample: sourceSampleFor(paths.root),
     scopeClasses: true,
   });
 

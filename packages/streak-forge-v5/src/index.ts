@@ -18,6 +18,7 @@ export {
 } from "./cli/mock-worker-server";
 export { defaultPurgeEngine } from "./cli/purge-engine";
 export { renderSample, renderInstance } from "./cli/render";
+export { sourceSampleFor } from "./cli/source-sample";
 export { discoverCssHrefs } from "./cli/discover-css-hrefs";
 export {
   writeDynamicClassesSafelist,

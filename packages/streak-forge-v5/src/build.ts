@@ -62,10 +62,11 @@ export interface PreBuildOptions {
   /** Base for the relative `filePath` written into every meta.json (see
    *  registry.ts's saveRegistry). Defaults to process.cwd(). */
   projectRoot?: string;
-  /** Given a widget/component/html/head/body's meta, return sample
-   *  rendered HTML used only to seed the purge scan (real per-instance data
-   *  doesn't matter here — CSS output is data-independent by design, see
-   *  the dynamicClasses rule). */
+  /** Given a widget/component/html/head/body's meta, return the text the
+   *  purge scan extracts class tokens from. The CLI passes
+   *  cli/source-sample.ts's sourceSampleFor — the entry's source plus its
+   *  project imports, never a render, so no app code runs during
+   *  prebuild/dev's CSS step. */
   renderSample: (
     entry: WidgetMeta | ComponentMeta | ShellMeta,
   ) => Promise<string>;

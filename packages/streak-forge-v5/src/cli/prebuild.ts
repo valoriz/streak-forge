@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { runPreBuild } from "../build";
 import { defaultPurgeEngine } from "./purge-engine";
-import { renderSample } from "./render";
+import { sourceSampleFor } from "./source-sample";
 import { projectPaths } from "./conventions";
 
 /**
@@ -50,7 +50,9 @@ export async function runPrebuildCommand(root: string): Promise<void> {
     purgeEngine: defaultPurgeEngine,
     projectRoot: paths.root,
     strict: true,
-    renderSample,
+    // Source scan, never a render: prebuild runs no app code (no handlers,
+    // no network, no env) — see source-sample.ts.
+    renderSample: sourceSampleFor(paths.root),
     scopeClasses: true,
     minify,
   });

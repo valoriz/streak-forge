@@ -16,6 +16,7 @@ bun run build         # bundle this package itself -> dist/
 
 - **Registry model**: `widget({...})(fn)` / `handler({...})(fn)` / `component({...})(fn)` / `html|head|body|rootLayout({...})(fn)` are real function calls (not comment annotations), structurally matched via `annotations.ts`'s TS AST parse — never executed at scan time. `registry.ts`'s `fullScan` walks the project's `src/widgets|handlers|components|shell` dirs once; `incrementalRescan` (dev only) re-parses just a changed file plus its direct importers.
 - **`.dev/` vs `.prebuild/`**: `cli/dev.ts` and `cli/prebuild.ts` call the *same* `runPreBuild()` (`build.ts`) with different flags (`strict`/`minify`/`outDir`) — dev must see byte-identical purged CSS to a real build, by design. There is no separate "dev prebuild" implementation.
+- **Prebuild runs no app code**: the CSS purge sample is the widget's own source text plus its project imports (`cli/source-sample.ts`), never a render — no handler, network call or env is needed for `prebuild`/`dev`'s CSS step. Only `dev`'s page render (and `streak-boot build`) executes widgets/handlers.
 - **CSS scoping**: every widget's CSS is purged (via a host-supplied `purgeEngine`, see `cli/purge-engine.ts`) and prefixed to a short, deterministic per-type code (`css-purge.ts`'s `shortScopePrefix`), so two widgets sharing a class name never collide.
 
 ## Key files
