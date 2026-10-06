@@ -1,27 +1,46 @@
 {
   "name": "streak-forge",
-  "version": "5.0.0-alpha.0",
+  "version": "5.0.1",
   "description": "Dev server + pre-build engine for Streak.js \u2014 annotation-based widget/handler registry, live-reload dev server, TSX->JS + per-widget CSS-purge pre-build. Produces .prebuild/ for streak-boot to build/serve.",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./globals": {
-      "types": "./src/ambient-globals.d.ts",
-      "default": "./src/globals.ts"
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
     },
-    "./jsx-runtime": "./src/jsx-runtime.ts",
-    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+    "./globals": {
+      "types": "./dist/types/ambient-globals.d.ts",
+      "default": "./dist/globals.js"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/types/jsx-runtime.d.ts",
+      "default": "./dist/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/types/jsx-dev-runtime.d.ts",
+      "default": "./dist/jsx-dev-runtime.js"
+    },
+    "./render": {
+      "types": "./dist/types/render-record.d.ts",
+      "default": "./dist/render-record.js"
+    }
   },
   "bin": {
-    "streak-forge": "./bin/streak-forge.ts"
+    "streak-forge": "./dist/streak-forge.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "MIGRATING_V4_TO_V5.md"
+  ],
   "scripts": {
     "lint": "eslint src bin",
-    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "build": "bun scripts/build.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "typescript": "^5.6.0",

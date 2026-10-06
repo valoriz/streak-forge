@@ -12,7 +12,7 @@
  */
 
 export const Fragment = Symbol.for("streak-forge.fragment");
-const SCRIPT_BLOCK = Symbol.for("streak-forge.script-block");
+export const SCRIPT_BLOCK = Symbol.for("streak-forge.script-block");
 
 export type VNodeChild =
   VNode | string | number | boolean | null | undefined | VNodeChild[];
