@@ -189,11 +189,18 @@ export async function renderToString(node: VNodeChild): Promise<string> {
 }
 
 export interface WidgetPlaceholderProps {
-  /** This page's own instance id for the slot — matches a
-   *  PageWidgetManifestEntry.id (see types.ts). */
+  /** The slot's id: a fixed slot's widget instance id, or the key of a
+   *  dynamic slot in the page's sitemap `slots`. */
   id: string;
-  /** Widget type to resolve into this slot. */
-  type: string;
+  /** Widget type that always fills this slot (fixed slot). Leave out (and
+   *  `shared` too) for a dynamic slot, filled per page from the sitemap. */
+  type?: string;
+  /** Fixed slot filled by the sitemap's `shared[]` entry with this id
+   *  (built once per build with its own props). */
+  shared?: boolean;
+  /** Fixed slot only: load this widget client-side after the page
+   *  (dynamic slot entries set it on their own sitemap entry). */
+  loadingStrategy?: "lazy";
 }
 
 /**
@@ -294,7 +301,7 @@ export function isKind(
 
 export type PlaceholderResolver = (
   id: string,
-  type: string,
+  type: string | undefined,
 ) => Promise<VNodeChild> | VNodeChild;
 /** Either `WidgetPlaceholder` or `ComponentPlaceholder` — the marker
  *  function identity `resolvePlaceholders`/`collectPlaceholderIds` match

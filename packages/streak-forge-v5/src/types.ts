@@ -201,7 +201,8 @@ export interface SitemapComponentEntry {
 /** A widget built ONCE (with its own fixed props) and reused across every
  *  page that references it by `ref` — a shared/global nav, a footer, ... */
 export interface SharedWidgetEntry {
-  /** Referenced from a page's widgets[] as `{ ref: id }`. */
+  /** Referenced from a fixed `<WidgetPlaceholder id={id} shared />` in a
+   *  rootLayout, or from a dynamic slot's list as `{ ref: id }`. */
   id: string;
   /** Must match a registered widget's `type`. */
   type: string;
@@ -211,7 +212,7 @@ export interface SharedWidgetEntry {
   components?: SitemapComponentEntry[];
 }
 
-/** One widget slot on a page — either a pointer to a `shared[]` entry
+/** One widget in a page's dynamic slot (SitemapPageEntry.slots) — either a pointer to a `shared[]` entry
  *  (`ref`), or an inline, page-specific instance. `loadingStrategy: "lazy"`
  *  (default: absent = eager) leaves this slot's placeholder marker in the
  *  shipped HTML instead of resolving it server-side, picked up by the
@@ -244,7 +245,20 @@ export interface SitemapPageEntry {
    *  streak-forge's per-page dataHandler — streak-forge has no page-level
    *  handler concept, only widget-level ones, see hoc.ts's `handler()`). */
   metadata?: Record<string, unknown>;
-  widgets: SitemapWidgetEntry[];
+  /**
+   * Widgets for the rootLayout's DYNAMIC slots only, by slot id, in order.
+   *
+   * A rootLayout's `<WidgetPlaceholder id type />` (or `id shared`) is a
+   * fixed slot: it renders on every page using that layout, with nothing in
+   * the sitemap. A `<WidgetPlaceholder id />` with no type is a dynamic
+   * slot: it holds whatever this page lists under `slots[id]` (any number
+   * of widgets, in order), or stays empty. Lists for slot ids the layout
+   * doesn't have as dynamic slots are ignored. See page-widgets.ts.
+   */
+  slots?: Record<string, SitemapWidgetEntry[]>;
+  /** @deprecated Ignored: fixed slots come from the rootLayout, dynamic
+   *  ones from `slots`. Still accepted so older sitemaps parse. */
+  widgets?: unknown;
 }
 
 /** streak-forge's own sitemap shape — read from a `streak.sitemap.json`-named
@@ -257,8 +271,12 @@ export interface StreakBootSitemap {
 }
 
 export interface PageWidgetManifestEntry {
-  /** This page's own instance id (matches a <WidgetPlaceholder id=.../> in the rootLayout). */
+  /** This page's own instance id: a fixed slot's placeholder id, or a
+   *  dynamic slot entry's own id. Unique per page. */
   id: string;
+  /** Set for a widget in a dynamic slot whose id differs from the slot's:
+   *  that slot's placeholder id. Absent = the slot is the widget's own id. */
+  slot?: string;
   type: string;
   /** true = built once under shared/<sharedId>/, reused as-is; false = built
    *  fresh under this page's own folder, just for this page. */

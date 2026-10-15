@@ -28,6 +28,7 @@ import {
   shortScopePrefix,
 } from "./css-purge";
 import { resetHandlerCache } from "./hoc";
+import { resolvePageWidgets, instanceId } from "./page-widgets";
 import { hashOf } from "./hash";
 import { minifyHtml, minifyJsFiles, findFilesByBasename } from "./minify";
 import { ROOT_SCRIPT_JS } from "./cli/root-script";
@@ -151,6 +152,13 @@ const WIDGET_SCRIPT_FILE = "script.js";
 const PAGE_SCRIPT_FILE = "common.js";
 const WIDGET_PLACEHOLDER_ATTR = "data-widget-placeholder";
 const WIDGET_TYPE_ATTR = "data-widget-type";
+/** A rootLayout slot in the body shell (body/<Type>/index.html): one per
+ *  `<WidgetPlaceholder>`, fixed or dynamic. The composer replaces it with
+ *  that slot's widgets for the page (see page-widgets.ts): one for a fixed
+ *  slot, any number (or none) for a dynamic one. Written by
+ *  writeShellFiles, found by SLOT_MARKER_RE. */
+const WIDGET_SLOT_ATTR = "data-widget-slot";
+const SLOT_MARKER_RE = /<div data-widget-slot="([^"]*)"><\/div>/g;
 /** Stamped onto a LAZY widget's placeholder marker ONLY for build/serve
  *  (manifest.inlineCss) — the direct, static outDir-relative URL to that
  *  instance's own already-persisted content.json (see WidgetContent),
@@ -497,6 +505,15 @@ function placeholderMarkerHtml(id: string, type: string): string {
   return `<div${renderAttrs({ [WIDGET_PLACEHOLDER_ATTR]: id, [WIDGET_TYPE_ATTR]: type })}></div>`;
 }
 
+/** Undoes renderAttrs' escaping of a slot id read back from SLOT_MARKER_RE. */
+function unescapeAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
 /** The build/serve-only augmented form of a LAZY widget's marker — same
  *  attrs as placeholderMarkerHtml plus WIDGET_SRC_ATTR, pointing straight
  *  at that instance's own content.json (see WIDGET_SRC_ATTR's own doc
@@ -706,9 +723,9 @@ async function writeShellFiles(
   const markedVNode = await resolvePlaceholders(
     layoutVNode,
     WidgetPlaceholder,
-    (id, type) => ({
+    (id) => ({
       type: "div",
-      props: { [WIDGET_PLACEHOLDER_ATTR]: id, [WIDGET_TYPE_ATTR]: type },
+      props: { [WIDGET_SLOT_ATTR]: id },
     }),
   );
   let bodyContentHtml = await renderToString(markedVNode);
@@ -1028,9 +1045,17 @@ export async function buildPages(
     const folder = cleanUrlToFolder(page.url);
     const rootLayoutMeta = resolveRootLayoutType(registry, page);
 
+    // The page's widgets come from its rootLayout's placeholders (fixed
+    // slots) plus its sitemap `slots` (dynamic ones) — see page-widgets.ts.
+    const layoutVNode = (await render(rootLayoutMeta, {})) as VNodeChild;
     const widgets: PageWidgetManifestEntry[] = [];
-    for (const w of page.widgets) {
+    for (const w of resolvePageWidgets(layoutVNode, page)) {
       const lazy = w.loadingStrategy === "lazy";
+      // Absent when the slot is the widget's own id (every fixed slot).
+      const slot =
+        w.slot !== undefined && w.slot !== instanceId(w)
+          ? { slot: w.slot }
+          : {};
       if ("ref" in w) {
         const id = w.id ?? w.ref;
         const shared = sharedById.get(w.ref);
@@ -1041,6 +1066,7 @@ export async function buildPages(
         const path = join(WIDGETS_DIR, shared.type, shared.id);
         widgets.push({
           id,
+          ...slot,
           type: shared.type,
           shared: true,
           path,
@@ -1086,32 +1112,13 @@ export async function buildPages(
         );
         widgets.push({
           id: w.id,
+          ...slot,
           type: w.type,
           shared: false,
           path,
           lazy,
           cssHref: widgetCssHref,
         });
-      }
-    }
-
-    const layoutVNode = (await render(rootLayoutMeta, {})) as VNodeChild;
-    const placeholderIds = collectPlaceholderIds(
-      layoutVNode,
-      WidgetPlaceholder,
-    );
-    for (const id of placeholderIds) {
-      if (!widgets.some((w) => w.id === id)) {
-        throw new Error(
-          `page "${page.url}": rootLayout has <WidgetPlaceholder id="${id}"/> with no matching entry in sitemap widgets[]`,
-        );
-      }
-    }
-    for (const w of widgets) {
-      if (!placeholderIds.has(w.id)) {
-        throw new Error(
-          `page "${page.url}": sitemap widget "${w.id}" has no matching <WidgetPlaceholder id="${w.id}"/> in its rootLayout`,
-        );
       }
     }
 
@@ -1416,41 +1423,46 @@ function resolvePageParts(
     "<body></body>",
   );
 
+  // Each layout slot marker becomes its widgets, in order: one for a fixed
+  // slot, the page's list (or nothing) for a dynamic one.
+  const bySlot = new Map<string, PageWidgetManifestEntry[]>();
   for (const w of manifest.widgets) {
+    const slot = w.slot ?? w.id;
+    bySlot.set(slot, [...(bySlot.get(slot) ?? []), w]);
+  }
+  const widgetHtml = (w: PageWidgetManifestEntry): string => {
     if (w.lazy) {
-      // build/serve: stamp the marker with this instance's own direct,
+      // build/serve: a marker stamped with this instance's own direct,
       // static content.json path — the client (cli/root-script.ts's
       // loadLazyWidget) fetches it straight off disk, no server lookup at
       // all. Dev leaves the marker generic (no WIDGET_SRC_ATTR) and falls
       // back to the old /__streak/lazy?page=&id= composed endpoint (see
       // cli/app-script.ts's pump) — matching the same dev-vs-build split
       // used everywhere else in this function.
-      if (manifest.inlineCss) {
-        const marker = placeholderMarkerHtml(w.id, w.type);
-        bodyHtml = bodyHtml
-          .split(marker)
-          .join(
-            lazyPlaceholderMarkerHtml(
-              w.id,
-              w.type,
-              w.path,
-              w.shared,
-              manifest.version,
-            ),
-          );
-      }
-      continue;
+      return manifest.inlineCss
+        ? lazyPlaceholderMarkerHtml(
+            w.id,
+            w.type,
+            w.path,
+            w.shared,
+            manifest.version,
+          )
+        : placeholderMarkerHtml(w.id, w.type);
     }
-    const marker = placeholderMarkerHtml(w.id, w.type);
     const widgetPath = join(outDir, w.path, HTML_FILE);
     if (!existsSync(widgetPath))
       throw new Error(
         `resolvePageParts: missing ${widgetPath} — did buildPages run first?`,
       );
-    let widgetHtml = readFileSync(widgetPath, "utf-8");
-    widgetHtml = resolveWidgetComponents(widgetHtml, w.path, outDir);
-    bodyHtml = bodyHtml.split(marker).join(widgetHtml);
-  }
+    return resolveWidgetComponents(
+      readFileSync(widgetPath, "utf-8"),
+      w.path,
+      outDir,
+    );
+  };
+  bodyHtml = bodyHtml.replace(SLOT_MARKER_RE, (_, slotId: string) =>
+    (bySlot.get(unescapeAttr(slotId)) ?? []).map(widgetHtml).join(""),
+  );
 
   // Only combine when THIS page was built that way (see
   // BuildPagesOptions.inlineCss) — dev's pages already have their CSS

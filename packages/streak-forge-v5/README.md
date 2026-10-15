@@ -51,7 +51,13 @@ streak-boot serve       # serve out/ (no live-reload)
 
 ## Core Concepts
 
-- **`streak.sitemap.json`** — `{ shared?: [...], pages: [{ url, rootLayout, widgets: [...] }] }`. Different shape from v4's array-of-`renderConfig` — see the migration guide if upgrading.
+- **`streak.sitemap.json`** — `{ shared?: [...], pages: [{ url, rootLayout, metadata, slots? }] }`. Different shape from v4's array-of-`renderConfig` — see the migration guide if upgrading.
+- **Widgets come from the rootLayout**, not the sitemap:
+  - `<WidgetPlaceholder id="nav" type="Nav" />` — fixed slot: on every page using the layout, rendered with the page's `metadata`.
+  - `<WidgetPlaceholder id="nav" shared />` — fixed slot: the `shared[]` entry with that id (built once, its own `props`).
+  - `loadingStrategy="lazy"` on either makes that widget lazy.
+  - `<WidgetPlaceholder id="main" />` (no type) — dynamic slot: the page's `slots.main` list (`{ id, type, loadingStrategy?, components? }` or `{ ref }`), in order, or empty.
+  - A page's old `widgets` array is ignored.
 - **Annotation HOCs** (`src/hoc.ts`, exposed as ambient globals via `streak-forge/globals`) — `widget({...})(fn)`, `handler({...})(fn)`, `component({...})(fn)`, `html/head/body/rootLayout({...})(fn)`. A widget's `type` comes from its **filename**, not a threaded field — `HelloNav.tsx` registers as `"HelloNav"` regardless of export name.
 - **`@dynamicClasses`** annotation — declares Tailwind-style bracket-syntax classes (`bg-[#123]`) that the CSS-purge scan can't discover by static analysis alone.
 - **CSS-Modules-style scoping** — every widget's CSS is purged and prefixed to a short, deterministic per-type code, so two widgets can safely use the same class name.

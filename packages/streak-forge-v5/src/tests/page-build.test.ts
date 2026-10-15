@@ -1,4 +1,5 @@
 import { describe, expect, test, afterEach } from "bun:test";
+import { slotsOf } from "./slots-of";
 import {
   rmSync,
   existsSync,
@@ -153,8 +154,8 @@ const render: RenderInstance = async (meta, props) => {
       type: Fragment,
       props: {
         children: [
-          WidgetPlaceholder({ id: "badge-1", type: "Badge" }),
-          WidgetPlaceholder({ id: "card-1", type: "Card" }),
+          WidgetPlaceholder({ id: "badge-1" }),
+          WidgetPlaceholder({ id: "card-1" }),
         ],
       },
     };
@@ -180,19 +181,19 @@ const sitemap: StreakBootSitemap = {
       url: "/",
       rootLayout: "AppShell",
       metadata: { name: "A" },
-      widgets: [
+      slots: slotsOf([
         { id: "badge-1", ref: "SaleBadge" },
         { id: "card-1", type: "Card" },
-      ],
+      ]),
     },
     {
       url: "/page-2",
       rootLayout: "AppShell",
       metadata: { name: "B" },
-      widgets: [
+      slots: slotsOf([
         { id: "badge-1", ref: "SaleBadge" },
         { id: "card-1", type: "Card" },
-      ],
+      ]),
     },
   ],
 };
@@ -316,8 +317,7 @@ describe("page-build.buildPages", () => {
     // stays shell-type-scoped (same for every page using this shell), the
     // actual per-page widget content only gets spliced in at compose time.
     expect(bodyFile).toBe(
-      '<body class="shell-body"><div data-widget-placeholder="badge-1" data-widget-type="Badge"></div>' +
-        '<div data-widget-placeholder="card-1" data-widget-type="Card"></div></body>',
+      '<body class="shell-body"><div data-widget-slot="badge-1"></div><div data-widget-slot="card-1"></div></body>',
     );
   });
 
@@ -337,7 +337,7 @@ describe("page-build.buildPages", () => {
         {
           url: "/no-meta",
           rootLayout: "AppShell",
-          widgets: sitemap.pages[0]!.widgets,
+          slots: sitemap.pages[0]!.slots,
         },
       ],
     };
@@ -401,47 +401,56 @@ describe("page-build.buildPages", () => {
     expect(runs).toBe(1); // default: one cache for the whole build
   });
 
-  test("throws when a sitemap widget has no matching WidgetPlaceholder in its rootLayout", async () => {
-    // Both real placeholders (badge-1, card-1) satisfied, PLUS one extra
-    // sitemap widget the layout never references — isolates this
-    // direction of the mismatch check from the other.
-    const badSitemap: StreakBootSitemap = {
+  test("slot lists for ids the layout doesn't have as dynamic slots are ignored", async () => {
+    const extraSitemap: StreakBootSitemap = {
       pages: [
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [
-            { id: "badge-1", ref: "SaleBadge" },
-            { id: "card-1", type: "Card" },
-            { id: "extra-1", type: "Card" },
-          ],
+          slots: {
+            ...slotsOf([
+              { id: "badge-1", ref: "SaleBadge" },
+              { id: "card-1", type: "Card" },
+            ]),
+            "no-such-slot": [{ id: "extra-1", type: "Card" }],
+          },
         },
       ],
       shared: sitemap.shared,
     };
-    await expect(
-      buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render }),
-    ).rejects.toThrow(
-      /sitemap widget "extra-1" has no matching <WidgetPlaceholder/,
-    );
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: extraSitemap,
+      outDir: OUT_DIR,
+      render,
+    });
+    expect(pageManifests[0]!.widgets.map((w) => w.id)).toEqual([
+      "badge-1",
+      "card-1",
+    ]);
   });
 
-  test("throws when a WidgetPlaceholder has no matching sitemap widget", async () => {
-    // Layout has two placeholders (badge-1, card-1); sitemap only supplies one.
-    const badSitemap: StreakBootSitemap = {
+  test("a dynamic slot the page lists nothing for stays empty", async () => {
+    const partialSitemap: StreakBootSitemap = {
       pages: [
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [{ id: "card-1", type: "Card" }],
+          metadata: { name: "A" },
+          slots: slotsOf([{ id: "card-1", type: "Card" }]),
         },
       ],
     };
-    await expect(
-      buildPages({ registry, sitemap: badSitemap, outDir: OUT_DIR, render }),
-    ).rejects.toThrow(
-      /rootLayout has <WidgetPlaceholder id="badge-1"\/> with no matching entry/,
-    );
+    const { pageManifests } = await buildPages({
+      registry,
+      sitemap: partialSitemap,
+      outDir: OUT_DIR,
+      render,
+    });
+    expect(pageManifests[0]!.widgets.map((w) => w.id)).toEqual(["card-1"]);
+    const html = composePageFromFiles(pageManifests[0]!, OUT_DIR);
+    expect(html).not.toContain("data-widget-slot");
+    expect(html).not.toContain("badge-1");
   });
 
   test("a ref widget's id defaults to the ref value when omitted", async () => {
@@ -451,7 +460,7 @@ describe("page-build.buildPages", () => {
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [{ ref: "SaleBadge" }, { id: "card-1", type: "Card" }],
+          slots: slotsOf([{ ref: "SaleBadge" }, { id: "card-1", type: "Card" }]),
         },
       ],
     };
@@ -464,8 +473,8 @@ describe("page-build.buildPages", () => {
           type: Fragment,
           props: {
             children: [
-              WidgetPlaceholder({ id: "SaleBadge", type: "Badge" }),
-              WidgetPlaceholder({ id: "card-1", type: "Card" }),
+              WidgetPlaceholder({ id: "SaleBadge" }),
+              WidgetPlaceholder({ id: "card-1" }),
             ],
           },
         };
@@ -495,10 +504,10 @@ describe("page-build.buildPages", () => {
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "does-not-exist" },
             { id: "card-1", type: "Card" },
-          ],
+          ]),
         },
       ],
     };
@@ -563,10 +572,10 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
           url: "/",
           rootLayout: "AppShell",
           metadata: { name: "A" },
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "SaleBadge" },
             { id: "card-1", type: "Card", loadingStrategy: "lazy" },
-          ],
+          ]),
         },
       ],
     };
@@ -620,7 +629,7 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
         return {
           type: Fragment,
           props: {
-            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+            children: [WidgetPlaceholder({ id: "badge-1" })],
           },
         };
       }
@@ -632,7 +641,7 @@ describe("page-build.composePageFromFiles — pure fs + string splicing, no rend
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+          slots: slotsOf([{ id: "badge-1", ref: "PlainBadge" }]),
         },
       ],
     };
@@ -747,7 +756,7 @@ describe("page-build buildPages({ spa: true }) — index.json + spa-router.js, o
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+          slots: slotsOf([{ id: "badge-1", ref: "PlainBadge" }]),
         },
       ],
     };
@@ -761,7 +770,7 @@ describe("page-build buildPages({ spa: true }) — index.json + spa-router.js, o
         return {
           type: Fragment,
           props: {
-            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+            children: [WidgetPlaceholder({ id: "badge-1" })],
           },
         };
       }
@@ -807,10 +816,10 @@ describe("page-build buildPages({ inlineCss: true }) — build/serve's combined 
           url: "/",
           rootLayout: "AppShell",
           metadata: { name: "A" },
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "SaleBadge" }, // eager
             { id: "card-1", type: "Card", loadingStrategy: "lazy" }, // lazy
-          ],
+          ]),
         },
       ],
     };
@@ -908,10 +917,10 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
         url: "/",
         rootLayout: "AppShell",
         metadata: { name: "A" },
-        widgets: [
+        slots: slotsOf([
           { id: "badge-1", ref: "SaleBadge" },
           { id: "card-1", type: "Card", loadingStrategy: "lazy" },
-        ],
+        ]),
       },
     ],
   };
@@ -1069,10 +1078,10 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
           url: "/",
           rootLayout: "AppShell",
           metadata: { name: "A" },
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "SaleBadge", loadingStrategy: "lazy" }, // triggers needsRuntime
             { id: "card-1", type: "Card" }, // eager, HAS a script — ends up in common.js
-          ],
+          ]),
         },
       ],
     };
@@ -1139,10 +1148,10 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
           url: "/",
           rootLayout: "AppShell",
           metadata: { name: "A" },
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "SaleBadge", loadingStrategy: "lazy" },
             { id: "card-1", type: "Card" },
-          ],
+          ]),
         },
       ],
     };
@@ -1224,7 +1233,7 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
         {
           url: "/",
           rootLayout: "AppShell",
-          widgets: [{ id: "badge-1", ref: "PlainBadge" }],
+          slots: slotsOf([{ id: "badge-1", ref: "PlainBadge" }]),
         },
       ],
     };
@@ -1238,7 +1247,7 @@ describe("page-build.composeLazyWidgetFragment / lazy-runtime wiring", () => {
         return {
           type: Fragment,
           props: {
-            children: [WidgetPlaceholder({ id: "badge-1", type: "Badge" })],
+            children: [WidgetPlaceholder({ id: "badge-1" })],
           },
         };
       }
@@ -1359,10 +1368,10 @@ describe("page-build Script collection — no combined file is ever persisted, j
           url: "/",
           rootLayout: "AppShell",
           metadata: { name: "A" },
-          widgets: [
+          slots: slotsOf([
             { id: "badge-1", ref: "SaleBadge" },
             { id: "card-1", type: "Card", loadingStrategy: "lazy" },
-          ],
+          ]),
         },
       ],
     };
@@ -1438,7 +1447,7 @@ describe("page-build common components — one level deep, declared in the sitem
       return {
         type: Fragment,
         props: {
-          children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })],
+          children: [WidgetPlaceholder({ id: "panel-1" })],
         },
       };
     }
@@ -1460,7 +1469,7 @@ describe("page-build common components — one level deep, declared in the sitem
           url: "/",
           rootLayout: "AppShell",
           metadata: panelMetadata,
-          widgets: [{ id: "panel-1", type: "Panel", components }],
+          slots: slotsOf([{ id: "panel-1", type: "Panel", components }]),
         },
       ],
     };
@@ -1551,7 +1560,7 @@ describe("page-build common components — one level deep, declared in the sitem
       url: "/page-2",
       rootLayout: "AppShell",
       metadata: { label: "Bye" },
-      widgets: [
+      slots: slotsOf([
         {
           id: "panel-1",
           type: "Panel",
@@ -1559,7 +1568,7 @@ describe("page-build common components — one level deep, declared in the sitem
             { id: "btn-1", type: "Button", props: { label: "Click B" } },
           ],
         },
-      ],
+      ]),
     });
 
     const { pageManifests } = await buildPages({
@@ -1683,7 +1692,7 @@ describe("page-build common components — one level deep, declared in the sitem
           type: Fragment,
           props: {
             children: [
-              WidgetPlaceholder({ id: "panel-1", type: "Panel" }),
+              WidgetPlaceholder({ id: "panel-1" }),
               ComponentPlaceholder({ id: "stray-1", type: "Button" }),
             ],
           },
@@ -1743,7 +1752,7 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
         type: "div",
         props: {
           className: "layout",
-          children: [WidgetPlaceholder({ id: "panel-1", type: "Panel" })],
+          children: [WidgetPlaceholder({ id: "panel-1" })],
         },
       };
     }
@@ -1755,13 +1764,13 @@ describe("page-build buildPages({ scopeClasses }) — CSS-Modules-style class pr
       {
         url: "/",
         rootLayout: "AppShell",
-        widgets: [
+        slots: slotsOf([
           {
             id: "panel-1",
             type: "Panel",
             components: [{ id: "btn-1", type: "Button" }],
           },
-        ],
+        ]),
       },
     ],
   };
@@ -1915,7 +1924,7 @@ describe("page-build Dynamic components — build-time extraction, on-demand fet
       return {
         type: Fragment,
         props: {
-          children: [WidgetPlaceholder({ id: "banner-1", type: "Banner" })],
+          children: [WidgetPlaceholder({ id: "banner-1" })],
         },
       };
     }
@@ -1927,7 +1936,7 @@ describe("page-build Dynamic components — build-time extraction, on-demand fet
       {
         url: "/",
         rootLayout: "AppShell",
-        widgets: [{ id: "banner-1", type: "Banner" }],
+        slots: slotsOf([{ id: "banner-1", type: "Banner" }]),
       },
     ],
   };

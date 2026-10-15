@@ -1,4 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test";
+import { slotsOf } from "./slots-of";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { buildPages, type RenderInstance } from "../page-build";
@@ -63,7 +64,7 @@ const render: RenderInstance = async (meta) => {
     return {
       type: Fragment,
       props: {
-        children: [WidgetPlaceholder({ id: "hello-1", type: "Hello" })],
+        children: [WidgetPlaceholder({ id: "hello-1" })],
       },
     };
   }
@@ -75,12 +76,12 @@ const sitemap: StreakBootSitemap = {
     {
       url: "/",
       rootLayout: "AppShell",
-      widgets: [{ id: "hello-1", type: "Hello" }],
+      slots: slotsOf([{ id: "hello-1", type: "Hello" }]),
     },
     {
       url: "/page-2",
       rootLayout: "AppShell",
-      widgets: [{ id: "hello-1", type: "Hello" }],
+      slots: slotsOf([{ id: "hello-1", type: "Hello" }]),
     },
   ],
 };

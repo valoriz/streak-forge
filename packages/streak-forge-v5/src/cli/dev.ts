@@ -132,15 +132,11 @@ export async function renderDevPage(
     (p) => (p.url.replace(/\/+$/, "") || "/") === wanted,
   );
   if (!page) return false;
-  const refs = new Set(
-    page.widgets.flatMap((w) => ("ref" in w ? [w.ref] : [])),
-  );
+  // Which shared widgets the page uses is only known from its rendered
+  // rootLayout (page-widgets.ts): pass them all (a handful, built once each).
   await buildPages({
     registry: build.registry,
-    sitemap: {
-      shared: (sitemap.shared ?? []).filter((s) => refs.has(s.id)),
-      pages: [page],
-    },
+    sitemap: { shared: sitemap.shared ?? [], pages: [page] },
     outDir: paths.devDir,
     render: renderInstance,
     scopeClasses: true,

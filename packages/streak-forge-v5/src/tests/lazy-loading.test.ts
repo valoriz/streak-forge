@@ -1,4 +1,5 @@
 import { describe, test, expect, afterEach } from "bun:test";
+import { slotsOf } from "./slots-of";
 import { rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { buildPages, type RenderInstance } from "../page-build";
@@ -107,8 +108,8 @@ const render: RenderInstance = async (meta, props) => {
       type: Fragment,
       props: {
         children: [
-          WidgetPlaceholder({ id: "hello-1", type: "Hello" }),
-          WidgetPlaceholder({ id: "bonus-1", type: "Bonus" }),
+          WidgetPlaceholder({ id: "hello-1" }),
+          WidgetPlaceholder({ id: "bonus-1" }),
         ],
       },
     };
@@ -122,10 +123,10 @@ const sitemap: StreakBootSitemap = {
       url: "/",
       rootLayout: "AppShell",
       metadata: { fact: "real" },
-      widgets: [
+      slots: slotsOf([
         { id: "hello-1", type: "Hello" },
         { id: "bonus-1", type: "Bonus", loadingStrategy: "lazy" },
-      ],
+      ]),
     },
   ],
 };

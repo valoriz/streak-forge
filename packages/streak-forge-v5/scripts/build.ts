@@ -6,6 +6,7 @@
  *
  *   dist/index.js, globals.js, jsx-runtime.js, jsx-dev-runtime.js,
  *   dist/render-record.js ("streak-forge/render": stage-1 render + record),
+ *   dist/runtime.js ("streak-forge/runtime": what prebuilt bundles import),
  *   dist/streak-forge.js (the CLI)
  *   dist/chunk-*.js   shared code (one module instance across entry points)
  *   dist/types/**     .d.ts declarations
@@ -29,6 +30,7 @@ const result = await Bun.build({
     join(ROOT, "src/jsx-runtime.ts"),
     join(ROOT, "src/jsx-dev-runtime.ts"),
     join(ROOT, "src/render-record.ts"),
+    join(ROOT, "src/runtime.ts"),
     join(ROOT, "bin/streak-forge.ts"),
   ],
   outdir: DIST,

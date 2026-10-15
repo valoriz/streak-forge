@@ -16,6 +16,7 @@ import { basename, extname, join, resolve } from "node:path";
 import { hashValue } from "./hash";
 import { ComponentPlaceholder, Dynamic, Fragment, SCRIPT_BLOCK, WidgetPlaceholder, isKind, type VNode, type VNodeChild } from "./jsx";
 import type { ComponentMeta, Registry, ShellMeta, SharedWidgetEntry, SitemapPageEntry, WidgetMeta } from "./types";
+import { resolvePageWidgets } from "./page-widgets";
 
 export type { Registry, SharedWidgetEntry, SitemapPageEntry } from "./types";
 
@@ -135,7 +136,7 @@ function resolveRootLayout(registry: Registry, page: SitemapPageEntry): ShellMet
 
 /** Distinct rootLayout values ("" = the project's default) -> shell types. */
 export function shellTypesFor(registry: Registry, rootLayouts: string[]): string[] {
-  return [...new Set(rootLayouts.map((rootLayout) => resolveRootLayout(registry, { url: "/", widgets: [], ...(rootLayout ? { rootLayout } : {}) }).type))];
+  return [...new Set(rootLayouts.map((rootLayout) => resolveRootLayout(registry, { url: "/", ...(rootLayout ? { rootLayout } : {}) }).type))];
 }
 
 /** Once per build: shared widgets (+ their components) and the shells of the
@@ -161,10 +162,12 @@ export function planSetupRenders(registry: Registry, shared: SharedWidgetEntry[]
 }
 
 /** One page: its inline widgets (+ components), its rootLayout, and its own
- *  head when it has metadata. */
-export function planPageRenders(registry: Registry, page: SitemapPageEntry): RenderCall[] {
+ *  head when it has metadata. The page's widgets come from its rootLayout's
+ *  placeholders (page-widgets.ts), so the plan needs the rendered layout:
+ *  see recordPageRenders, which renders it first. */
+export function planPageRenders(registry: Registry, page: SitemapPageEntry, layoutVNode: VNodeChild): RenderCall[] {
   const calls: RenderCall[] = [];
-  for (const w of page.widgets) {
+  for (const w of resolvePageWidgets(layoutVNode, page)) {
     if ("ref" in w) continue; // shared: rendered by the setup job
     const context = `page "${page.url}", widget "${w.id}"`;
     calls.push({ entry: lookup(registry.widgets, w.type, "widget", context), props: { data: page.metadata ?? {} }, kind: "vnode" });
@@ -249,4 +252,20 @@ export async function recordRenders(
     }
   }
   return into;
+}
+
+/** One page, as stage 1 runs it: renders the page's rootLayout, reads its
+ *  widgets off the placeholders, then records every render the page needs
+ *  into `into` (the layout render included, once). */
+export async function recordPageRenders(
+  registry: Registry,
+  page: SitemapPageEntry,
+  render: (entry: RenderEntry, props: Record<string, unknown>) => Promise<unknown>,
+  into: RenderRecord = {},
+): Promise<RenderRecord> {
+  const layoutEntry = resolveRootLayout(registry, page);
+  const layoutVNode = await resolveVNode((await render(layoutEntry, {})) as VNodeChild);
+  const layoutKey = renderKey(layoutEntry, {});
+  if (!(layoutKey in into)) into[layoutKey] = { kind: "vnode", value: encodeVNodeTree(layoutVNode) };
+  return recordRenders(planPageRenders(registry, page, layoutVNode), render, into);
 }

@@ -2,6 +2,43 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { removeStaleHashedFiles } from "./fs-utils";
 import { join } from "node:path";
 import type { BundleGenResult } from "./types";
+import * as runtime from "./runtime";
+
+/** What a bundle's `import ... from "streak-forge"` is pointed at — see
+ *  pointAtRuntime. */
+export const RUNTIME_SPECIFIER = "streak-forge/runtime";
+const RUNTIME_EXPORTS = new Set(Object.keys(runtime));
+
+/**
+ * Client code imports its authoring API (Script, Dynamic, the placeholders,
+ * the HOCs) from "streak-forge". In the bundle that import is pointed at
+ * `streak-forge/runtime`, which carries only that API — so rendering a
+ * bundle never loads the main entry's build tooling (TypeScript, chokidar,
+ * purgecss). Subpath imports ("streak-forge/jsx-dev-runtime", ...) are
+ * already lean and stay as they are.
+ *
+ * A named import the runtime doesn't export fails here, at prebuild time,
+ * instead of when the bundle renders. Idempotent (only the exact
+ * "streak-forge" specifier is rewritten), so cached bundles go through it too.
+ */
+export function pointAtRuntime(js: string, where: string): string {
+  const out = js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)(["'])streak-forge\2/g, `$1$2${RUNTIME_SPECIFIER}$2`);
+  const named = /import\s*\{([^}]*)\}\s*from\s*["']streak-forge\/runtime["']/g;
+  for (const match of out.matchAll(named)) {
+    for (const part of match[1]!.split(",")) {
+      const name = part.trim().split(/\s+as\s+/)[0]!.trim();
+      if (name && !name.startsWith("type ") && !RUNTIME_EXPORTS.has(name)) {
+        throw new Error(
+          `streak-forge: ${where} imports "${name}" from "streak-forge", which isn't part of the client runtime (streak-forge/runtime). Import build-time tooling only from build scripts, not from widget/handler/component code.`,
+        );
+      }
+    }
+  }
+  if (/import\s+[A-Za-z_$][\w$]*\s*(,|from)\s*["']streak-forge\/runtime["']/.test(out)) {
+    throw new Error(`streak-forge: ${where} uses a default import from "streak-forge"; it has no default export`);
+  }
+  return out;
+}
 
 /**
  * Bundles a widget/handler/component's TSX/TS source (plus every local
@@ -70,7 +107,7 @@ export async function generateBundle(
   const cacheFile = join(cacheDir, baseFileName);
 
   if (existsSync(cacheFile)) {
-    const js = readFileSync(cacheFile, "utf-8");
+    const js = pointAtRuntime(readFileSync(cacheFile, "utf-8"), `${target.name} (${target.filePath})`);
     writeFileSync(join(entryDir, baseFileName), js);
     removeStaleHashedFiles(entryDir, target.name, ".js", baseFileName);
     return { name: target.name, fileName, fromCache: true };
@@ -97,7 +134,7 @@ export async function generateBundle(
       `streak-forge: bundling "${target.name}" (${target.filePath}) produced no output`,
     );
   }
-  const js = await output.text();
+  const js = pointAtRuntime(await output.text(), `${target.name} (${target.filePath})`);
 
   writeFileSync(cacheFile, js);
   writeFileSync(join(entryDir, baseFileName), js);
