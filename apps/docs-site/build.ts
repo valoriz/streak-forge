@@ -50,6 +50,9 @@ interface DocsVersion {
   navOrder: string[]
   /** One-line notice shown above every page of the version (HTML). */
   banner?: string
+  /** Extra stylesheet (e.g. Google Fonts) loaded only on this version's pages.
+   *  Its fonts are applied by `[data-version="<id>"]` rules in styles.css. */
+  fontsHref?: string
 }
 
 const VERSIONS: DocsVersion[] = [
@@ -88,6 +91,8 @@ const VERSIONS: DocsVersion[] = [
       "migration",
       "reference",
     ],
+    fontsHref:
+      "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
     banner:
       'You are reading the <strong>v5 (beta)</strong> docs. APIs may still change before the stable release. <a href="/index.html">v4 docs</a> · <a href="/v5/migration/from-v4.html">Migrating from v4</a>',
   },
@@ -440,6 +445,8 @@ export async function build({ minify = false } = {}) {
         .replace("{{version_switcher}}", generateVersionSwitcher(version, page, relsByVersion))
         .replace("{{version_banner}}", version.banner ? `<div class="version-banner">${version.banner}</div>` : "")
         .replaceAll("{{version_base}}", version.base)
+        .replace("{{version_id}}", version.id)
+        .replace("{{version_head}}", version.fontsHref ? `<link href="${version.fontsHref}" rel="stylesheet" />` : "")
 
       if (minify) out = minifyHtml(out)
 
