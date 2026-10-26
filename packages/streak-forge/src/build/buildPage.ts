@@ -4,6 +4,7 @@ import { collectStyles, type StyleCollectDirs } from "./styleExtract";
 import { withHandlerTimeoutWarning } from "./handlerTimeoutWarning";
 import type { Progress } from "./progress";
 import type { RenderConfig, WidgetProps } from "../types";
+import type { PurgeConfig } from "./purgeConfig";
 
 export interface WidgetOut {
   id: string;
@@ -24,6 +25,9 @@ export interface RawContent {
   dataHandlerOut: Record<string, any>;
   rootLayoutOut: string;
   completeStyle: string;
+  // Client purgecss options (from purgecss.config.js) for the optimizer's
+  // critical/secondary CSS split. Absent when the project has no config.
+  purgeConfig?: PurgeConfig;
 }
 
 // Handler responses often carry fields with no widget attached (a `status`

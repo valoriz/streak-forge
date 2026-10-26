@@ -2,6 +2,7 @@ import path from "path";
 import config from "./config";
 import { HANDLERS_DIR, LAYOUTS_DIR, WIDGETS_DIR } from "./constants";
 import { buildPageData, type BuildPageDirs } from "./build/buildPage";
+import { loadPurgeConfig } from "./build/purgeConfig";
 import { Progress, type ProgressMetaInfo } from "./build/progress";
 import { getCommonHandlerData } from "./build/commonHandler";
 import { resolveMiddleware } from "./build/middleware";
@@ -17,6 +18,7 @@ export { getCommonHandlerData } from "./build/commonHandler";
 // Re-exported so external callers can type their own onProgress callback
 // against RenderOptions's actual metaInfo shape instead of widening it.
 export type { ProgressMetaInfo } from "./build/progress";
+export type { PurgeConfig } from "./build/purgeConfig";
 
 export interface HandlerOptions {
   srcDir: {
@@ -149,6 +151,10 @@ export const render = async (
     progress,
     common,
   );
+  // Project root = public dir's parent: the app's cwd for our own commands,
+  // the extracted project for external callers (streak-forge-build).
+  const purgeConfig = await loadPurgeConfig(path.dirname(styleDirs.publicDir));
+  if (purgeConfig) raw.purgeConfig = purgeConfig;
   // Reports render completion the same way every other stage does (a real
   // {currentTime, timeTook} entry) instead of a bespoke top-level field, so
   // external consumers that only special-case startTime/totalTime and treat
