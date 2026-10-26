@@ -1,0 +1,84 @@
+---
+title: Shells
+description: "html(), head(), body() and rootLayout(): the document shell around a page's widgets, and per-page <head>."
+order: 4
+---
+
+# Shells
+
+A shell is the document around the widgets. One file in `src/shell/` is one shell type (its file name), and exports up to four entries:
+
+```tsx
+// src/shell/ProductShell.tsx
+import { WidgetPlaceholder } from "streak-forge";
+import { ProductHandler } from "../handlers/ProductHandler";
+
+export const ProductHtml = html({})(() => ({ lang: "en", dir: "ltr" }));
+
+export const ProductHead = head({})(async (props: { data?: { slug?: string } }) => {
+  const product = props?.data?.slug ? await ProductHandler({ slug: props.data.slug }) : null;
+  return (
+    <>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>{product ? `${product.title} — Shop` : "Shop"}</title>
+    </>
+  );
+});
+
+export const ProductBody = body({})(() => ({ className: "bg-white text-gray-900 antialiased" }));
+
+export const ProductRootLayout = rootLayout({})(() => (
+  <>
+    <WidgetPlaceholder id="nav" shared />
+    <WidgetPlaceholder id="detail" type="ProductDetail" />
+    <WidgetPlaceholder id="related" type="RelatedProducts" loadingStrategy="lazy" />
+    <WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+  </>
+));
+```
+
+| Entry | Returns | Becomes |
+|---|---|---|
+| `html()` | attribute object | `<html …>` attributes |
+| `head()` | JSX | `<head>` content |
+| `body()` | attribute object | `<body …>` attributes |
+| `rootLayout()` | JSX with `<WidgetPlaceholder>`s | `<body>` content, with one slot per placeholder |
+
+A page picks its shell with `"rootLayout": "<ShellType>"` in the sitemap. If the project has only one rootLayout, pages may leave it out.
+
+---
+
+## Per-page `<head>`
+
+`head()` is rendered twice:
+
+- **Once per shell**, with `{}` — the shell's shared head, used by pages without `metadata`.
+- **Once per page that has `metadata`**, with `{ data: page.metadata }` — that page's own head (`pages/<url>/head.html`).
+
+So title, description, canonical URL and `og:*` tags can come from the page's data or from a handler, as in the example. Make `head()` work with empty data too.
+
+---
+
+## Shared layout helpers
+
+Several shells often share markup. Put it in a helper file in `src/shell/` that calls no HOC (it isn't registered), and import it:
+
+```tsx
+// src/shell/shell-shared.tsx
+export const htmlAttrs = () => ({ lang: "en" });
+export const bodyAttrs = () => ({ className: "bg-white text-gray-900" });
+
+// src/shell/HomeShell.tsx
+import { htmlAttrs, bodyAttrs } from "./shell-shared";
+export const HomeHtml = html({})(htmlAttrs);
+export const HomeBody = body({})(bodyAttrs);
+```
+
+---
+
+## One shell per page kind
+
+The rootLayout decides a page's fixed widgets. Pages that need different fixed widgets need different shells — or one shell with a **dynamic slot** that each page fills from the sitemap. See [Slots](/v5/core-concepts/slots.html).
+
+The rootLayout is rendered with `{}`, once per shell type, so its slots are the same for every page using it. Don't make the placeholders depend on data.

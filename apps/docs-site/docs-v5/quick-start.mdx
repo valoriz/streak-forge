@@ -1,0 +1,139 @@
+---
+title: Quick Start
+description: "Get a Streak.js v5 project running locally in a few minutes."
+order: 2
+---
+
+# Quick Start
+
+This sets up the smallest working v5 project: one shell, one widget, one page. For a full example with shared and lazy widgets, see `apps/hello-streak-app` in the streak-forge repository.
+
+> **Note:** `create-streak-app` scaffolds v4 projects only. For v5, start from the files below or copy `hello-streak-app`.
+
+---
+
+## 1. Install
+
+```bash
+mkdir my-site && cd my-site
+bun init -y
+bun add streak-forge
+bun add -d tailwindcss@3 concurrently
+```
+
+`streak-boot` (page build and serving) is added later, when you want a production build. See [Installation](/v5/getting-started/installation.html).
+
+## 2. Configure
+
+`tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "streak-forge",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["bun-types", "streak-forge/globals"]
+  },
+  "include": ["src"]
+}
+```
+
+`bunfig.toml` (installs the `widget()`, `handler()`, `html()`… globals before your code runs):
+
+```toml
+preload = ["streak-forge/globals"]
+
+[test]
+preload = ["streak-forge/globals"]
+```
+
+`package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "css-build": "tailwindcss -i src/app.css -o src/app.full.css",
+    "dev:css": "tailwindcss -i src/app.css -o src/app.full.css --watch",
+    "dev": "concurrently -k \"bun run dev:css\" \"streak-forge dev\"",
+    "prebuild": "streak-forge safelist && bun run css-build && streak-forge prebuild"
+  }
+}
+```
+
+`src/app.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+## 3. A widget
+
+`src/widgets/Hello.tsx` — the file name is the widget type:
+
+```tsx
+type HelloProps = { data?: { heading?: string } };
+
+export const Hello = widget({})((props: HelloProps) => (
+  <section className="p-10 text-center">
+    <h1 className="text-4xl font-bold">{props?.data?.heading ?? "Hello"}</h1>
+  </section>
+));
+```
+
+## 4. A shell
+
+`src/shell/AppShell.tsx` — the file name is the shell type:
+
+```tsx
+import { WidgetPlaceholder } from "streak-forge";
+
+export const AppHtml = html({})(() => ({ lang: "en" }));
+export const AppHead = head({})((props: { data?: { title?: string } }) => (
+  <>
+    <meta charset="utf-8" />
+    <title>{props?.data?.title ?? "My site"}</title>
+  </>
+));
+export const AppBody = body({})(() => ({ className: "bg-white text-gray-900" }));
+export const AppRootLayout = rootLayout({})(() => (
+  <WidgetPlaceholder id="hello" type="Hello" />
+));
+```
+
+## 5. A page
+
+`streak.sitemap.json`:
+
+```json
+{
+  "pages": [
+    { "url": "/", "rootLayout": "AppShell", "metadata": { "title": "Home", "heading": "Hello, Streak v5" } }
+  ]
+}
+```
+
+The `Hello` widget gets the page's `metadata` as `props.data`, and so does the shell's `head()`.
+
+## 6. Run it
+
+```bash
+bun run css-build   # first run: create src/app.full.css
+bun run dev
+```
+
+Open `http://localhost:4000`. Edit the widget and the page reloads.
+
+---
+
+## Next steps
+
+- [Project structure](/v5/getting-started/project-structure.html)
+- [Your first page](/v5/getting-started/your-first-page.html) — shared widgets, lazy widgets, scripts
+- [streak-boot](/v5/cli/streak-boot.html) — build and serve a production version

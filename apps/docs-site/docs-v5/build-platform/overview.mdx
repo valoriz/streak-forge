@@ -1,0 +1,58 @@
+---
+title: Overview
+description: "The Streak build platform: two-stage builds on Cloudflare, full and partial builds, on-demand (ISR) pages, preview and live."
+order: 1
+---
+
+# Build Platform Overview
+
+The Streak build platform builds and serves v5 sites at scale. It runs on Cloudflare (Workers, D1, R2, Queues, Durable Objects and Containers) and does three things:
+
+- **Builds** — full or partial: render pages in containers, optimize them in Workers, deploy them. See [Builds](/v5/build-platform/builds.html).
+- **On-demand builds (ISR)** — a known page that isn't built yet is built the first time someone requests it, and the HTML goes straight back to that visitor. See [On-demand builds](/v5/build-platform/on-demand.html).
+- **Serving** — a site worker in the site's own Cloudflare account serves pages from the site's database and storage. See [Site worker](/v5/build-platform/site-worker.html).
+
+---
+
+## Two stages, two trust levels
+
+Your code (widgets, handlers) only runs inside containers. Everything the platform does to your output runs outside them.
+
+| | Stage 1 — render | Stage 2 — optimize |
+|---|---|---|
+| Runs | Cloudflare Container (Docker) | Worker (queue consumer) |
+| Package | `streak-forge/render` (render + record) | `streak-boot/build` (`buildSetup` / `buildPage`) |
+| Input | `prebuild.zip`, page entries, your site's env | Stage 1's render records, the prebuild's registry and CSS |
+| Does | Calls every widget and shell, encodes the results | Composes fragments, CSS, scripts; minifies; writes files |
+| Gets | A build-scoped token, nothing else | Storage and database access |
+
+Stage 1 sends a **render record** — every render result of a page, encoded as JSON — and stage 2 replays it. Stage 2 never runs client code. The same records come out of an in-process `streak-boot build`, which is tested to produce byte-identical output.
+
+---
+
+## Where things live
+
+| Piece | Account | Holds |
+|---|---|---|
+| Build API, containers, queues, stage-2 Worker | Platform (one) | Build state, cached release ZIPs, render records, staging (preview) |
+| Common DB (D1) | Platform | Sites, builds, build pages, usage |
+| Site worker | Site (per site, can be yours) | Serves the site |
+| Site DB (D1) | Site | Every valid URL of the site + page info + page state. Never files. |
+| Site bucket (R2) | Site | Live page files and public assets |
+
+The platform reaches a site account only over HTTPS: the site bucket through R2's S3 API with bucket-scoped keys, the site DB through the site worker's signed sync route. If the platform is down, every built page keeps serving.
+
+---
+
+## The flow at a glance
+
+```
+your CI ── streak-forge prebuild ──▶ GitHub release (prebuild.zip + public.zip)
+                                             │
+build request ──▶ Build API ──▶ stage-1 containers ──▶ ingest ──▶ queue ──▶ stage 2 ──▶ staging (preview)
+                                                                                         │ deploy (copy)
+visitor ──▶ site worker ──▶ cache ─▶ site DB ─▶ site R2 ─────────────────────────────▶ live
+                                        └─ page known but not built ─▶ POST /isr ─▶ warm renderer ─▶ stage 2 ─▶ HTML
+```
+
+Next: [Release artifacts](/v5/build-platform/release-artifacts.html) — what your CI publishes.

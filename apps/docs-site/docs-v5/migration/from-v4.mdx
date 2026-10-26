@@ -1,0 +1,263 @@
+---
+title: Migrating from v4
+description: "Step-by-step upgrade of a Streak.js v4 project to v5: packages, widgets, data, layouts, sitemap, scripts, CSS and deployment."
+order: 1
+---
+
+# Migrating from v4
+
+v5 is a rewrite, not a drop-in upgrade. The authoring style (TSX widgets, `<Script>`, `<Dynamic>`, static HTML out) carries over; how data, layouts, the sitemap, CSS and builds work does not. Plan it as a port: one change per section below, in order, checking `streak-forge dev` as you go.
+
+This guide follows a real port of a ~50-page Shopify storefront (33 widgets, 12 handlers).
+
+---
+
+## At a glance
+
+| Area | v4 | v5 |
+|---|---|---|
+| Packages | `streak-forge` (everything) | `streak-forge` (dev, prebuild) + `streak-boot` (build, serve). v4 lives on as `streak-forge-legacy`. |
+| Widget | `export default function X(props)` | `export const X = widget({})(fn)`; type = file name |
+| Data | Page `dataHandler` returns `{ WidgetId: data }`; `CommonHandler`; `Middleware` | Widgets call `handler()`s with `await`; memoized by input; no page/common handler, no middleware |
+| Layout | One `rootLayout` component with `<WidgetPlaceholder>`s; missing widgets ignored | Shell file: `html()`, `head()`, `body()`, `rootLayout()`; placeholders **are** the page's widgets |
+| `<head>` | `AppHead` widget inside `<head>` | `head()` of the shell, rendered per page with `metadata` |
+| Sitemap | Array of `{ url, renderConfig }` | `{ shared, pages: [{ url, rootLayout, metadata, slots }] }` |
+| Components import | `streak-forge/components` | `streak-forge` |
+| `Preload` | Component | Removed — use `<link rel="preload">` |
+| CSS | One full CSS file per site | Purged and scoped per widget; script-touched classes declared in `dynamicClasses` |
+| Output | `out/<url>/index.html` (+ JSON) | HTML fragments composed per request; incompatible with v4 output |
+| Validator | `bun run validate` | Built into prebuild/build (they fail with a message) |
+
+---
+
+## 1. Packages and scripts
+
+```diff
+  "dependencies": {
+-   "streak-forge": "^4.1.18"
++   "streak-forge": "^5.1.0",
++   "streak-boot": "…"
+  }
+```
+
+| v4 | v5 |
+|---|---|
+| `streak-forge dev` | `streak-forge dev` |
+| `streak-forge pre-build` | `streak-forge safelist && <css build> && streak-forge prebuild` |
+| `streak-forge build` / `dev-build` | `streak-boot build` |
+| `bun run start` (python server over `out/`) | `streak-boot serve` |
+| `bun run validate` | — (checks run in prebuild/build) |
+
+```json
+"scripts": {
+  "css-build": "tailwindcss -i ./src/common/styles/input.css -o ./src/app.full.css",
+  "css-dev": "tailwindcss -i ./src/common/styles/input.css -o ./src/app.full.css --watch",
+  "dev": "bun run css-build && concurrently -k \"bun run css-dev\" \"streak-forge dev\"",
+  "prebuild": "streak-forge safelist && bun run css-build && streak-forge prebuild",
+  "build": "streak-boot build",
+  "serve": "streak-boot serve"
+}
+```
+
+Note the CSS output moves to **`src/app.full.css`** — the file prebuild purges. Remove the old `<link href="/styles/tailwind.css">` from your head: v5 delivers CSS itself.
+
+Add `bunfig.toml` and the tsconfig `types` entry — see [Configuration](/v5/getting-started/configuration.html). `create-streak-app` creates v4 projects only.
+
+---
+
+## 2. Widgets
+
+```diff
+- import { Script, Preload } from "streak-forge/components";
++ import { Script } from "streak-forge";
+
+- const Hero = (props: HeroProps) => { /* … */ };
+- export default Hero;
++ const HeroView = (props: HeroProps) => { /* … unchanged … */ };
++ export const Hero = widget({})(async (props: PageProps) => HeroView({ data: await heroData(props) }));
+```
+
+Keeping the old component as a `…View` function and adding a one-line `widget()` export makes the port mechanical and the diff small.
+
+- The file name is the type. Default exports aren't registered.
+- `Preload` is gone: write `<link rel="preload" href={…} as="image" />` (in the widget, or in the shell's `head()`).
+- A widget never learns its slot id. Two instances of one widget that need different data (v4's `HorizontalScroll` and `HorizontalScroll2` sharing a type) become two widget types reusing one view:
+
+```tsx
+// src/widgets/HorizontalScroll2.tsx
+export const HorizontalScroll2 = widget({})(async (props) =>
+  HorizontalScrollView({ data: await widgetData(HomeDataHandler, props, "HorizontalScroll2") }),
+);
+```
+
+---
+
+## 3. Data: page handlers → widget handlers
+
+v4 ran one handler per page and handed each widget `result[widgetId]`. v5 has no page-level handler. The smallest port keeps your v4 handlers as they are and lets each widget pick its entry:
+
+```ts
+// src/handlers/ProductBySlugHandler.ts — the v4 function, unchanged, now wrapped
+import type { PageHandler } from "../utils/page-data";
+const getProductData = async (metadata?: { slug?: string }) => { /* v4 body returning { ProductDetail, RelatedProducts, AppHead, … } */ };
+export const ProductBySlugHandler: PageHandler = handler({})(getProductData);
+```
+
+```ts
+// src/utils/page-data.ts
+export type PageInput = { slug?: string };
+export type WidgetProps = { data?: PageInput };
+
+/** One input shape everywhere, so every caller hits the same memo entry. */
+export function pageInput(props?: WidgetProps): PageInput {
+  const slug = props?.data?.slug;
+  return slug ? { slug } : {};
+}
+
+export async function widgetData(handler: PageHandler, props: WidgetProps | undefined, key: string) {
+  return (await handler(pageInput(props)))?.[key];
+}
+```
+
+```tsx
+// src/widgets/ProductDetail.tsx
+export const ProductDetail = widget({})(async (props: WidgetProps) =>
+  ProductDetailView({ data: await widgetData(ProductBySlugHandler, props, "ProductDetail") }),
+);
+```
+
+Because `handler()` memoizes by input, `ProductDetail`, `RelatedProducts` and the page's `head()` still cause **one** fetch per page.
+
+- **Handler input** — the page's `metadata` (`{ slug }`) is all a widget gets. Put the v4 `renderConfig.metadata` there.
+- **`CommonHandler`** (nav, footer) — make a `ChromeHandler` and render header/footer as `shared[]` widgets that call it.
+- **`Middleware` / dynamic routes** — not supported. List every URL in the sitemap, or use the build platform's [pages API](/v5/build-platform/pages-api.html) and on-demand builds.
+- **Results must be JSON-safe** — convert `Date` to strings. See [Handlers](/v5/core-concepts/handlers.html).
+- **Widgets shared by several page kinds** (home and CMS pages): pick the handler from the input, e.g. `slug ? PageBySlugHandler : HomeDataHandler`.
+
+---
+
+## 4. Layouts → shells
+
+A v4 `MainLayout` listing every widget of the site works because v4 skips placeholders the page doesn't list. In v5 a typed placeholder **always renders**. Choose:
+
+- **One shell per page kind** (home, product, collection, cart…), each listing exactly its widgets. Clear, and each kind's slots are fixed.
+- **One shell with a dynamic `main` slot**, header/footer/overlays as fixed `shared` slots, and each page listing its body widgets under `slots.main`.
+
+A shell file per kind can stay tiny when the markup lives in a helper:
+
+```tsx
+// src/shell/ProductShell.tsx
+import { ProductBySlugHandler } from "../handlers/ProductBySlugHandler";
+import { htmlAttrs, bodyAttrs, headFor, layoutFor } from "./shell-shared";
+
+export const ProductHtml = html({})(htmlAttrs);
+export const ProductHead = head({})(headFor(ProductBySlugHandler));
+export const ProductBody = body({})(bodyAttrs);
+export const ProductRootLayout = rootLayout({})(layoutFor("product"));
+```
+
+### The `<head>`
+
+The v4 `AppHead` widget becomes a plain component rendered by each shell's `head()`, fed by the page handler's `AppHead` entry:
+
+```tsx
+export const headFor = (handler: PageHandler) => async (props: WidgetProps) =>
+  AppHead({ data: (await handler(pageInput(props)))?.AppHead });
+```
+
+A page with `metadata` gets its own head, so per-product titles, canonical URLs and `og:image` keep working.
+
+---
+
+## 5. Sitemap
+
+```diff
+- [
+-   { "url": "/products/chair",
+-     "renderConfig": { "renderId": "product_chair", "dataHandler": "ProductBySlugHandler",
+-       "rootLayout": "MainLayout", "metadata": { "slug": "chair" },
+-       "widgets": [{ "id": "AppHead", "type": "AppHead" }, { "id": "ProductDetail", "type": "ProductDetail" }, …] } }
+- ]
++ {
++   "shared": [{ "id": "CommonHeader", "type": "CommonHeader" }, …],
++   "pages": [
++     { "url": "/products/chair", "rootLayout": "ProductShell", "metadata": { "slug": "chair" } }
++   ]
++ }
+```
+
+| v4 field | v5 |
+|---|---|
+| `renderId` | removed |
+| `dataHandler` | removed — the shell's `head()` and the widgets call the handler |
+| `rootLayout` | the page kind's shell type |
+| `metadata` | unchanged — keep only what handlers need (a slug) |
+| `widgets` | removed — fixed slots come from the shell; dynamic ones from `slots` |
+| `version` | removed |
+
+Keep **only the slug** in `metadata`; titles and descriptions come from handlers. A single route table (page kind → shell, widget slots) that both the shells and your sitemap generator read keeps the two from drifting apart.
+
+---
+
+## 6. Scripts
+
+- `options` is typed from what you pass, and `nonce` is gone.
+- The function is still serialized: no closures over widget variables.
+- `gDom` is `window`; the helpers are unchanged (`loadPackage`, `loadDynamicComponent`, `onVisible`, `debounce`, `geById`, `stall`, cookies).
+- `sf:pageload` / `sf:pageunload` still fire with SPA navigation.
+
+---
+
+## 7. CSS: the part that needs care
+
+v4 linked one full Tailwind file to every page. v5 gives each widget only its CSS and **renames its classes** (`hidden` → `c56b__hidden`). Markup is renamed automatically; **client scripts are not**. Every script that works with class names breaks until the classes are declared.
+
+For each widget, add to `dynamicClasses`:
+
+1. **Bracket classes** in the file (`text-[11px]`, `tracking-[0.2em]`) — prebuild fails without them.
+2. **Classes scripts use**: `classList.add/remove/toggle("…")`, `el.className = "…"`, `innerHTML` templates with `class="…"`, selectors like `querySelector(".x")` (better: switch to `id` / `data-*`).
+3. **Classes sharing a CSS property with those on the same element** — for `hidden`, the element's `flex`, `md:block`, `lg:flex` — so all of them keep Tailwind's order. See [Class scoping](/v5/styling/class-scoping.html#keep-the-cascade-right).
+
+```tsx
+export const CommonFooter = widget({
+  dynamicClasses: [
+    ["text-[11px]", "tracking-[0.15em]"],          // bracket classes
+    ["hidden"],                                     // toggled by the script
+    ["flex", "md:block", "md:hidden"],              // display classes on elements the script toggles
+    ["grid-cols-1", "md:grid-cols-2"],              // same property as a global class on one element
+  ],
+})(/* … */);
+```
+
+Declared classes are global: unprefixed everywhere, one rule in the common CSS. For a large widget set, a small script that scans each widget's `<Script>` bodies for class tokens and `classList` calls gets you most of the list.
+
+Check visually: compare computed styles of v4 and v5 pages element by element (Playwright works well). Differences in `display`, `grid-template-columns` or padding point straight at a missing declaration.
+
+---
+
+## 8. Development
+
+- `streak-forge dev` re-renders a page on every request with fresh data. A v4 habit of restarting to see new CMS data is no longer needed.
+- Edits to helper modules (`src/utils`, `src/services`) need a `dev` restart.
+
+---
+
+## 9. Build and deploy
+
+- v4's `out/` and anything that served it (a worker reading `out/<url>/index.html`) don't work with v5 output. Serve with `streak-boot serve` or the platform's [site worker](/v5/build-platform/site-worker.html).
+- **Prebuild needs no env vars** — CI can run it without secrets. Handlers' env vars are needed at build (`streak-boot build`, or the build request's `env`).
+- For the build platform, publish `prebuild.zip` + `public.zip` per release. See [Release artifacts](/v5/build-platform/release-artifacts.html).
+
+---
+
+## Checklist
+
+- [ ] `streak-forge` v5 + `streak-boot` installed; scripts updated; `bunfig.toml`; tsconfig `types`
+- [ ] Full CSS written to `src/app.full.css`; old global CSS link removed from the head
+- [ ] Every widget a named `widget({})` export; imports from `streak-forge`; `Preload` replaced
+- [ ] Page handlers wrapped in `handler({})`; widgets call them via one input helper; results JSON-safe
+- [ ] Shells per page kind (or a dynamic slot); `AppHead` moved into `head()`
+- [ ] Sitemap converted to `{ shared, pages }`; metadata trimmed to slugs
+- [ ] `dynamicClasses` for bracket classes, script classes, and same-property neighbors
+- [ ] Every page kind checked in `dev`, then `streak-boot build` + `serve`
+- [ ] CI publishes the prebuild without secrets

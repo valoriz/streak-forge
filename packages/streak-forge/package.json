@@ -1,12 +1,12 @@
 {
-  "name": "streak-forge",
+  "name": "streak-forge-legacy",
   "version": "4.1.18",
   "description": "A performance-first static site generator that pre-renders every page to plain HTML at build time. Zero framework runtime ships to the browser.",
   "author": "indrajithc",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "streak-forge": "./dist/cli/main.js"
+    "streak-forge-legacy": "./dist/cli/main.js"
   },
   "repository": {
     "type": "git",

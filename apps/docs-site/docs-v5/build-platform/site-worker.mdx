@@ -1,0 +1,58 @@
+---
+title: Site Worker
+description: "How a v5 site is served on Cloudflare: cache, site DB, site bucket, on-demand builds — and every option."
+order: 6
+---
+
+# Site Worker
+
+The site worker serves one site from the site's own Cloudflare account. It composes each page from its stored fragments — the same composition as `streak-boot serve` — and builds unbuilt pages on demand.
+
+## Request order
+
+1. **Site DB row** for the page's URL (every page route: the page, its `index.json`, `common.js`, lazy fragments).
+   - No row → **404**, even if old files are still in the bucket.
+   - `available` → step 2.
+   - `pending` / `isr` → [on-demand build](/v5/build-platform/on-demand.html) (page HTML route only).
+   - `building` → wait for it.
+2. **Edge cache.** Keyed by page, output kind and the row's `last_build_id`. A rebuild or delete changes the row, so the next request misses the old entry — no purge needed; old entries expire (7 days).
+3. **Site bucket.** Read `meta.json`, then exactly the files it lists; compose; cache; return.
+
+Assets:
+
+- URLs with `?v=` — cached for a year (immutable).
+- Other files — cached for `ASSET_CACHE_TTL`.
+
+Pages not built yet are never cached.
+
+## Bindings and options
+
+| Name | Kind | Default | Meaning |
+|---|---|---|---|
+| `SITE_BUCKET` | R2 binding | — | The site's files |
+| `SITE_DB` | D1 binding | — | Page rows. Without it the worker serves straight from the bucket (`meta.json` decides 404) — fine for previews |
+| `SITE_ROOT` | var | — | Prefix of the site inside the bucket |
+| `SITE_ID` | var | — | The site's id on the platform |
+| `BUILD_API_URL` | var | — | Platform Build API, for on-demand builds |
+| `ISR_WAIT_MS` | var | `20000` | Wait for an on-demand build before the loading page / `503` |
+| `PAGE_STATE_TTL` | var | `0` | Seconds to cache a page's row (0 = read on every request) |
+| `ASSET_CACHE_TTL` | var | `300` | Seconds to cache non-versioned files |
+| `PAGES_FROM` | var | `db` | `r2` = ignore the DB and serve by `meta.json` (preview over staging) |
+| `STREAK_ISR_TOKEN` | secret | — | Authenticates `POST /isr` |
+| `STREAK_SYNC_KEY` | secret | — | Verifies the platform's signed calls to `/__streak/sync` |
+
+## The sync route
+
+The platform never holds a credential for the site DB. It sends operations to the site worker:
+
+```http
+POST /__streak/sync
+x-streak-timestamp: <unix ms>
+x-streak-signature: <HMAC-SHA256(sync key, "<timestamp>.<body>")>
+```
+
+Only fixed operations are accepted — `migrate`, `healthcheck`, `upsertPages`, `markAvailable`, `deletePages`, `deleteUnlisted` — never raw SQL. Requests that are unsigned, wrongly signed, more than 5 minutes off, or changed in transit are refused. Without `SITE_DB` or `STREAK_SYNC_KEY` the route doesn't exist.
+
+## Preview
+
+Point a site worker at the platform's staging area (`SITE_ROOT` = the site's staging prefix, `PAGES_FROM = "r2"`) to see the latest build before it goes live.

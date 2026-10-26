@@ -1,0 +1,55 @@
+---
+title: Installation
+description: "Install streak-forge and streak-boot for a Streak.js v5 project."
+order: 1
+---
+
+# Installation
+
+## Requirements
+
+| Tool | Version | Why |
+|---|---|---|
+| Bun | ≥ 1.2 | Runs the CLIs, bundles widgets (`Bun.build`), resolves imports |
+| TypeScript | ≥ 5.6 | Installed with `streak-forge`; your editor uses it for types |
+| Tailwind CSS (optional) | 3.x or 4.x | Builds the full CSS file that prebuild purges per widget |
+
+---
+
+## streak-forge
+
+```bash
+bun add streak-forge
+```
+
+This gives you the `streak-forge` CLI (`dev`, `prebuild`, `safelist`) and the authoring API: `Script`, `Dynamic`, `WidgetPlaceholder`, `ComponentPlaceholder`, the `widget()` / `handler()` / `component()` / shell globals, and the JSX runtime.
+
+The published package contains compiled JavaScript and type declarations only.
+
+---
+
+## streak-boot
+
+```bash
+bun add streak-boot
+```
+
+Needed for a production build (`streak-boot build`) and a local preview of it (`streak-boot serve`). You don't need it for `streak-forge dev`.
+
+> **Note:** `streak-boot` is distributed by the Streak build platform, not the public npm registry. Ask your team where to install it from (a workspace link, a private registry or a tarball).
+
+`streak-boot` renders the bundles that prebuild wrote, and those bundles import `streak-forge`. So wherever `streak-boot build` runs, `streak-forge` must be installed next to it, with its globals preloaded (`bunfig.toml`, see [Configuration](/v5/getting-started/configuration.html)).
+
+---
+
+## Package entry points
+
+| Import | Use |
+|---|---|
+| `streak-forge` | Authoring API plus the build tooling (registry, page build, purge). |
+| `streak-forge/globals` | Installs `widget`, `handler`, `component`, `html`, `head`, `body`, `rootLayout` as globals. Preload it. |
+| `streak-forge/jsx-runtime` | The JSX runtime (`jsxImportSource: "streak-forge"`). |
+| `streak-forge/runtime` | The client authoring API only. Prebuilt bundles import this instead of the main entry. |
+| `streak-forge/render` | Render-and-record API used by the build platform's render containers. |
+
+See [Package exports](/v5/reference/package-exports.html) for details.

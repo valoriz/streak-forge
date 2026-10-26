@@ -1,0 +1,47 @@
+---
+title: gDom API
+description: "Helpers available to <Script> code in Streak.js v5: loadDynamicComponent, loadPackage, onVisible, debounce and more."
+order: 3
+---
+
+# gDom API
+
+A `<Script>` function receives `gDom` as its first argument. In v5 `gDom` is `window`, and the runtime adds these helpers to it. Their types are declared on `Window` by `streak-forge/globals`.
+
+| Function | Returns | Does |
+|---|---|---|
+| `geById(id)` | `HTMLElement \| null` | `document.getElementById` |
+| `loadDynamicComponent(id, callback?)` | `void` | Loads a [`<Dynamic>`](/v5/components/dynamic.html) block into the page, then calls `callback` |
+| `loadPackage(name)` | `Promise<void>` | Loads a script or stylesheet from `/assets/<name>` through a Web Worker. See [loadPackage](/v5/runtime/load-package.html) |
+| `onVisible(el, callback, options?, metadata?)` | `void` | Calls `callback(isIntersecting, el, metadata)` when `el` enters or leaves the viewport (10% visible). `options.onlyOnce` stops after the first call |
+| `debounce(fn, ms)` | function | A debounced copy of `fn` |
+| `stall(ms)` | `Promise<void>` | Waits `ms` milliseconds |
+| `setCookie(name, value, days?)` | `void` | Sets a cookie |
+| `getCookie(name)` | `string \| null` | Reads a cookie |
+
+```tsx
+<Script id="reveal" options={{}}>
+  {(gDom) => {
+    const el = gDom.geById("stats");
+    if (!el) return;
+    gDom.onVisible(el, (visible) => {
+      if (visible) el.classList.add("is-visible");
+    }, { onlyOnce: true });
+  }}
+</Script>
+```
+
+`is-visible` is added by the script, so it must be in the widget's `dynamicClasses`. See [Class scoping](/v5/styling/class-scoping.html).
+
+---
+
+## Events
+
+With SPA navigation on, the router dispatches on `window`:
+
+| Event | `detail` | When |
+|---|---|---|
+| `sf:pageunload` | `{ from }` | Before the old page's content is replaced |
+| `sf:pageload` | `{ pathname, from }` | After the new page's content is in place |
+
+Listeners and timers that widget scripts register are removed automatically on navigation. See [SPA navigation](/v5/runtime/spa-navigation.html).

@@ -17,6 +17,7 @@ const rebuild = () => {
 };
 
 watch("docs", { recursive: true }, rebuild);
+watch("docs-v5", { recursive: true }, rebuild);
 watch("templates", { recursive: true }, rebuild);
 
 // Dev server
@@ -35,4 +36,4 @@ const server = Bun.serve({
 });
 
 console.log("[dev] Server running:", server.url);
-console.log("[dev] Watching docs/ and templates/ for changes...");
+console.log("[dev] Watching docs/, docs-v5/ and templates/ for changes...");

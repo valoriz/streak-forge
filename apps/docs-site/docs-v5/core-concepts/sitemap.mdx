@@ -1,0 +1,88 @@
+---
+title: Sitemap
+description: "streak.sitemap.json in v5: shared widgets, pages, rootLayout, metadata and dynamic slots."
+order: 6
+---
+
+# Sitemap
+
+`streak.sitemap.json` lists every page and every shared widget. It is an object (v4 used an array).
+
+```json
+{
+  "shared": [
+    { "id": "nav", "type": "Nav" },
+    { "id": "footer", "type": "Footer", "props": { "data": { "year": 2026 } } }
+  ],
+  "pages": [
+    { "url": "/", "rootLayout": "HomeShell", "metadata": { "title": "Home" } },
+    {
+      "url": "/products/chair",
+      "rootLayout": "ProductShell",
+      "metadata": { "slug": "chair" }
+    },
+    {
+      "url": "/about",
+      "rootLayout": "PageShell",
+      "metadata": { "title": "About" },
+      "slots": { "main": [{ "id": "story", "type": "Story" }, { "ref": "newsletter" }] }
+    }
+  ]
+}
+```
+
+---
+
+## `shared[]`
+
+Widgets built **once** per build and reused on every page that places them.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | string | Referenced by `<WidgetPlaceholder id={id} shared />` or `{ "ref": id }` |
+| `type` | string | A registered widget type |
+| `props` | object | Passed to the widget as-is (usually `{ "data": … }`) |
+| `components` | list | Components this widget fills: `{ id, type, props?, loadingStrategy? }` — see [Components](/v5/core-concepts/components.html) |
+
+## `pages[]`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `url` | string | The page's URL. `/` and `/a/b` style, no trailing slash. |
+| `rootLayout` | string | Shell type. Optional when the project has one rootLayout. |
+| `metadata` | object | Passed to every per-page widget and to the page's own `head()` as `props.data`. |
+| `slots` | object | Lists for the rootLayout's dynamic slots only, by slot id. |
+
+There is no per-page `widgets` list, `renderId`, `dataHandler` or `version` any more. Fixed widgets come from the shell.
+
+---
+
+## What to put in `metadata`
+
+Keep it small and stable: the page's identity and any static values its widgets need.
+
+- **A key for handlers** — `slug`, `id`, `locale`. Widgets pass it to their handler.
+- **Static values** — title, heading, labels known when the sitemap is written.
+
+Don't copy data that a handler can fetch: the sitemap (or the platform's site database) then has to change every time the data does.
+
+---
+
+## Generating the sitemap
+
+Large sites generate the sitemap from a CMS. A small script that knows each page kind's shell keeps the shells and sitemap in sync:
+
+```ts
+// scripts/build-sitemap.ts
+const pages = [
+  { url: "/", rootLayout: "HomeShell" },
+  ...(await getAllProducts()).map((p) => ({
+    url: `/products/${p.handle}`,
+    rootLayout: "ProductShell",
+    metadata: { slug: p.handle },
+  })),
+];
+await Bun.write("streak.sitemap.json", JSON.stringify({ shared: SHARED, pages }, null, 2));
+```
+
+On the build platform, pages can also be registered without a build and built on first request. See [Pages API](/v5/build-platform/pages-api.html).

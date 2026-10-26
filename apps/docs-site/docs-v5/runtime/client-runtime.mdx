@@ -1,0 +1,36 @@
+---
+title: Client Runtime
+description: "The small scripts a v5 page loads: root.js, app.js, common.js, the SPA router — and how every asset is versioned."
+order: 1
+---
+
+# Client Runtime
+
+A built v5 page links one deferred script. Everything else loads from it, only when the page needs it.
+
+| File | Loaded | Does |
+|---|---|---|
+| `/__streak/root.js?v=…` | `<script defer>` in the page | Defines `addResourceToBody`, `loadDynamicComponent`, `loadLazyWidget`; tracks listeners and timers so SPA navigation can clean up; then loads `app.js` |
+| `/__streak/app.js` | by `root.js` | The `gDom` helpers (`onVisible`, `debounce`, `loadPackage`, …), the lazy-widget loader, and the page's `common.js` |
+| `/<page>/common.js` | by `app.js` | The page's eager widgets' `<Script>` blocks, joined |
+| `/__streak/spa-router.js?v=…` | `<script defer>` (when SPA is on) | Client-side navigation |
+| `/__streak/asset-worker.js` | first `loadPackage()` call | Web Worker that fetches `/assets/…` files |
+
+A page with no `<Script>`, no lazy widget and no `<Dynamic>` block links no runtime script at all (only the SPA router, when SPA is on).
+
+In `streak-forge dev`, `root.js` and `app.js` are one file, `dev-runtime.js`, plus a live-reload connection.
+
+---
+
+## Versioned URLs
+
+Every built page has a **version**: a hash of everything it serves (its shell fragments, its own head, each widget's content). It is stamped on every asset URL the page loads:
+
+- `root.js?v=…` and `spa-router.js?v=…` in the HTML.
+- `root.js` reads its own `?v=` and adds it to `app.js`, the page's `common.js`, `asset-worker.js` and every `loadPackage()` fetch.
+- Lazy widgets and Dynamic blocks: their `content.json?v=…`, and the CSS and `bundle.js` listed inside it.
+- SPA navigation: the next page's `common.js` carries that page's version.
+
+A content change produces a new version, so a URL with `?v=` never serves stale bytes and can be cached as `immutable`. `streak-boot serve` (and the platform's site worker) send `Cache-Control: public, max-age=31536000, immutable` for any URL with `?v=`. The page HTML and its `index.json` aren't versioned — they're what tells the browser the current version.
+
+Dev URLs have no `?v=`.

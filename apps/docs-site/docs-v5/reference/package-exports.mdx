@@ -1,0 +1,34 @@
+---
+title: Package Exports
+description: "What each streak-forge and streak-boot entry point contains, and who imports it."
+order: 3
+---
+
+# Package Exports
+
+## streak-forge
+
+Published as compiled JavaScript plus type declarations.
+
+| Entry | Contains | Imported by |
+|---|---|---|
+| `streak-forge` | Authoring API + build tooling (registry, prebuild, page build, purge, dev server) | Your widgets (for `Script`, `WidgetPlaceholder`, …), build scripts |
+| `streak-forge/globals` | Installs `widget`, `handler`, `component`, `html`, `head`, `body`, `rootLayout` on `globalThis`; types for them and for `gDom` | `bunfig.toml` preload, tsconfig `types` |
+| `streak-forge/jsx-runtime`, `/jsx-dev-runtime` | `jsx`, `jsxs`, `Fragment` | The TypeScript/Bun JSX transform (`jsxImportSource`) |
+| `streak-forge/runtime` | The client authoring API only: JSX helpers, HOCs, JSON-safety | Prebuilt bundles (prebuild rewrites their `streak-forge` imports to this) |
+| `streak-forge/render` | Read a prebuild, render from its bundles, plan a page's renders, record them | The build platform's render containers |
+
+Why `runtime` exists: rendering a bundle should not load TypeScript, chokidar and PurgeCSS. Importing `streak-forge/runtime` takes ~40 ms against ~700 ms for the main entry, per process. Prebuild **fails** if a widget, handler or component imports a name from `streak-forge` that the runtime doesn't have — build tooling belongs in build scripts, not in widget code.
+
+CLI: `streak-forge` (`safelist`, `prebuild`, `dev`).
+
+## streak-boot
+
+| Entry | Contains |
+|---|---|
+| `streak-boot` (also `streak-boot/core`) | `buildPages`, `loadRegistry`, `readSitemap`, `renderInstanceFromBundle`, preview server, widget cache, record replay |
+| `streak-boot/build` | Disk-free builds: `buildSetup`, `buildPage`, `MemoryFs`, record replay |
+| `streak-boot/serve` | Compose pages from stored fragments (edge workers) |
+| `streak-boot/types` | Types only |
+
+CLI: `streak-boot` (`build`, `serve`). `streak-forge` is a peer dependency: the bundles it renders import it.

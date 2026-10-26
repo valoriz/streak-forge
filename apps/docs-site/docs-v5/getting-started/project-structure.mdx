@@ -1,0 +1,67 @@
+---
+title: Project Structure
+description: "Where widgets, handlers, components and shells live in a Streak.js v5 project, and what each output folder holds."
+order: 2
+---
+
+# Project Structure
+
+Paths are fixed by convention. There is no config file for them.
+
+```
+my-site/
+├── streak.sitemap.json      # pages (and shared widgets)
+├── package.json
+├── tsconfig.json
+├── bunfig.toml              # preloads streak-forge/globals
+├── tailwind.config.js       # optional
+├── public/                  # static assets, copied as-is (images, fonts, JS libs)
+└── src/
+    ├── app.css              # your CSS entry (Tailwind input)
+    ├── app.full.css         # full CSS built from app.css — the file prebuild purges
+    ├── widgets/             # widget({...})(fn)   — one type per file
+    ├── handlers/            # handler({...})(fn)  — data fetching
+    ├── components/          # component({...})(fn) — optional
+    └── shell/               # html() / head() / body() / rootLayout() — one shell type per file
+```
+
+---
+
+## Naming rule
+
+A widget's, component's or shell's **type is its file name**:
+
+- `src/widgets/HelloBanner.tsx` → widget type `HelloBanner`
+- `src/shell/HomeShell.tsx` → shell type `HomeShell` (its `html()`, `head()`, `body()` and `rootLayout()` exports all belong to it)
+
+The export name doesn't matter for the type, but every entry must be a **named export** of the form `export const Name = widget({...})(fn)`. Default exports are not registered.
+
+Files in `src/shell/` or `src/widgets/` that call none of the HOCs (helpers, shared JSX) are ignored by the registry, so you can keep helpers next to the files that use them.
+
+---
+
+## Generated folders
+
+| Folder | Written by | Holds | Commit it? |
+|---|---|---|---|
+| `.streak-forge-cache/` | `safelist`, `prebuild`, `dev` | `dynamic-classes.json`, CSS/JS caches | No |
+| `.dev/` | `streak-forge dev` | Prebuild output + rendered pages, served by the dev server | No |
+| `.prebuild/` | `streak-forge prebuild` | Registry (`meta.json` per entry), JS bundles, purged CSS, a `public/` mirror | No — CI uploads it |
+| `out/` | `streak-boot build` | HTML fragments, per-page manifests, runtime scripts, assets | No |
+
+### `.prebuild/` in detail
+
+```
+.prebuild/
+├── streak-boot.registry.json        # marker: registry version + timestamp
+├── widgets/<Type>/meta.json         # registry entry (filePath is project-relative)
+├── widgets/<Type>/<Type>.<hash>.js  # bundled widget code
+├── widgets/<Type>/<Type>.<hash>.css # purged, scoped CSS (absent if empty)
+├── handlers/<Name>/...
+├── components/<Type>/...
+├── html|head|body|rootLayout/<Shell>/...
+├── head/<Shell>/<Shell>.common.<hash>.css   # the one shared common CSS file
+└── public/                          # mirror of generated CSS + your public/
+```
+
+`filePath` in each `meta.json` is relative to the project root, so a `.prebuild/` folder can be copied anywhere — together with `streak.sitemap.json` it is all `streak-boot build` needs.

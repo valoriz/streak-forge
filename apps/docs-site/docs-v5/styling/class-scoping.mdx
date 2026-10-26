@@ -1,0 +1,80 @@
+---
+title: Class Scoping
+description: "Per-widget class prefixes, global classes from dynamicClasses, bracket classes, and keeping client scripts working."
+order: 2
+---
+
+# Class Scoping
+
+At build time every class in a widget's HTML and CSS is renamed with a short code for the widget's type:
+
+```html
+<!-- source -->
+<div class="flex p-4 hidden md:block">
+<!-- output (widget type HelloNav) -->
+<div class="c56b__flex c56b__p-4 c56b__hidden c56b__md:block">
+```
+
+Two widgets can then use the same class name with different rules, and a widget's CSS can't leak into another. The code is 3 hex characters from the type name; if two types get the same code, prebuild fails and names both — rename one file.
+
+Components and shells get their own codes the same way.
+
+---
+
+## Global classes: `dynamicClasses`
+
+Client scripts see the **output** class names. A script that does `classList.add("hidden")` would add `hidden`, but the element and its CSS use `c56b__hidden`. So classes that scripts touch must keep their name.
+
+Any class listed in **any** entry's `dynamicClasses` is **global**:
+
+- It is never prefixed, in any widget, component or shell.
+- Its CSS rule lives once, in the common CSS file, in Tailwind's order.
+
+```tsx
+export const CartDrawer = widget({
+  dynamicClasses: [
+    // added/removed by the script below
+    ["hidden", "translate-x-full"],
+    // used in HTML the script builds at runtime
+    ["flex", "items-center", "gap-2", "text-sm"],
+  ],
+})(() => (/* ... */));
+```
+
+Declare a class when:
+
+1. **A script adds, removes or toggles it** (`classList.add`, `toggle`, `className =`).
+2. **A script builds HTML with it** (`innerHTML = '<div class="…">'`, `el.className = "…"`).
+3. **A script selects by it** (`querySelector(".open")`). Prefer `id` or `data-*` attributes for selecting — they're never renamed.
+4. **It's assembled at runtime** (`` `bg-${color}-500` ``): list every possible value.
+5. **It's a bracket class** (`text-[11px]`): required, see below.
+
+### Keep the cascade right
+
+A global class's rule is in the common CSS, which loads **first**; prefixed rules load after it. On one element, a prefixed rule therefore wins over a global rule for the same CSS property, whatever Tailwind's own order says.
+
+```html
+<nav class="hidden lg:flex">   <!-- script toggles "hidden" -->
+```
+
+If only `hidden` is declared, `c…__lg:flex` (prefixed, loaded later) and `hidden` (global, loaded first) still resolve correctly on desktop. But on an element with `flex` and a script that adds `hidden`, the prefixed `flex` would win and `hidden` would do nothing. Rule of thumb:
+
+> **Tip:** When an element carries a global class, also declare the element's other classes that set the **same property** (for `hidden`: its `display` classes such as `flex`, `md:block`, `lg:flex`). Then all of them live in the common CSS in Tailwind's order.
+
+---
+
+## Bracket classes
+
+A class with an arbitrary value in brackets — `text-[11px]`, `bg-[#0A1521]`, `grid-cols-[1fr_2fr]` — must be listed in its entry's `dynamicClasses`. `streak-forge prebuild` fails on an undeclared one; `streak-forge dev` only warns.
+
+```tsx
+export const Price = widget({ dynamicClasses: [["text-[11px]", "tracking-[0.2em]"]] })(/* ... */);
+```
+
+Listed bracket classes become global like any other declared class.
+
+---
+
+## Shells
+
+`body()` and `html()` return attribute objects. Their classes come from the shell file's source like any other entry's, so literal classes there keep their CSS. Declare them only if a script changes them.

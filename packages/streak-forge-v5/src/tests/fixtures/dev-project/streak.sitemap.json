@@ -1,0 +1,5 @@
+{
+  "pages": [
+    { "url": "/", "rootLayout": "AppShell", "widgets": [{ "id": "hello-1", "type": "Hello" }] }
+  ]
+}

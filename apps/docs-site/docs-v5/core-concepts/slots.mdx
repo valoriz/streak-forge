@@ -1,0 +1,92 @@
+---
+title: Slots
+description: "Fixed, shared and dynamic widget slots: how a page's widgets come from its rootLayout and the sitemap's slots."
+order: 5
+---
+
+# Slots
+
+In v5 a page's widgets come from its **rootLayout**, not from a list in the sitemap. Every `<WidgetPlaceholder>` in the rootLayout is a slot. What fills the slot depends on its props.
+
+| Placeholder | Kind | Filled by |
+|---|---|---|
+| `<WidgetPlaceholder id="hero" type="Hero" />` | Fixed | The `Hero` widget, rendered for each page with `{ data: page.metadata }` |
+| `<WidgetPlaceholder id="nav" shared />` | Fixed, shared | The sitemap's `shared[]` entry with id `nav`, built once per build |
+| `<WidgetPlaceholder id="main" />` | Dynamic | The page's `slots.main` list, in order — or nothing |
+
+Add `loadingStrategy="lazy"` to a fixed placeholder to make that widget [lazy](/v5/runtime/lazy-widgets.html).
+
+---
+
+## Fixed slots
+
+A fixed slot renders on **every** page that uses the layout. The sitemap doesn't mention it.
+
+```tsx
+export const SiteRootLayout = rootLayout({})(() => (
+  <>
+    <WidgetPlaceholder id="nav" shared />
+    <WidgetPlaceholder id="hero" type="Hero" />
+    <WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+  </>
+));
+```
+
+## Dynamic slots
+
+A placeholder with an `id` and no `type` or `shared` is dynamic. Each page lists its widgets for it:
+
+```tsx
+export const SiteRootLayout = rootLayout({})(() => (
+  <>
+    <WidgetPlaceholder id="nav" shared />
+    <WidgetPlaceholder id="main" />
+    <WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+  </>
+));
+```
+
+```json
+{
+  "url": "/",
+  "rootLayout": "SiteShell",
+  "metadata": { "title": "Home" },
+  "slots": {
+    "main": [
+      { "id": "hero", "type": "Hero" },
+      { "id": "featured", "type": "ProductGrid", "loadingStrategy": "lazy" },
+      { "ref": "newsletter" }
+    ]
+  }
+}
+```
+
+A dynamic slot's list can hold:
+
+- **Inline widgets** — `{ id, type, loadingStrategy?, components? }`. Rendered for this page with `{ data: page.metadata }`.
+- **Shared refs** — `{ ref, id?, loadingStrategy? }`. The `shared[]` entry with that id. `id` defaults to `ref`.
+
+A page that lists nothing for a slot leaves it empty. `slots` keys that aren't dynamic slots in the layout are ignored.
+
+---
+
+## Rules
+
+- Every placeholder needs an `id`, unique within the layout.
+- Widget ids must be unique across the whole page: fixed slot ids plus every id in every dynamic slot.
+- A `slots` value must be a list; each entry is either `{ ref }` or `{ id, type }`.
+- A page's old v4-style `widgets` array is ignored.
+
+The build stops with a message naming the page when one of these is broken.
+
+---
+
+## Choosing between fixed and dynamic
+
+- **Header, footer, overlays** — fixed `shared` slots.
+- **Something every page of a kind shows** (a product page's detail block) — a fixed typed slot in that kind's shell.
+- **The body of content pages, where pages differ** — one dynamic `main` slot.
+
+Keep sitemap entries small: a page with only fixed slots is just `url`, `rootLayout` and `metadata`. That matters when the site has tens of thousands of pages stored in a database ([on-demand builds](/v5/build-platform/on-demand.html)).
+
+> **Warning:** A "union" layout that lists every widget of the site as a typed slot renders **all** of them on every page. Split it into a few shells, or move the varying part into a dynamic slot.

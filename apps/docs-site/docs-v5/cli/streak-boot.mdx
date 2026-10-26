@@ -1,0 +1,88 @@
+---
+title: streak-boot
+description: "streak-boot CLI and API: build a site from .prebuild/, preview it, and build pages without a disk."
+order: 2
+---
+
+# streak-boot
+
+`streak-boot` turns a `.prebuild/` folder into a servable site. It never reads your source and never runs a prebuild.
+
+```bash
+streak-boot build   # .prebuild/ + streak.sitemap.json → out/
+streak-boot serve   # serve out/ (no live reload)
+```
+
+---
+
+## build
+
+Run from a folder containing `.prebuild/` and `streak.sitemap.json`.
+
+1. Loads the registry from `.prebuild/`.
+2. Clears `out/` and copies `.prebuild/public/` into it.
+3. Renders from the **prebuilt bundles**, not from source: setup (shared widgets, shells, runtime scripts), then every page.
+4. Writes HTML fragments and per-page manifests. No combined page HTML is ever written.
+
+Because it renders from bundles, a copied `.prebuild/` plus the sitemap builds anywhere — no `src/` needed. The bundles import `streak-forge`, so it must be installed there, with `streak-forge/globals` preloaded.
+
+Handlers run during build, so the build needs your site's env vars (API keys, store domains).
+
+| Env | Default | Meaning |
+|---|---|---|
+| `SPA` | on | `SPA=0` ships plain full-page navigation, no `spa-router.js` |
+
+Always on: class scoping, inline per-page CSS, JS minification of the runtime and widget scripts.
+
+---
+
+## serve
+
+```bash
+PORT=3690 streak-boot serve
+```
+
+Serves `out/`, composing each page per request from its fragments:
+
+- Page routes, `<page>/index.json` (SPA), `<page>/common.js`, lazy and Dynamic fragments, static files.
+- URLs with `?v=` get `Cache-Control: public, max-age=31536000, immutable`.
+- Unknown pages: 404.
+
+It is a preview server. In production the same composition runs in an edge worker over object storage — see [Site worker](/v5/build-platform/site-worker.html).
+
+---
+
+## API
+
+For build services that call it directly:
+
+```ts
+import { loadRegistry, readSitemap, buildPages, renderInstanceFromBundle } from "streak-boot";
+
+const registry = loadRegistry(prebuildDir, projectRoot);
+const sitemap = readSitemap("streak.sitemap.json");
+await buildPages({
+  registry,
+  sitemap,
+  outDir: "out",
+  render: renderInstanceFromBundle(prebuildDir, registry.fileHashes),
+  scopeClasses: true,
+  inlineCss: true,
+  spa: true,
+  widgetCache: new Map<string, string>(), // optional, see Widget cache
+  buildId: "local",
+});
+```
+
+| Entry | Contents |
+|---|---|
+| `streak-boot` | `buildPages`, `loadRegistry`, `readSitemap`, `renderInstanceFromBundle`, the preview server, widget cache |
+| `streak-boot/build` | Disk-free building for workers: `buildSetup`, `buildPage`, `MemoryFs`, record replay (`render-plan`, VNode codec) |
+| `streak-boot/serve` | Composing pages from stored fragments (used by edge workers) |
+| `streak-boot/types` | Types only |
+
+- `buildSetup` runs once per build (shared widgets, shells, runtime scripts); `buildPage` builds one page and needs the setup output present. Together they produce the same files as `buildPages`.
+- `MemoryFs` keeps a whole build in memory: pass `memory.root` as `outDir`, then upload `memory.relativeFiles()`.
+- A memory build has no `Bun.build` for JS minification: pass your own `minifyJs`.
+
+See [Build platform](/v5/build-platform/overview.html) for how these pieces run at scale.

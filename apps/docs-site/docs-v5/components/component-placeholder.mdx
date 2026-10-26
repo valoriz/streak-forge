@@ -1,0 +1,37 @@
+---
+title: ComponentPlaceholder
+description: "<ComponentPlaceholder>: a slot inside a widget, filled with a registered component from the widget's sitemap entry."
+order: 3
+---
+
+# ComponentPlaceholder
+
+`<ComponentPlaceholder>` marks a slot inside a **widget's** output, filled with a [registered component](/v5/core-concepts/components.html) listed in that widget's sitemap entry.
+
+```tsx
+import { ComponentPlaceholder } from "streak-forge";
+
+export const Panel = widget({})(() => (
+  <aside className="card">
+    <h3>Today only</h3>
+    <ComponentPlaceholder id="cta" type="Button" />
+  </aside>
+));
+```
+
+```json
+{ "id": "promo", "type": "Panel", "components": [{ "id": "cta", "type": "Button", "props": { "label": "Shop now" } }] }
+```
+
+## Props
+
+| Prop | Type | Meaning |
+|---|---|---|
+| `id` | string | Matches the `id` of an entry in the widget's `components` list |
+| `type` | string | The component type |
+
+## Rules
+
+- Only inside widgets. A `ComponentPlaceholder` directly in a rootLayout fails the build.
+- One level deep: a registered component can't contain a `ComponentPlaceholder`.
+- A component entry with `"loadingStrategy": "lazy"` is left out of the widget's HTML and loaded by the client runtime, like a lazy widget.

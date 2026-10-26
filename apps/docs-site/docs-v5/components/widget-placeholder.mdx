@@ -1,0 +1,41 @@
+---
+title: WidgetPlaceholder
+description: "<WidgetPlaceholder>: declare a widget slot in a rootLayout — fixed, shared or dynamic, eager or lazy."
+order: 2
+---
+
+# WidgetPlaceholder
+
+`<WidgetPlaceholder>` marks a widget slot in a [rootLayout](/v5/core-concepts/shells.html). The props decide what fills it.
+
+```tsx
+import { WidgetPlaceholder } from "streak-forge";
+
+export const SiteRootLayout = rootLayout({})(() => (
+  <>
+    <WidgetPlaceholder id="nav" shared />
+    <WidgetPlaceholder id="hero" type="Hero" />
+    <WidgetPlaceholder id="main" />
+    <WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+  </>
+));
+```
+
+## Props
+
+| Prop | Type | Meaning |
+|---|---|---|
+| `id` | string | Required, unique in the layout. The slot's id; for fixed slots also the widget instance's id. |
+| `type` | string | Fixed slot: always this widget type, rendered for each page with `{ data: page.metadata }`. |
+| `shared` | boolean | Fixed slot: the `shared[]` entry whose `id` equals this `id`. |
+| `loadingStrategy` | `"lazy"` | For a fixed slot: load the widget on the client after the page is interactive. |
+
+With neither `type` nor `shared`, the slot is **dynamic**: filled with the page's `slots[id]` list, or left empty. A dynamic slot's entries set their own `loadingStrategy`.
+
+See [Slots](/v5/core-concepts/slots.html) for the full rules.
+
+## Output
+
+In the shell's body HTML each placeholder becomes a marker element. When a page is served, each eager widget's HTML replaces its marker; a lazy widget's marker stays, carrying the URL of the widget's `content.json` for the client runtime.
+
+Place placeholders directly in the rootLayout's markup — not inside another component's output, and not inside a widget.

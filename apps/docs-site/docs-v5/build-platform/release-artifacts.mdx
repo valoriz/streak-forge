@@ -1,0 +1,53 @@
+---
+title: Release Artifacts
+description: "What a site's CI publishes for the build platform: deterministic prebuild.zip and public.zip in a GitHub release."
+order: 2
+---
+
+# Release Artifacts
+
+The platform builds from GitHub releases. Your CI runs `streak-forge prebuild` and publishes two assets per release:
+
+| Asset | Contents | Used by |
+|---|---|---|
+| `prebuild.zip` | `.prebuild/` **without** its `public/` mirror: registry, bundles, generated CSS | Stage 1 (render) and stage 2 (registry + CSS) |
+| `public.zip` | Your project's own `public/` folder | Copied to the site root, only when it changed |
+
+`public.zip` is your `public/`, not `.prebuild/public/`: the latter also mirrors generated CSS, so it would change with every code change. The generated CSS is still in `prebuild.zip`, under `widgets/<Type>/`, `head/<Type>/`, ….
+
+---
+
+## No secrets in CI
+
+`streak-forge prebuild` runs no app code, so the CI job needs no API keys or store domains. Your handlers' env vars are given to the platform with each build request (stored encrypted) and only reach the render containers.
+
+---
+
+## Deterministic ZIPs
+
+The platform identifies an artifact by GitHub's sha256 digest of the ZIP. A plain `zip` stores file times, and every CI checkout sets new ones — unchanged content would get a new checksum and miss every cache. So the workflow fixes timestamps, permissions and file order: the same content always produces the same bytes.
+
+With that:
+
+- `prebuild.zip` is downloaded once per checksum and shared by every build that uses it.
+- `public.zip` is copied to the site only when its checksum changes.
+
+---
+
+## The workflow
+
+The platform ships one workflow file, `streak-release.yml`, to copy into `.github/workflows/`:
+
+- push to `master` → staging release (`build-staging-<run>`)
+- push to `release` → production release (`build-production-<run>`)
+- manual dispatch → custom tag, optional name and app directory
+
+```yaml
+- name: Build
+  working-directory: ${{ env.WORK_DIR }}
+  run: bun run "$BUILD_SCRIPT"   # "prebuild"
+```
+
+Steps: install, `bun run prebuild`, a zip step that writes both deterministic ZIPs (an empty `public/` gives a valid empty ZIP), and a GitHub release with both files.
+
+At onboarding the site gives the platform a GitHub token with read access to releases. A build request names a release tag, or uses the latest.

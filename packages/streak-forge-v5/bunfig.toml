@@ -1,0 +1,9 @@
+# Installs the widget()/handler()/component() globals (see globals.ts)
+# before any widget/handler/component file is imported/executed. `bun test`
+# does NOT pick up the top-level `preload` below — it only reads preload
+# from its own [test] table — so both are needed: top-level for
+# `bun run`/`bun <file>`, [test] for `bun test`.
+preload = ["streak-forge/globals"]
+
+[test]
+preload = ["streak-forge/globals"]
