@@ -1,0 +1,50 @@
+---
+title: Dynamic
+description: "<Dynamic>: keep part of a widget out of the initial HTML and load it on demand with gDom.loadDynamicComponent."
+order: 4
+---
+
+# Dynamic
+
+`<Dynamic>` takes part of a widget out of the page's HTML. The block is rendered at build time and stored as its own fragment; the browser loads it when a script asks for it. Use it for content most visitors never open: a mobile menu, a size guide, a "show more" panel.
+
+```tsx
+import { Dynamic, Script } from "streak-forge";
+
+export const Nav = widget({})(() => (
+  <header>
+    <button id="menu-btn" aria-expanded="false">Menu</button>
+    <Dynamic id="mobile-menu">
+      <nav id="mobile-menu-content" style={{ opacity: 0 }} className="flex flex-col gap-2 p-4">
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+      </nav>
+    </Dynamic>
+    <Script id="menu-script" options={{}}>
+      {(gDom) => {
+        gDom.geById("menu-btn")?.addEventListener("click", () => {
+          gDom.loadDynamicComponent("mobile-menu", () => {
+            const menu = gDom.geById("mobile-menu-content");
+            requestAnimationFrame(() => { if (menu) menu.style.opacity = "1"; });
+          });
+        });
+      }}
+    </Script>
+  </header>
+));
+```
+
+## Props
+
+| Prop | Type | Meaning |
+|---|---|---|
+| `id` | string | Required, **unique across the whole build**. `loadDynamicComponent(id)` finds the block by it. |
+| `children` | JSX | The content. Rendered at build time like the rest of the widget. |
+
+## Loading
+
+`gDom.loadDynamicComponent(id, callback?)` fetches the block and puts it where the `<Dynamic>` stood. The callback runs after it's in the page. Scripts inside the block run when it loads.
+
+Load each block once: after loading, the block replaces its marker. Guard repeat clicks yourself, for example with a flag or by checking for the block's element (`gDom.geById("mobile-menu-content")`).
+
+Classes inside the block are part of the widget's source, so their CSS is kept like any other class of the widget.

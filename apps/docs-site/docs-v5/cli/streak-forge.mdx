@@ -1,0 +1,82 @@
+---
+title: streak-forge
+description: "streak-forge CLI: safelist, prebuild and dev — what each command reads, writes and checks."
+order: 1
+---
+
+# streak-forge
+
+```bash
+streak-forge safelist   # write .streak-forge-cache/dynamic-classes.json
+streak-forge prebuild   # registry + JS bundles + purged CSS → .prebuild/
+streak-forge dev        # build into .dev/, serve with live reload
+```
+
+Run every command from the project root (where `streak.sitemap.json` is).
+
+---
+
+## safelist
+
+Writes every class listed in any entry's `dynamicClasses` to `.streak-forge-cache/dynamic-classes.json`. Run it before your CSS build so the full CSS contains those classes. See [CSS pipeline](/v5/styling/css-pipeline.html).
+
+---
+
+## prebuild
+
+Turns `src/` into `.prebuild/`. **Runs none of your code** and needs no env vars.
+
+1. Registry scan of `src/widgets`, `src/handlers`, `src/components`, `src/shell`.
+2. Lint: an undeclared bracket class fails the command.
+3. CSS: common CSS + one purged, scoped file per entry, from `src/app.full.css`. Fails if that file doesn't exist.
+4. JS: one bundle per entry. Imports from `streak-forge` are rewritten to `streak-forge/runtime`. A widget, handler or component that imports a name the runtime doesn't have (build tooling) fails the command.
+5. Copies `public/` and the generated CSS into `.prebuild/public/`, and writes the registry.
+
+| Env | Default | Meaning |
+|---|---|---|
+| `MINIFY` | on | `MINIFY=0` writes unminified CSS for debugging |
+
+Output layout: see [Project structure](/v5/getting-started/project-structure.html#prebuild-in-detail). Each `meta.json` stores its source path relative to the project, so the folder can be copied and built elsewhere.
+
+Typical script:
+
+```json
+"prebuild": "streak-forge safelist && bun run css-build && streak-forge prebuild"
+```
+
+---
+
+## dev
+
+```bash
+PORT=4000 streak-forge dev
+```
+
+1. Waits for `src/app.full.css` (run your CSS watcher alongside, e.g. with `concurrently`).
+2. Runs the same prebuild into `.dev/`. Lint problems are warnings here, not errors.
+3. Builds every page into `.dev/` and serves it on `http://localhost:4000` with live reload.
+4. Watches `src/widgets`, `src/handlers`, `src/components`, `src/shell`, `public/` and `streak.sitemap.json`. A change rebuilds and reloads open tabs.
+
+### Fresh data on every request
+
+Before serving a page (or its SPA `index.json`), `dev` **re-renders that page**, with the handler cache reset first. So:
+
+- each reload shows current data from your APIs;
+- within one render, a handler with the same input still runs once;
+- a slow handler makes the reload slow — that's the real cost of the page.
+
+Full rebuilds and per-request renders run one at a time, so they never write `.dev/` at once.
+
+### Dev vs a real build
+
+| | `dev` | `streak-boot build` |
+|---|---|---|
+| CSS | One `<link>` per CSS file | One inline `<style>` per page |
+| Runtime | `dev-runtime.js` (+ live reload) | `root.js` → `app.js` |
+| Lazy widgets | `/__streak/lazy` endpoint | static `content.json?v=…` |
+| Handler cache | Per page render | Whole build |
+| Asset URLs | No `?v=` | `?v=<page version>` |
+
+### Known limits
+
+- Edits to files only imported by widgets (helpers in `src/utils`, `src/services`) don't trigger a rebuild, and an edited handler module stays loaded. Restart `dev` to pick them up.

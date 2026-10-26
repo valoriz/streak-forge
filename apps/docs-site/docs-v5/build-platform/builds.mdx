@@ -1,0 +1,128 @@
+---
+title: Builds
+description: "Full and partial builds on the Streak build platform: the request, the render and optimize stages, retries, deploy and cleanup."
+order: 3
+---
+
+# Builds
+
+A build renders a list of pages from one release and deploys them. It is started with one API call.
+
+## The request
+
+```http
+POST /builds
+Authorization: Bearer <BUILD_API_KEY>
+Content-Type: application/json
+```
+
+```json
+{
+  "buildId": "build-2026-10-26-001",
+  "siteId": "shop",
+  "type": "full",
+  "sourceRef": "build-production-42",
+  "sitemap": {
+    "shared": [{ "id": "nav", "type": "Nav" }],
+    "pages": [
+      { "url": "/", "rootLayout": "HomeShell", "metadata": { "title": "Home" } },
+      { "url": "/products/chair", "rootLayout": "ProductShell", "metadata": { "slug": "chair" } }
+    ]
+  },
+  "env": { "SHOPIFY_STORE_DOMAIN": "shop.myshopify.com", "SHOPIFY_STOREFRONT_TOKEN": "…" },
+  "deploy": true
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `buildId` | yes | Your id, 1–100 chars of `A-Z a-z 0-9 _ -`. Reusing one is a `409`. |
+| `siteId` | yes | An onboarded site |
+| `type` | yes | `"full"` or `"partial"` (below) |
+| `sourceRef` | no | GitHub release tag; omit for the latest release |
+| `sitemap.shared` | no | Shared widgets, as in `streak.sitemap.json` |
+| `sitemap.pages` | yes | Non-empty. Each page: `url` (starting with `/`, unique), `rootLayout`, `metadata`, `slots` (object of lists) |
+| `env` | no | String values your handlers read. Stored encrypted, given only to render containers. |
+| `deploy` | no | Deploy on completion. Defaults to the site's `autoDeploy`. `true` needs a publisher. |
+
+Answer: `202 { buildId, pages }`.
+
+### Full vs partial
+
+| | Partial | Full |
+|---|---|---|
+| Builds | The listed pages | The listed pages |
+| Other pages | Untouched | After deploy, pages **no build listed** since this build started are removed (rows and files) |
+
+Removing pages only after a successful deploy means live pages keep serving during the build, and a failed full build never removes anything. Pages added by a partial build or the [pages API](/v5/build-platform/pages-api.html) after the full build started survive.
+
+---
+
+## What happens
+
+1. **Prepare.** The release is resolved; `prebuild.zip` is downloaded once per checksum (sha256 verified); `public.zip` is synced to staging if its checksum is new for the site.
+2. **Setup job.** A container renders shared widgets and shells first; stage 2's `buildSetup` writes them. No page is optimized before this.
+3. **Render.** Containers claim batches of pages (with a lease), render them and post the records. A page whose render throws is reported as failed; the rest of the batch continues. Each job runs in a fresh process, so memory is freed between batches.
+4. **Optimize.** Each rendered page is one queue message; stage 2 runs `buildPage` with the record and writes the page's files to staging, then deletes the record.
+5. **Retry rounds.** When every page is done or failed, failed pages get up to **2 more rounds**, run at the end so a short outage (API down, rate limit) can clear. Render failures go back to a container; optimize failures are re-optimized from the kept record.
+6. **Complete.** Pages still failing are listed with their error. Deploy follows.
+
+### Limits and timeouts
+
+| Item | Value |
+|---|---|
+| Container job | 10 min (the page lease); killed jobs' pages are claimed again |
+| Lease attempts per page | 3, then the page fails (render) |
+| Container lifetime | 2 h, then exits between jobs |
+| Build in `queued` | 30 min, then failed |
+| Page `rendered` but not optimized | 30 min, then failed (optimize) and retried |
+| Whole build | 6 h |
+
+A watchdog checks every 5 minutes, so nothing waits on a lost message.
+
+### Cancel
+
+```http
+POST /builds/:id/cancel
+```
+
+A queued or rendering build becomes `cancelled` and its containers stop; anything still in flight is ignored. A completed build that's deploying has its deploy stopped instead (files already copied stay live).
+
+---
+
+## Deploy: preview → live
+
+Stage 2 writes to the site's **staging** area — a preview a site worker can serve. Deploy **copies** staging to the site's own bucket (it may be in another Cloudflare account), in phases:
+
+1. **shared** — setup files and public assets (if the live site doesn't have that `public.zip` yet),
+2. **pages** — each page's files, its `meta.json` last,
+3. **rows** — the site DB: built pages `available`, failed pages `pending` (an already-live version keeps serving), and for full builds the unlisted pages removed.
+
+Trigger it automatically (`deploy: true` or the site's `autoDeploy`) or by hand:
+
+```http
+POST /builds/:id/deploy
+```
+
+- Only the site's **latest** build can deploy: staging holds one build per site, and a newer build has overwritten it.
+- A failed deploy can be started again; copies are idempotent.
+- A stalled deploy (no progress for 30 min) is failed by the watchdog.
+
+---
+
+## Cleanup
+
+- Render records: deleted per page once optimized; failed pages keep theirs; a storage rule removes leftovers after a few days.
+- Full builds sweep staging folders of pages they no longer list.
+- Build page rows are pruned 7 days after a build finishes.
+
+---
+
+## Usage
+
+```http
+GET /sites/:id/usage?from=…&to=…&period=month|day&include=builds
+GET /builds/:id/usage
+```
+
+Per site and period: container time, CPU, R2 reads/writes, queue operations, pages optimized, on-demand pages, storage.

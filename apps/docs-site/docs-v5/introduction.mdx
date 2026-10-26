@@ -1,0 +1,58 @@
+---
+title: Introduction
+description: "How Streak.js v5 is put together: the two packages, the three stages, and what runs where."
+order: 1
+---
+
+# Introduction
+
+Streak.js renders every page at build time and ships plain HTML plus a small client runtime. There is no hydration, no virtual DOM in the browser and no framework bundle. Interactivity comes from small `<Script>` blocks that run plain JavaScript.
+
+v5 keeps that model and changes how a page is produced and stored.
+
+---
+
+## The two packages
+
+| Package | Job | Runs |
+|---|---|---|
+| `streak-forge` | Widget registry, dev server, prebuild (TSX → JS bundles, purged and scoped CSS) | Your machine, your CI |
+| `streak-boot` | Page build (compose fragments from a prebuild) and serving | A build container or server, the edge |
+
+`streak-boot` never reads your source. It only reads what `streak-forge prebuild` wrote to `.prebuild/`. That split is what lets a build run in an isolated container that holds only the compiled bundles.
+
+---
+
+## The three stages
+
+```
+your source ──▶ streak-forge prebuild ──▶ .prebuild/ ──▶ streak-boot build ──▶ out/ ──▶ streak-boot serve
+               (CI, no app code runs)                   (renders widgets,             (composes each page
+                                                         runs handlers)                per request)
+```
+
+1. **Prebuild** (`streak-forge prebuild`) — scans `src/`, registers every widget, handler, component and shell, bundles each one to JS, and writes purged, scoped CSS. It reads your code but never executes it.
+2. **Build** (`streak-boot build`) — renders every widget and shell (this is where handlers run and fetch data) and writes HTML **fragments** to `out/`: one per shell layer, one per widget instance.
+3. **Serve** — for each request, reads the page's manifest and splices its fragments into one HTML document in memory. No combined page is ever written to disk.
+
+During development, `streak-forge dev` does all three in one process, and re-renders a page each time you reload it.
+
+---
+
+## What a page is made of
+
+- **Shell** — `html()` (`<html>` attributes), `head()` (`<head>` content), `body()` (`<body>` attributes) and `rootLayout()` (the body content with widget slots). See [Shells](/v5/core-concepts/shells.html).
+- **Widgets** — the sections of the page, each rendered into its slot. See [Widgets](/v5/core-concepts/widgets.html).
+- **Components** — smaller pieces a widget renders into its own `<ComponentPlaceholder>` slots. See [Components](/v5/core-concepts/components.html).
+- **Scripts** — `<Script>` blocks, extracted into one small file per page. See [Script](/v5/components/script.html).
+
+Widgets can be **shared** (built once, reused on every page) or **per page** (rendered with that page's `metadata`). Either kind can be **lazy**: left out of the first HTML and loaded by the client runtime after the page is interactive.
+
+---
+
+## What v5 is not
+
+- No hydration — the HTML is final.
+- No virtual DOM in the browser — DOM changes are plain JS inside `<Script>`.
+- No CSS-in-JS — styles are Tailwind (or any CSS) purged per widget at prebuild.
+- No page-level data handler, common handler or middleware — data belongs to widgets. See [Migrating from v4](/v5/migration/from-v4.html).

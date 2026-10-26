@@ -1,0 +1,81 @@
+---
+title: Sites & Pages API
+description: "Onboard a site, rotate its ISR token, add pages without a build, and remove pages."
+order: 7
+---
+
+# Sites & Pages API
+
+All calls use `Authorization: Bearer <BUILD_API_KEY>` unless noted.
+
+---
+
+## Onboard a site
+
+```http
+PUT /sites/:id
+```
+
+```json
+{
+  "name": "Shop",
+  "source": { "type": "github", "owner": "acme", "repo": "shop", "token": "…" },
+  "publisher": { "type": "r2", "accountId": "…", "bucket": "shop-site", "prefix": "", "accessKeyId": "…", "secretAccessKey": "…" },
+  "store": { "type": "site-worker", "url": "https://shop.example.com", "syncKey": "…at least 32 characters…" },
+  "autoDeploy": true
+}
+```
+
+| Part | Meaning |
+|---|---|
+| `source` | Where releases come from. GitHub token with read access to releases. |
+| `publisher` | Where pages are deployed: the site's R2 bucket, through S3 keys scoped to it. Optional — builds work without it, deploys don't. |
+| `store` | The site DB, reached through the site worker's signed sync route (`url` must be `https://`). Optional — without it builds skip site-DB writes and on-demand builds are off. |
+| `autoDeploy` | Deploy each build when it completes, unless the build request says otherwise. |
+
+Before anything is saved, each part is checked: GitHub repo and releases readable; R2 write, read and delete of a test object; site DB schema applied, plus a test row written, read and deleted. If one check fails, nothing is saved and you get `422` with the failing check.
+
+Secrets are stored encrypted. The response includes the site's **ISR token, shown once**: set it as the site worker's `STREAK_ISR_TOKEN` secret.
+
+| Call | Does |
+|---|---|
+| `PATCH /sites/:id` | Change parts (a new token, a new bucket, `publisher: null`, name, autoDeploy). Changed parts are checked again. |
+| `GET /sites/:id` | The site, secrets masked |
+| `POST /sites/:id/verify` | Re-run every check with the stored credentials |
+| `POST /sites/:id/isr-token` | Issue a new ISR token; the old one stops working at once |
+
+---
+
+## Add pages without a build
+
+```http
+POST /sites/:id/pages
+```
+
+```json
+{
+  "pages": [
+    { "url": "/products/lamp", "rootLayout": "ProductShell", "metadata": { "slug": "lamp" } },
+    { "url": "/products/desk", "rootLayout": "ProductShell", "metadata": { "slug": "desk" } }
+  ],
+  "state": "pending"
+}
+```
+
+- New URLs are inserted as `pending` (built on first request) or `isr` (always built on demand).
+- Existing URLs: page info updated, state kept — an `available` page stays live, and its next build uses the new info.
+- Up to 5000 pages per request. Needs the site's store (`409` otherwise).
+
+This is how a site gets 50,000 valid URLs without a 50,000-page build.
+
+## Remove pages
+
+```http
+DELETE /sites/:id/pages
+```
+
+```json
+{ "urls": ["/products/discontinued"] }
+```
+
+Removes the rows (404 from then on) and exactly those pages' own files from the site bucket — never another page's files (`/a/b` lives inside `pages/a/`) and never shared files. Up to 5000 URLs per request. No build needed.

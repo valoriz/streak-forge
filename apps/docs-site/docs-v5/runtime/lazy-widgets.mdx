@@ -1,0 +1,65 @@
+---
+title: Lazy Widgets
+description: "loadingStrategy: lazy — widgets loaded after the page is interactive, in the order CSS, HTML, script."
+order: 2
+---
+
+# Lazy Widgets
+
+A lazy widget isn't in the page's HTML. Its slot holds a marker; the client runtime loads the widget after the page is interactive. Use it for anything below the fold: footers, related products, overlays.
+
+```tsx
+<WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+<WidgetPlaceholder id="related" type="RelatedProducts" loadingStrategy="lazy" />
+```
+
+```json
+"slots": { "main": [{ "id": "reviews", "type": "Reviews", "loadingStrategy": "lazy" }] }
+```
+
+A lazy widget is rendered at build time like any other. Only its delivery differs.
+
+---
+
+## What gets loaded
+
+At build time each widget instance writes a `content.json`:
+
+```json
+{ "html": "<section …>…</section>", "cssHref": "widgets/Reviews/Reviews.3f2a1c.css", "scriptHref": "pages/…/reviews/bundle.js" }
+```
+
+In a built page, the marker carries the URL of that file:
+
+```html
+<div data-widget-placeholder="reviews" data-widget-type="Reviews" data-widget-src="/pages/…/reviews/content.json?v=…"></div>
+```
+
+---
+
+## Load order
+
+For each marker the runtime:
+
+1. **Fetches `content.json`.**
+2. **Loads the CSS** (`<link>`), and waits for it.
+3. **Inserts the HTML**, replacing the marker. A widget with several root elements (a backdrop and a drawer) keeps all of them.
+4. **Loads the widget's script** (`bundle.js`: its `<Script>` blocks and those of its eager components), so the elements exist when it runs.
+
+If the CSS fails to load, the HTML is inserted anyway (possibly unstyled) rather than never appearing.
+
+All URLs are resolved from the site root and carry the page's `?v=`.
+
+---
+
+## How many at once
+
+The loader works through the markers in page order, a few at a time based on the connection: 4 at once on 4G, 2 on 3G, 1 on slower connections, 3 when the browser doesn't say.
+
+In `streak-forge dev`, lazy widgets are fetched from the dev server's `/__streak/lazy` endpoint instead of `content.json`, with the same order.
+
+---
+
+## Lazy components
+
+A registered component entry with `"loadingStrategy": "lazy"` (in a widget's sitemap `components`) is left out of the widget's HTML and loaded the same way.

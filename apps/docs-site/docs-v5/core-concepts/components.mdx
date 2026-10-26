@@ -1,0 +1,72 @@
+---
+title: Components
+description: "component() and ComponentPlaceholder: reusable pieces inside widgets, with their own CSS and optional lazy loading."
+order: 7
+---
+
+# Components
+
+There are two kinds of "component" in a v5 project.
+
+## Plain function components
+
+Any function returning JSX can be used inside a widget as `<Card … />`. It renders as part of the widget: its markup goes into the widget's HTML, and its classes are scanned and scoped as the widget's own. No registration needed.
+
+```tsx
+// src/common/ProductCard.tsx — imported by widgets
+export function ProductCard({ product }: { product: Product }) {
+  return <a href={`/products/${product.slug}`} className="block rounded-lg">{product.title}</a>;
+}
+```
+
+Use these for almost everything.
+
+## Registered components
+
+`component()` registers a component as its own build entry — own folder, own purged CSS, own scoped class prefix — and lets the sitemap fill it into a widget's `<ComponentPlaceholder>`:
+
+```tsx
+// src/components/Button.tsx
+export const Button = component({})((props: { label?: string }) => (
+  <button className="px-4 py-2 rounded bg-indigo-600 text-white">{props?.label ?? "Buy"}</button>
+));
+```
+
+```tsx
+// in a widget
+import { ComponentPlaceholder } from "streak-forge";
+
+export const Panel = widget({})(() => (
+  <div className="card">
+    <ComponentPlaceholder id="cta" type="Button" />
+  </div>
+));
+```
+
+The widget's sitemap entry lists the component:
+
+```json
+{
+  "shared": [
+    {
+      "id": "promo",
+      "type": "Panel",
+      "components": [{ "id": "cta", "type": "Button", "props": { "label": "Shop now" } }]
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | Matches `<ComponentPlaceholder id>` in the widget's output |
+| `type` | A registered component type |
+| `props` | Passed to the component |
+| `loadingStrategy` | `"lazy"`: left out of the widget's HTML and loaded by the client runtime |
+
+Rules:
+
+- Components are one level deep: a component can't contain a `ComponentPlaceholder`.
+- A `ComponentPlaceholder` can only appear inside a widget, never directly in a rootLayout.
+- Components get props only from the sitemap entry; they don't call handlers.
+- Two widgets using the same component type each get their own instance.

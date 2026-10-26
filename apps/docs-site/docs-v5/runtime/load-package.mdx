@@ -1,0 +1,34 @@
+---
+title: loadPackage & Public Assets
+description: "Static files in public/, and loading third-party scripts on demand with gDom.loadPackage."
+order: 5
+---
+
+# loadPackage & Public Assets
+
+## public/
+
+Everything in `public/` is copied to the site root as-is: `public/images/logo.svg` is served at `/images/logo.svg`. Use it for images, fonts, favicons and hand-written JS or CSS.
+
+In the build platform, `public/` ships as its own release asset (`public.zip`) and is only uploaded again when its content changes. See [Release artifacts](/v5/build-platform/release-artifacts.html).
+
+## loadPackage
+
+`gDom.loadPackage(name)` loads a file from `/assets/<name>` through a Web Worker and adds it to the page as a `<script>` or `<style>`, based on its content type. Put the file at `public/assets/<name>`.
+
+```tsx
+<Script id="hero-motion" options={{}}>
+  {(gDom) => {
+    gDom.loadPackage("js/motion.js").then(() => {
+      const { animate } = (window as unknown as { Motion: { animate: Function } }).Motion;
+      animate("#hero h1", { opacity: [0, 1] });
+    });
+  }}
+</Script>
+```
+
+- Each file is fetched once; later calls reuse it.
+- Failed fetches are retried twice, with a 10 s timeout per attempt; the promise rejects after that.
+- In built sites the fetch carries the page's `?v=`.
+
+Use it for libraries only a few widgets need, so they never block the first render.

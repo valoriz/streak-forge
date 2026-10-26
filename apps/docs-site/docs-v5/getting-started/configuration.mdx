@@ -1,0 +1,105 @@
+---
+title: Configuration
+description: "tsconfig, bunfig, package scripts and the CSS build for a Streak.js v5 project."
+order: 3
+---
+
+# Configuration
+
+v5 has no Streak-specific config file. A project is configured through `tsconfig.json`, `bunfig.toml`, its `package.json` scripts and its CSS build.
+
+---
+
+## tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "streak-forge",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["bun-types", "streak-forge/globals"]
+  },
+  "include": ["src"]
+}
+```
+
+- `jsxImportSource: "streak-forge"` — TSX compiles to Streak's own VNodes, not React.
+- `types: ["streak-forge/globals"]` — types for the global `widget()`, `handler()`, `component()`, `html()`, `head()`, `body()`, `rootLayout()`, and for the `gDom` helpers on `window`.
+- tsconfig `paths` aliases work: prebuild resolves them with Bun's resolver.
+
+## bunfig.toml
+
+```toml
+preload = ["streak-forge/globals"]
+
+[test]
+preload = ["streak-forge/globals"]
+```
+
+The globals must exist before any widget, handler or shell module loads. `bun test` reads only its own `[test]` table, so both entries are needed.
+
+## package.json scripts
+
+```json
+{
+  "scripts": {
+    "css-build": "tailwindcss -i src/app.css -o src/app.full.css",
+    "dev:css": "tailwindcss -i src/app.css -o src/app.full.css --watch",
+    "dev:streak": "streak-forge dev",
+    "dev": "concurrently -k -n CSS,STREAK \"bun run dev:css\" \"bun run dev:streak\"",
+    "prebuild": "streak-forge safelist && bun run css-build && streak-forge prebuild",
+    "build": "streak-boot build",
+    "serve": "streak-boot serve"
+  }
+}
+```
+
+Bun runs a script's `pre<name>` script first, so `bun run build` runs `prebuild` and then `streak-boot build`.
+
+Why `prebuild` has three steps:
+
+1. `streak-forge safelist` writes `.streak-forge-cache/dynamic-classes.json` — every class listed in a `dynamicClasses` annotation.
+2. Your CSS build reads that file into Tailwind's `safelist` and writes the full CSS to `src/app.full.css`. streak-forge never runs a CSS compiler itself.
+3. `streak-forge prebuild` purges that full CSS per widget.
+
+## The CSS build
+
+Prebuild reads the full CSS from `src/app.full.css`. Any tool can produce it. With Tailwind 3, feed the safelist in so runtime-only classes exist in the full CSS:
+
+```js
+// tailwind.config.js
+const fs = require("fs");
+const path = require("path");
+
+let safelist = [];
+try {
+  safelist = JSON.parse(fs.readFileSync(path.join(__dirname, ".streak-forge-cache", "dynamic-classes.json"), "utf-8"));
+} catch {
+  // first run, before `streak-forge safelist`
+}
+
+module.exports = {
+  content: ["./src/**/*.{ts,tsx}"],
+  safelist,
+  theme: { extend: {} },
+  plugins: [],
+};
+```
+
+Tailwind 4 (`@tailwindcss/cli`) works too, and its `@layer` output is handled. See [CSS pipeline](/v5/styling/css-pipeline.html).
+
+## Environment variables
+
+| Variable | Used by | Default | Meaning |
+|---|---|---|---|
+| `PORT` | `streak-forge dev` | `4000` | Dev server port |
+| `MINIFY` | `streak-forge prebuild` | on | `MINIFY=0` writes unminified CSS |
+| `PORT` | `streak-boot serve` | `3690` | Preview server port |
+| `SPA` | `streak-boot build` | on | `SPA=0` ships plain full-page navigation |
+
+Your handlers read their own env (API keys, store domains) at **build time** only. Prebuild never needs them.

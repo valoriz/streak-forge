@@ -1,0 +1,90 @@
+---
+title: API Reference
+description: "Every authoring API in Streak.js v5: the HOCs and their options, the JSX components, and the client gDom helpers."
+order: 1
+---
+
+# API Reference
+
+## HOCs (globals)
+
+Installed as globals by `streak-forge/globals`. Always used as `export const Name = hoc({ … })(fn)`; options must be literals.
+
+### `widget(meta)(fn)`
+
+| Option | Type | Default | Meaning |
+|---|---|---|---|
+| `dynamicClasses` | `string[][]` | `[]` | Classes that keep their CSS and their name (global). [Class scoping](/v5/styling/class-scoping.html) |
+| `cache` | `"none"` \| `"type"` \| `"props"` | `"none"` | Build render cache. [Widget cache](/v5/core-concepts/widget-cache.html) |
+
+`fn(props)` returns JSX (or a promise of it). File name = widget type.
+
+### `handler(meta)(fn)`
+
+`fn(...args)` returns JSON-safe data (or a promise of it). Memoized per handler by a hash of `args`. [Handlers](/v5/core-concepts/handlers.html)
+
+### `component(meta)(fn)`
+
+| Option | Type | Meaning |
+|---|---|---|
+| `dynamicClasses` | `string[][]` | As for widgets |
+
+File name = component type. [Components](/v5/core-concepts/components.html)
+
+### `html(meta)(fn)` · `head(meta)(fn)` · `body(meta)(fn)` · `rootLayout(meta)(fn)`
+
+| Entry | `fn` returns | Called with |
+|---|---|---|
+| `html` | attribute object | `{}` |
+| `head` | JSX | `{}` (shared head) and `{ data: page.metadata }` (per page) |
+| `body` | attribute object | `{}` |
+| `rootLayout` | JSX with `<WidgetPlaceholder>`s | `{}` |
+
+Option: `dynamicClasses`. File name = shell type. [Shells](/v5/core-concepts/shells.html)
+
+---
+
+## Components (`import { … } from "streak-forge"`)
+
+| Component | Props | Page |
+|---|---|---|
+| `Script` | `id`, `options?`, `children: (gDom, options) => void` | [Script](/v5/components/script.html) |
+| `WidgetPlaceholder` | `id`, `type?`, `shared?`, `loadingStrategy?: "lazy"` | [WidgetPlaceholder](/v5/components/widget-placeholder.html) |
+| `ComponentPlaceholder` | `id`, `type` | [ComponentPlaceholder](/v5/components/component-placeholder.html) |
+| `Dynamic` | `id`, `children` | [Dynamic](/v5/components/dynamic.html) |
+| `Fragment` | — | `<>…</>` |
+
+JSX notes:
+
+- `className` → `class`, `htmlFor` → `for`, `style` objects → CSS text.
+- `on*` props (event handlers) are dropped: behavior goes in `<Script>`.
+- `dangerouslySetInnerHTML={{ __html }}` inserts raw HTML.
+- `<script>` and `<style>` children are raw text (not escaped); a `</script` inside is escaped.
+- `key` is accepted and ignored.
+- SVG attributes are written as given: use `stroke-width`, not `strokeWidth`.
+
+---
+
+## Types (`import type { … } from "streak-forge"`)
+
+| Type | |
+|---|---|
+| `VNode`, `VNodeChild` | JSX output |
+| `JsonSafe<T>` | `T` if it's JSON-safe |
+| `StreakBootSitemap`, `SitemapPageEntry`, `SharedWidgetEntry`, `SitemapWidgetEntry`, `SitemapComponentEntry` | Sitemap |
+| `WidgetHocMeta`, `HandlerHocMeta`, `ComponentHocMeta`, `ShellHocMeta`, `WidgetCacheMode` | HOC options |
+
+---
+
+## gDom (client)
+
+| Function | |
+|---|---|
+| `geById(id)` | `document.getElementById` |
+| `loadDynamicComponent(id, cb?)` | Load a `<Dynamic>` block |
+| `loadPackage(name)` | Load `/assets/<name>` through a worker → `Promise<void>` |
+| `onVisible(el, cb, { onlyOnce }?, meta?)` | Viewport observer |
+| `debounce(fn, ms)` · `stall(ms)` | Timing helpers |
+| `setCookie(name, value, days?)` · `getCookie(name)` | Cookies |
+
+Events: `sf:pageunload`, `sf:pageload`. [gDom API](/v5/runtime/gdom-api.html)

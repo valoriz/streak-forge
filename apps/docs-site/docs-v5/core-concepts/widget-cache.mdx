@@ -1,0 +1,44 @@
+---
+title: Widget Cache
+description: "widget({ cache }): render a widget once per type or once per props across a whole build."
+order: 8
+---
+
+# Widget Cache
+
+By default every per-page widget is rendered for every page. For a widget whose output doesn't depend on the page, that's wasted work — and on a large build, wasted handler calls. `widget({ cache })` opts a widget into a build-wide render cache.
+
+```tsx
+export const SiteFooter = widget({ cache: "type" })(async () => {
+  const { columns } = await FooterHandler();
+  return <footer>…</footer>;
+});
+
+export const CategoryStrip = widget({ cache: "props" })((props: { data?: { category?: string } }) => (
+  /* … */
+));
+```
+
+| Mode | Cached | Requirement (checked by TypeScript) |
+|---|---|---|
+| `"none"` (default) | Never | — |
+| `"type"` | One output per widget type per build | The widget takes **no props** at all |
+| `"props"` | One output per widget type + hash of its props | Props are **JSON-safe** |
+
+The requirements are compile-time checks on the `widget()` call: a `"type"` widget with a props parameter, or a `"props"` widget with a non-JSON-safe props type, fails to type-check with the rule in the error.
+
+> **Warning:** `"props"` hashes the widget's props. A per-page widget's props are `{ data: page.metadata }`, so pages with identical `metadata` share one output. Only use it when the output really depends on nothing else.
+
+---
+
+## Where the cache applies
+
+The `cache` option only marks a widget as cacheable. Whether a cache is used depends on what runs the build:
+
+- **Build platform** — the cache spans every page render container of one build. Cached outputs are stored already encoded, so a hit skips the render and every handler call inside it. Each build starts empty; the cache is cleared when the build completes, fails or is cancelled. Large entries are stored in object storage; entries over a size cap aren't cached. See [Widget build cache](/v5/build-platform/widget-build-cache.html).
+- **`streak-boot` API** — `buildPages({ widgetCache, buildId })` takes any store with `get(key, ctx)` / `set(key, value, ctx)`. A `new Map<string, string>()` works for a single process; a remote store (Redis, KV, a Durable Object) shares it across processes. Keys are build-scoped and carry no source hash, so a store that outlives a build must prefix keys with `ctx.buildId` and clear them itself. A failing `get`/`set` is logged and treated as a miss — it never fails the build.
+- **`streak-boot build` (CLI)** — passes no store: every widget renders. Use the API above to cache.
+- **On-demand (ISR) builds** — never use the cache. An on-demand page always renders with fresh data.
+- **`streak-forge dev`** — renders every time, so you always see current output.
+
+Handler results are cached separately and always (see [Handlers](/v5/core-concepts/handlers.html)). The widget cache saves the render itself, across processes and containers.

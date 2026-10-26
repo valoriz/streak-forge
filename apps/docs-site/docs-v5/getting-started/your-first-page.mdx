@@ -1,0 +1,122 @@
+---
+title: Your First Page
+description: "Build a page with a shared nav, a per-page hero, a lazy section and a client script."
+order: 4
+---
+
+# Your First Page
+
+This builds on the [Quick Start](/v5/quick-start.html) project and adds the pieces most pages use: a shared widget, a per-page widget, a lazy widget, a handler and a `<Script>`.
+
+---
+
+## 1. A handler
+
+`src/handlers/NavHandler.ts`:
+
+```ts
+export interface NavData {
+  links: { label: string; href: string }[];
+}
+
+export const NavHandler: () => Promise<NavData> = handler({})(async () => {
+  // fetch from a CMS here; this runs at build time
+  return { links: [{ label: "Home", href: "/" }, { label: "About", href: "/about" }] };
+});
+```
+
+The result must be JSON-safe (no `Date`, `Map`, class instances). See [Handlers](/v5/core-concepts/handlers.html).
+
+## 2. A shared widget that uses it
+
+`src/widgets/Nav.tsx`:
+
+```tsx
+import { Script } from "streak-forge";
+import { NavHandler } from "../handlers/NavHandler";
+
+export const Nav = widget({})(async () => {
+  const { links } = await NavHandler();
+  return (
+    <header id="site-nav" className="flex gap-6 p-4 border-b">
+      {links.map((l) => <a href={l.href} className="text-sm">{l.label}</a>)}
+      <Script id="nav-script" options={{}}>
+        {() => {
+          const nav = document.getElementById("site-nav");
+          window.addEventListener("scroll", () => nav?.classList.toggle("shadow", window.scrollY > 10));
+        }}
+      </Script>
+    </header>
+  );
+});
+```
+
+`shadow` is only added by the script, so declare it — see [Class scoping](/v5/styling/class-scoping.html):
+
+```tsx
+export const Nav = widget({ dynamicClasses: [["shadow"]] })(async () => { /* ... */ });
+```
+
+## 3. Lay it out
+
+`src/shell/AppShell.tsx`, rootLayout:
+
+```tsx
+export const AppRootLayout = rootLayout({})(() => (
+  <>
+    <WidgetPlaceholder id="nav" shared />
+    <WidgetPlaceholder id="hero" type="Hello" />
+    <WidgetPlaceholder id="main" />
+    <WidgetPlaceholder id="footer" shared loadingStrategy="lazy" />
+  </>
+));
+```
+
+- `nav` — **shared** fixed slot: the sitemap's `shared[]` entry `nav`, built once.
+- `hero` — fixed slot: the `Hello` widget, rendered for each page with its `metadata`.
+- `main` — **dynamic** slot: whatever each page lists under `slots.main`.
+- `footer` — shared and **lazy**: loaded by the client after the page is interactive.
+
+## 4. The sitemap
+
+```json
+{
+  "shared": [
+    { "id": "nav", "type": "Nav" },
+    { "id": "footer", "type": "Footer", "props": { "data": { "year": 2026 } } }
+  ],
+  "pages": [
+    {
+      "url": "/",
+      "rootLayout": "AppShell",
+      "metadata": { "title": "Home", "heading": "Welcome" },
+      "slots": { "main": [{ "id": "features", "type": "Features" }] }
+    },
+    {
+      "url": "/about",
+      "rootLayout": "AppShell",
+      "metadata": { "title": "About", "heading": "About us" }
+    }
+  ]
+}
+```
+
+`/about` lists nothing for `main`, so that slot stays empty there.
+
+## 5. Check it
+
+```bash
+bun run dev
+```
+
+- `/` shows nav, hero, features and (after load) the footer.
+- `/about` shows nav, hero and footer.
+- Each reload re-renders the page, so handler data is fresh. See [streak-forge dev](/v5/cli/streak-forge.html).
+
+## 6. Production build
+
+```bash
+bun add streak-boot
+bun run build    # prebuild + streak-boot build → out/
+bun run serve    # http://localhost:3690
+```

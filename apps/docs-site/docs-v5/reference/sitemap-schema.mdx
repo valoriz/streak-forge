@@ -1,0 +1,54 @@
+---
+title: Sitemap Schema
+description: "The full TypeScript schema of streak.sitemap.json in Streak.js v5."
+order: 2
+---
+
+# Sitemap Schema
+
+```ts
+interface StreakBootSitemap {
+  shared?: SharedWidgetEntry[];
+  pages: SitemapPageEntry[];
+}
+
+interface SharedWidgetEntry {
+  id: string;                          // used by <WidgetPlaceholder id shared /> or { ref: id }
+  type: string;                        // a registered widget type
+  props?: Record<string, unknown>;     // passed as-is
+  components?: SitemapComponentEntry[];
+}
+
+interface SitemapPageEntry {
+  url: string;                         // "/", "/products/chair"
+  rootLayout?: string;                 // shell type; optional with a single rootLayout
+  metadata?: Record<string, unknown>;  // props.data for per-page widgets and the page's head()
+  slots?: Record<string, SitemapWidgetEntry[]>; // dynamic slots only
+  widgets?: unknown;                   // deprecated, ignored
+}
+
+type SitemapWidgetEntry =
+  | { id?: string; ref: string; loadingStrategy?: "lazy" }                // shared widget; id defaults to ref
+  | { id: string; type: string; loadingStrategy?: "lazy"; components?: SitemapComponentEntry[] }; // inline
+
+interface SitemapComponentEntry {
+  id: string;                          // matches <ComponentPlaceholder id />
+  type: string;                        // a registered component type
+  props?: Record<string, unknown>;
+  loadingStrategy?: "lazy";
+}
+```
+
+## Validation
+
+The build stops with a message naming the page when:
+
+- a page names a `rootLayout` that isn't registered, or names none while the project has several;
+- a placeholder has no `id`, or two placeholders share one;
+- two widgets on a page share an id (across all slots);
+- a `slots` value isn't a list, or an entry is neither `{ ref }` nor `{ id, type }`;
+- a `ref` names no `shared[]` entry;
+- a widget or component `type` isn't registered;
+- a widget's `components` and its `<ComponentPlaceholder>`s don't match one to one.
+
+The build platform's `POST /builds` also checks that every `url` starts with `/` and is unique.

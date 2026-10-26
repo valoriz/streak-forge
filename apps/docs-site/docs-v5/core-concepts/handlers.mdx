@@ -1,0 +1,85 @@
+---
+title: Handlers
+description: "Data fetching in Streak.js v5: handler(), memoization by input, JSON-safe results, and when handlers run."
+order: 3
+---
+
+# Handlers
+
+A handler fetches data. It is an async function wrapped in the global `handler()` HOC, exported by name from a file in `src/handlers/`. Widgets (and shells' `head()`) call it directly with `await`.
+
+```ts
+// src/handlers/ProductHandler.ts
+export interface Product { title: string; price: number; images: string[] }
+
+export const ProductHandler: (input: { slug: string }) => Promise<Product | null> =
+  handler({})(async ({ slug }: { slug: string }) => {
+    const res = await fetch(`https://api.example.com/products/${slug}`);
+    if (!res.ok) return null;
+    return (await res.json()) as Product;
+  });
+```
+
+> **Tip:** Give the export an explicit type, as above. TypeScript can't always infer a handler's type through the HOC when it is called from another file.
+
+---
+
+## Memoized by input
+
+`handler()` caches each call's result by a hash of its arguments. Same handler, same (deep-equal) input → it runs once, and every later call (including calls still waiting) gets the same promise.
+
+```tsx
+// all three run ProductHandler({ slug: "chair" }) once:
+export const ProductDetail = widget({})(async (p) => { const x = await ProductHandler({ slug: p?.data?.slug ?? "" }); /* ... */ });
+export const RelatedProducts = widget({})(async (p) => { const x = await ProductHandler({ slug: p?.data?.slug ?? "" }); /* ... */ });
+export const ShopHead = head({})(async (p) => { const x = await ProductHandler({ slug: p?.data?.slug ?? "" }); /* ... */ });
+```
+
+Build the input the same way everywhere. `{ slug: undefined }` and `{}` hash differently, so a shared helper that builds the input avoids accidental second fetches.
+
+### How long the cache lives
+
+| Where | Cache scope |
+|---|---|
+| `streak-boot build` | The whole build: a handler runs once per input across all pages. |
+| `streak-forge dev` | One page render: reset before each page, so each reload fetches fresh data. |
+| Build platform | One page render job; plus the optional [widget cache](/v5/core-concepts/widget-cache.html) across the build. |
+
+---
+
+## Results must be JSON-safe
+
+A handler's result must be plain data: objects, arrays, strings, finite numbers, booleans, `null`. No `Date`, `Map`, `Set`, class instances or functions. Results are stored and passed between build stages as JSON.
+
+- **At compile time:** a handler whose return type isn't JSON-safe fails to type-check, with the rule in the error message.
+- **At runtime:** a result the types can't see (for example `any` from `res.json()`) is checked once per handler; if it isn't JSON-safe you get one warning, and the result is only memoized in-process.
+
+```ts
+// ✗ fails to compile: Date isn't JSON-safe
+handler({})(async () => ({ updatedAt: new Date() }));
+
+// ✓ send an ISO string instead
+handler({})(async () => ({ updatedAt: new Date().toISOString() }));
+```
+
+---
+
+## When handlers run
+
+- **Never during prebuild.** Prebuild reads your code but runs none of it.
+- **At build** (`streak-boot build`, or a build platform render container), with your site's env vars.
+- **On every page request in dev.**
+
+Errors are yours to handle. A handler that throws fails the render of the widget that called it; in a platform build that page is retried later. See [Builds](/v5/build-platform/builds.html).
+
+---
+
+## No page-level handlers
+
+v4's per-page `dataHandler`, `CommonHandler` and `Middleware` don't exist in v5:
+
+- **Per-page data** — the page's `metadata` (for example a `slug`) is passed to every widget; each widget calls the handler it needs with it.
+- **Site-wide data** (nav, footer) — a handler called by shared widgets.
+- **Dynamic routes** — every URL must be in the sitemap, or registered with the platform's [pages API](/v5/build-platform/pages-api.html) and built on demand.
+
+See [Migrating from v4](/v5/migration/from-v4.html).

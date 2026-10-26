@@ -24,12 +24,13 @@
       <button class="menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu">
         <span></span><span></span><span></span>
       </button>
-      <a class="logo" href="/index.html">
+      <a class="logo" href="{{version_base}}/index.html">
         <img class="logo-img logo-img--light" src="/streak-logo-light-mode.svg" alt="Streak.js" height="28" />
         <img class="logo-img logo-img--dark" src="/streak-logo-dark-mode.svg" alt="Streak.js" height="28" />
       </a>
     </div>
     <div class="topbar-right">
+      {{version_switcher}}
       <button class="search-trigger" id="search-trigger" aria-label="Search docs">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <span class="search-trigger-text">Search docs...</span>
@@ -69,6 +70,7 @@
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <main class="content">
+      {{version_banner}}
       <nav class="breadcrumbs">{{breadcrumbs}}</nav>
       <article class="prose">
         {{content}}
@@ -349,7 +351,7 @@
         searchInput.value = '';
         setTimeout(function() { searchInput.focus(); }, 50);
         if (!searchIndex) {
-          fetch('/search-index.json')
+          fetch('{{version_base}}/search-index.json')
             .then(function(r) { return r.json(); })
             .then(function(d) {
               searchIndex = d;

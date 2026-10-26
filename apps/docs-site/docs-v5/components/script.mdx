@@ -1,0 +1,79 @@
+---
+title: Script
+description: "<Script>: client-side JavaScript for a widget, serialized at build time and passed data through options."
+order: 1
+---
+
+# Script
+
+`<Script>` adds client-side behavior to a widget. Its child is a function; the build turns that function's source into a small script that runs in the browser.
+
+```tsx
+import { Script } from "streak-forge";
+
+export const Counter = widget({})((props: { data?: { start?: number } }) => (
+  <div>
+    <button id="counter-btn" className="px-3 py-1 border">Clicked 0 times</button>
+    <Script id="counter-script" options={{ start: props?.data?.start ?? 0 }}>
+      {(gDom, options) => {
+        let count = Number(options.start);
+        const btn = gDom.geById("counter-btn");
+        btn?.addEventListener("click", () => {
+          count += 1;
+          btn.textContent = `Clicked ${count} times`;
+        });
+      }}
+    </Script>
+  </div>
+));
+```
+
+---
+
+## Props
+
+| Prop | Type | Meaning |
+|---|---|---|
+| `id` | string | Required. Identifies the script block. |
+| `options` | JSON object | Values passed from the build to the browser. Typed: the function's `options` parameter gets the same type. |
+| `children` | `(gDom, options) => void` | The code that runs in the browser. `gDom` is `window` with the [gDom helpers](/v5/runtime/gdom-api.html). |
+
+---
+
+## The function is serialized
+
+The build calls `toString()` on the function and runs that text in the browser:
+
+```js
+(function(){ var __fn = (/* your function */); __fn(window, {"start":0}); })();
+```
+
+So the function **cannot use anything from its surroundings** — no variables from the widget, no imports. Everything it needs comes through `options` (which must be JSON-serializable) or from the DOM.
+
+```tsx
+// ✗ `label` doesn't exist in the browser
+const label = props?.data?.label;
+<Script id="x" options={{}}>{() => alert(label)}</Script>
+
+// ✓ pass it through options
+<Script id="x" options={{ label: props?.data?.label ?? "" }}>{(_g, o) => alert(o.label)}</Script>
+```
+
+---
+
+## When it runs
+
+- Every Script of a widget is collected into that widget's own `script.js`.
+- For a page, the scripts of all **eager** widgets (and their eager components) are joined into one `common.js`, loaded after the HTML.
+- A **lazy** widget's scripts are loaded when the widget is inserted, after its CSS and HTML are in the page. See [Lazy widgets](/v5/runtime/lazy-widgets.html).
+- A Script inside a [`<Dynamic>`](/v5/components/dynamic.html) block runs when that block is loaded.
+
+Select elements by `id` or `data-*` attributes. If a script adds or removes classes, or builds HTML with classes, declare those classes in `dynamicClasses` — see [Class scoping](/v5/styling/class-scoping.html).
+
+---
+
+## Differences from v4
+
+- No `nonce` prop.
+- `gDom` is typed as `window`; the helpers (`loadPackage`, `onVisible`, …) are declared on `Window` by `streak-forge/globals`.
+- The function is serialized at render time with `toString()`, so a minified widget bundle would minify the script too.

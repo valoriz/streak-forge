@@ -31,25 +31,72 @@ import rehypeSlug from "rehype-slug"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import type { Root } from "hast"
 
-const DOCS_DIR = "docs"
 const DIST_DIR = "dist"
 
-// Edit this array to control sidebar group order.
-const NAV_ORDER = [
-  "getting-started",
-  "core-concepts",
-  "components",
-  "runtime",
-  "assets",
-  "cli",
-  "deployment",
-  "guides",
-  "reference",
-  "miscellaneous",
+// ── Versions ────────────────────────────────────────────────────────────
+// Each version is its own docs folder, served under its own URL base, with
+// its own sidebar, prev/next chain and search index. The default version
+// keeps the site's original URLs (no prefix).
+interface DocsVersion {
+  id: string
+  label: string
+  /** Shown next to the label in the version selector, e.g. "beta". */
+  badge?: string
+  /** Source folder of the version's .mdx files. */
+  dir: string
+  /** URL prefix ("" = site root). */
+  base: string
+  /** Sidebar group order (folder names). */
+  navOrder: string[]
+  /** One-line notice shown above every page of the version (HTML). */
+  banner?: string
+}
+
+const VERSIONS: DocsVersion[] = [
+  {
+    id: "v4",
+    label: "v4",
+    dir: "docs",
+    base: "",
+    navOrder: [
+      "getting-started",
+      "core-concepts",
+      "components",
+      "runtime",
+      "assets",
+      "cli",
+      "deployment",
+      "guides",
+      "reference",
+      "miscellaneous",
+    ],
+  },
+  {
+    id: "v5",
+    label: "v5",
+    badge: "beta",
+    dir: "docs-v5",
+    base: "/v5",
+    navOrder: [
+      "getting-started",
+      "core-concepts",
+      "components",
+      "styling",
+      "runtime",
+      "cli",
+      "build-platform",
+      "migration",
+      "reference",
+    ],
+    banner:
+      'You are reading the <strong>v5 (beta)</strong> docs. APIs may still change before the stable release. <a href="/index.html">v4 docs</a> · <a href="/v5/migration/from-v4.html">Migrating from v4</a>',
+  },
 ]
 
 interface PageMeta {
   file: string
+  /** Path inside the version, e.g. "core-concepts/widgets.html". */
+  rel: string
   url: string
   title: string
   description: string
@@ -202,22 +249,20 @@ function minifyHtml(html: string) {
   return html
 }
 
-function fileToUrl(file: string) {
-  return "/" + file.replace(/^docs\//, "").replace(/\.mdx$/, ".html")
-}
-
-async function collectPages(): Promise<PageMeta[]> {
-  const files = await glob(`${DOCS_DIR}/**/*.mdx`)
+async function collectPages(version: DocsVersion): Promise<PageMeta[]> {
+  const files = await glob(`${version.dir}/**/*.mdx`)
   const pages: PageMeta[] = []
 
   for (const file of files) {
     const raw = await fs.readFile(file, "utf8")
     const { data } = matter(raw)
-    const relPath = file.replace(/^docs\//, "")
+    const relPath = file.slice(version.dir.length + 1)
     const folder = relPath.includes("/") ? (relPath.split("/")[0] ?? "") : ""
+    const rel = relPath.replace(/\.mdx$/, ".html")
     pages.push({
       file,
-      url: fileToUrl(file),
+      rel,
+      url: `${version.base}/${rel}`,
       title: data.title ?? path.basename(file, ".mdx"),
       description: data.description ?? "",
       section: data.section ?? "",
@@ -235,7 +280,7 @@ async function collectPages(): Promise<PageMeta[]> {
   return pages
 }
 
-function generateSidebar(pages: PageMeta[], currentUrl: string) {
+function generateSidebar(pages: PageMeta[], currentUrl: string, navOrder: string[]) {
   const groups = new Map<string, PageMeta[]>()
   for (const page of pages) {
     if (!groups.has(page.folder)) groups.set(page.folder, [])
@@ -250,8 +295,8 @@ function generateSidebar(pages: PageMeta[], currentUrl: string) {
   }
 
   const sortedFolders = [...groups.keys()].filter(f => f).sort((a, b) => {
-    const ai = NAV_ORDER.indexOf(a)
-    const bi = NAV_ORDER.indexOf(b)
+    const ai = navOrder.indexOf(a)
+    const bi = navOrder.indexOf(b)
     if (ai !== -1 && bi !== -1) return ai - bi
     if (ai !== -1) return -1
     if (bi !== -1) return 1
@@ -275,14 +320,14 @@ function generateSidebar(pages: PageMeta[], currentUrl: string) {
   return html
 }
 
-function generateBreadcrumbs(page: PageMeta) {
-  let html = `<a href="/index.html">Home</a>`
+function generateBreadcrumbs(page: PageMeta, version: DocsVersion) {
+  let html = `<a href="${version.base}/index.html">Home</a>`
   if (page.folder) {
     const label = page.folder.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())
     html += `<span class="breadcrumb-sep">/</span>`
     html += `<span class="breadcrumb-section">${label}</span>`
   }
-  if (page.url !== "/index.html") {
+  if (page.rel !== "index.html") {
     html += `<span class="breadcrumb-sep">/</span>`
     html += `<span class="breadcrumb-current">${page.title}</span>`
   }
@@ -325,63 +370,91 @@ function generatePageNav(pages: PageMeta[], currentUrl: string) {
   return { prev, next }
 }
 
+/** Version selector: each option links to the same page in that version
+ *  when it exists there, else to that version's home page. */
+function generateVersionSwitcher(current: DocsVersion, page: PageMeta, relsByVersion: Map<string, Set<string>>) {
+  const options = VERSIONS.map((v) => {
+    const target = relsByVersion.get(v.id)?.has(page.rel) ? page.rel : "index.html"
+    const label = v.badge ? `${v.label} (${v.badge})` : v.label
+    const selected = v.id === current.id ? " selected" : ""
+    return `<option value="${v.base}/${target}"${selected}>${label}</option>`
+  }).join("")
+  return `<label class="version-switcher" title="Documentation version">
+      <span class="visually-hidden">Documentation version</span>
+      <select class="version-select" onchange="location.href=this.value" aria-label="Documentation version">${options}</select>
+    </label>`
+}
+
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, "").replace(/§/g, "").replace(/\s+/g, " ").trim()
 }
 
 
 export async function build({ minify = false } = {}) {
-  const pages = await collectPages()
   const layout = await fs.readFile("templates/layout.html", "utf8")
-
-  const searchIndex: { url: string; title: string; section: string; headings: string[]; excerpt: string }[] = []
-
-  for (const page of pages) {
-    const raw = await fs.readFile(page.file, "utf8")
-    const { content, data } = matter(raw)
-    const { html, toc } = await mdxToHtml(content)
-
-    const sidebar = generateSidebar(pages, page.url)
-    const breadcrumbs = generateBreadcrumbs(page)
-    const tocHtml = generateTocHtml(toc)
-    const { prev, next } = generatePageNav(pages, page.url)
-    const description = data.description ?? ""
-
-    // Build search index entry
-    const plainText = stripHtml(html)
-    searchIndex.push({
-      url: page.url,
-      title: page.title,
-      section: page.folder ? page.folder.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "",
-      headings: toc.map(t => t.text),
-      excerpt: plainText.slice(0, 200),
-    })
-
-    const pageTitle = `${data.title ?? "Docs"} — Streak.js`
-    let out = layout
-      .replaceAll("{{title}}", pageTitle)
-      .replaceAll("{{description}}", description)
-      .replace("{{content}}", html)
-      .replace("{{sidebar}}", sidebar)
-      .replace("{{breadcrumbs}}", breadcrumbs)
-      .replace("{{toc}}", tocHtml)
-      .replace("{{prev}}", prev)
-      .replace("{{next}}", next)
-      .replaceAll("{{edit_branch}}", EDIT_BRANCH)
-      .replace("{{edit_url}}", page.file)
-
-    if (minify) out = minifyHtml(out)
-
-    const outFile = path.join(DIST_DIR, page.url)
-    await fs.mkdir(path.dirname(outFile), { recursive: true })
-    await fs.writeFile(outFile, out)
-  }
-
-  // Write search index
-  await fs.writeFile(
-    path.join(DIST_DIR, "search-index.json"),
-    JSON.stringify(searchIndex)
+  const pagesByVersion = new Map<string, PageMeta[]>()
+  for (const version of VERSIONS) pagesByVersion.set(version.id, await collectPages(version))
+  const relsByVersion = new Map(
+    [...pagesByVersion].map(([id, pages]) => [id, new Set(pages.map((p) => p.rel))]),
   )
+  let total = 0
+
+  for (const version of VERSIONS) {
+    const pages = pagesByVersion.get(version.id)!
+    total += pages.length
+    const searchIndex: { url: string; title: string; section: string; headings: string[]; excerpt: string }[] = []
+
+    for (const page of pages) {
+      const raw = await fs.readFile(page.file, "utf8")
+      const { content, data } = matter(raw)
+      const { html, toc } = await mdxToHtml(content)
+
+      const sidebar = generateSidebar(pages, page.url, version.navOrder)
+      const breadcrumbs = generateBreadcrumbs(page, version)
+      const tocHtml = generateTocHtml(toc)
+      const { prev, next } = generatePageNav(pages, page.url)
+      const description = data.description ?? ""
+
+      // Build search index entry
+      const plainText = stripHtml(html)
+      searchIndex.push({
+        url: page.url,
+        title: page.title,
+        section: page.folder ? page.folder.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "",
+        headings: toc.map(t => t.text),
+        excerpt: plainText.slice(0, 200),
+      })
+
+      const pageTitle = `${data.title ?? "Docs"} — Streak.js`
+      let out = layout
+        .replaceAll("{{title}}", pageTitle)
+        .replaceAll("{{description}}", description)
+        .replace("{{content}}", html)
+        .replace("{{sidebar}}", sidebar)
+        .replace("{{breadcrumbs}}", breadcrumbs)
+        .replace("{{toc}}", tocHtml)
+        .replace("{{prev}}", prev)
+        .replace("{{next}}", next)
+        .replaceAll("{{edit_branch}}", EDIT_BRANCH)
+        .replace("{{edit_url}}", page.file)
+        .replace("{{version_switcher}}", generateVersionSwitcher(version, page, relsByVersion))
+        .replace("{{version_banner}}", version.banner ? `<div class="version-banner">${version.banner}</div>` : "")
+        .replaceAll("{{version_base}}", version.base)
+
+      if (minify) out = minifyHtml(out)
+
+      const outFile = path.join(DIST_DIR, page.url)
+      await fs.mkdir(path.dirname(outFile), { recursive: true })
+      await fs.writeFile(outFile, out)
+    }
+
+    // Search index, one per version (the layout fetches {{version_base}}/search-index.json)
+    await fs.mkdir(path.join(DIST_DIR, version.base), { recursive: true })
+    await fs.writeFile(
+      path.join(DIST_DIR, version.base, "search-index.json"),
+      JSON.stringify(searchIndex)
+    )
+  }
 
   // Copy static assets
   await fs.mkdir(DIST_DIR, { recursive: true })
@@ -396,7 +469,7 @@ export async function build({ minify = false } = {}) {
     console.warn("[build] no streak-logo-dark-mode.svg found in icons/, skipping")
   })
 
-  console.log(`[build] ${pages.length} page(s) built${minify ? " (minified)" : ""}`)
+  console.log(`[build] ${total} page(s) built across ${VERSIONS.length} version(s)${minify ? " (minified)" : ""}`)
 }
 
 if (import.meta.main) {

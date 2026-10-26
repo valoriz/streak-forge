@@ -1,0 +1,62 @@
+---
+title: CSS Pipeline
+description: "How Streak.js v5 turns one full CSS file into small, scoped per-widget CSS — without running your code."
+order: 1
+---
+
+# CSS Pipeline
+
+You write CSS the normal way (usually Tailwind). Streak takes the resulting full CSS file and gives each widget, component and shell only the rules it uses. A page then loads the shared base CSS plus the CSS of the widgets it actually shows.
+
+```
+src/app.css ──(your CSS build)──▶ src/app.full.css ──(prebuild)──▶ common CSS + one CSS file per widget/component/shell
+```
+
+---
+
+## 1. Safelist — `streak-forge safelist`
+
+Writes every class listed in a `dynamicClasses` annotation to `.streak-forge-cache/dynamic-classes.json`. Feed it into your CSS build (Tailwind's `safelist`) so classes that only appear at runtime still exist in the full CSS. Prebuild can only remove rules, never create them.
+
+## 2. Full CSS — your CSS build
+
+Your own build writes `src/app.full.css`. streak-forge never runs a CSS compiler. Tailwind 3 and Tailwind 4 output both work, including Tailwind 4's `@layer` blocks, `:where()` selectors (`space-y-*`) and attribute variants (`data-[active=true]:…`).
+
+## 3. Purge — `streak-forge prebuild`
+
+For each widget, component and shell:
+
+1. **Sample.** Collect the entry's source text plus every project file it imports (relative imports and tsconfig aliases; never `node_modules`). Nothing is executed.
+2. **Keep.** Keep the rules whose classes appear as tokens in that text, plus the entry's `dynamicClasses`. A class written anywhere in that code keeps its rule, whether or not a given page renders it.
+3. **Dedupe.** Remove rules already in the common CSS (below), compared inside their `@layer` / `@media` blocks.
+4. **Scope.** Prefix class names with the entry's short type code (see [Class scoping](/v5/styling/class-scoping.html)).
+5. **Write** `<kind>/<Type>/<Type>.<hash>.css`, or nothing when no rule is left. Older hashed copies are deleted.
+
+### The common CSS
+
+One file per build, written once:
+
+- Tailwind's base / preflight rules and `:root` variables.
+- `html` and `body` element rules (`line-height`, font family).
+- The rules of every **global** class — every class listed in any entry's `dynamicClasses`.
+
+Every page loads it first. Each other CSS file starts with the common file's `@layer` order statement, so cascade layers keep the right order whatever order the files load in.
+
+---
+
+## What a page loads
+
+| Mode | CSS |
+|---|---|
+| `streak-boot build` / serve | One inline `<style>` per page: common + shell + every eager widget's and component's CSS. A lazy widget's CSS loads as a `<link>` when the widget is inserted. |
+| `streak-forge dev` | Every generated CSS file as its own `<link>`, the same for every page. |
+
+All CSS URLs carry the page version (`?v=<hash>`), so they can be cached forever.
+
+---
+
+## Why prebuild scans source instead of rendering
+
+Rendering a widget runs its handlers, which need network access and secrets. Scanning source needs neither, so prebuild runs in CI with no env vars. The trade-off: a class that appears in the source but is never rendered (a branch no page reaches, a comment) keeps its rule — slightly larger CSS, never missing CSS.
+
+Classes assembled at runtime (`` `bg-${color}-500` ``) never appear as a whole token in the source. List the possible values in `dynamicClasses`.

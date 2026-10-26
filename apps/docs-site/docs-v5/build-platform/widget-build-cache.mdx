@@ -1,0 +1,46 @@
+---
+title: Widget Build Cache
+description: "How the build platform shares cached widget renders across render containers within one build."
+order: 5
+---
+
+# Widget Build Cache
+
+A large build renders the same widgets many times: the same footer, the same category strip, on thousands of pages, in many containers. Widgets marked with [`widget({ cache })`](/v5/core-concepts/widget-cache.html) are rendered once per build and reused everywhere.
+
+## How it works
+
+For each page a render container:
+
+1. computes the page's render plan,
+2. looks up the cacheable widgets: first in its own memory, then in the build's cache store,
+3. puts hits into the page's render record as-is (already encoded, nothing re-rendered, no handler called),
+4. renders the misses, and saves the newly rendered cacheable ones — in memory and in the store.
+
+Keys:
+
+| Mode | Key |
+|---|---|
+| `"type"` | widget type |
+| `"props"` | widget type + hash of its props |
+
+There is no source hash in the key: one build has one prebuild, so a widget's code can't differ within a build.
+
+## The store
+
+- **One Durable Object per build** (SQLite storage), reached through the Build API (`POST /stage1/cache`, `get` / `set`, up to 200 keys per call, build token only).
+- Values are compressed. Entries over **1 MB** aren't stored.
+- Emptied when the build completes, fails or is cancelled. The next build starts empty.
+- Handler results that aren't JSON-safe are never stored (they stay in the container's in-process memo).
+
+## Turning it off
+
+- Per widget: don't set `cache` (default `"none"`).
+- For every build: the platform variable `WIDGET_CACHE = "off"` (containers get `WIDGET_CACHE=0`).
+- On-demand builds never use it.
+
+## Checking it
+
+Each render job logs `widget cache N hit(s), N miss(es)`.
+
+> **Tip:** Good candidates: site-wide chrome rendered per page (`"type"`), and widgets driven by a small set of values such as a category or locale (`"props"`). Bad candidates: anything whose output depends on the page.

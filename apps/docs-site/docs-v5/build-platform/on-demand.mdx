@@ -1,0 +1,82 @@
+---
+title: On-demand Builds (ISR)
+description: "Build a page the first time it is requested: page states, the request flow, locking, the warm renderer, the loading page and its options."
+order: 4
+---
+
+# On-demand Builds (ISR)
+
+A site can know about far more pages than it builds up front. A page that is **known but not built** is built the moment someone requests it, and the HTML goes straight back to that visitor. Later requests get the stored page.
+
+Use it for large catalogs: register 50,000 product URLs with the [pages API](/v5/build-platform/pages-api.html), build the top sellers, and let the rest build on first visit.
+
+---
+
+## Page states
+
+Every valid URL has a row in the site DB. A URL with no row is a 404.
+
+| State | Meaning | On request |
+|---|---|---|
+| `available` | Built and stored in the site bucket | Served (from the edge cache when possible) |
+| `pending` | Known, not built yet | Built on demand |
+| `isr` | Always built on demand (never built up front) | Built on demand |
+| `building` | An on-demand build is running | Waits for it |
+
+Rows come from deploys (`available`), the pages API (`pending` or `isr`), on-demand builds (`available`) and the delete API (removed).
+
+---
+
+## Request flow
+
+1. **Lock.** The site worker takes a lock with one conditional update: `pending`/`isr` → `building`. Exactly one request wins. A lock older than **2 minutes** (crashed build) can be taken again.
+2. **Build.** The winner calls the platform's `POST /isr` with the page's row (url, rootLayout, metadata, slots) and its ISR token.
+3. **Render.** The platform sends the page to the site's **warm renderer**: the stage-1 container in server mode, with the live release already loaded. It renders the page (handler cache reset, so data is fresh; the widget build cache is never used).
+4. **Optimize.** Stage 2 builds the page against the live build's setup output and returns `{ html, files }`.
+5. **Store, then answer.** The site worker writes `files` to its bucket (`meta.json` last), marks the row `available`, and returns the HTML. Every asset the page links already exists when the browser asks for it.
+
+Other requests for the same page don't start a build: they poll the row and are served from the bucket once it's `available`.
+
+On failure the lock is released (back to `pending`) and the request gets `503`. There are no retry rounds on demand; the next request tries again.
+
+> **Note:** On-demand builds use the **live** release and its setup output (shared widgets, shells, CSS). A site with no deploy yet answers `pending` pages with `503`.
+
+---
+
+## Waiting and the loading page
+
+| Who | Within `ISR_WAIT_MS` | Past it |
+|---|---|---|
+| Browser | The page | A **loading page** that polls the page's `index.json` (`202` while building), then swaps the real page in without a reload |
+| Bot (by user agent) | The page | `503` with `Retry-After` — never the loading page |
+
+The build keeps running to the end even if the visitor leaves.
+
+---
+
+## The warm renderer
+
+- One per site, started by the first on-demand request, stopped after **30 minutes** idle.
+- Loads the live release once, then renders from memory — no container start per page.
+- A cold start (container + release load) takes seconds and only happens after idle; the wait limit and loading page cover it.
+- Renders one page at a time.
+- A new live release restarts it with the new prebuild.
+
+---
+
+## Options (site worker)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ISR_WAIT_MS` | `20000` | How long a request waits for an on-demand build before the loading page / `503` |
+| `BUILD_API_URL` | — | The platform's Build API |
+| `SITE_ID` | — | This site's id |
+| `STREAK_ISR_TOKEN` (secret) | — | The site's ISR token, from onboarding |
+
+See [Site worker](/v5/build-platform/site-worker.html) for the full list.
+
+---
+
+## Security
+
+`POST /isr` needs the site's ISR token (`Authorization: Bearer …`), issued once at onboarding and stored by the platform only as a hash. A token only builds pages for its own site. Rotate it with `POST /sites/:id/isr-token`; on-demand builds fail until the site worker has the new one.

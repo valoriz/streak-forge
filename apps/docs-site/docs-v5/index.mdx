@@ -1,0 +1,40 @@
+---
+title: Home
+description: "Streak.js v5 documentation — widget-based static pages, split into streak-forge (authoring, dev, prebuild) and streak-boot (page build and serving)."
+order: 0
+---
+
+# Streak.js v5
+
+Build-time rendering. HTML fragments composed per request. No framework runtime in the browser.
+
+v5 is a rewrite of Streak.js around one idea: **every part of a page is built once and reused**. A page is no longer one finished HTML file. It is a set of fragments (shell, widgets, components) that are rendered at build time, stored separately, and joined together when the page is requested.
+
+---
+
+## What's in v5
+
+**Two packages, two jobs.** `streak-forge` covers everything you do while writing a site: the widget registry, the dev server and the prebuild. `streak-boot` covers turning a prebuild into a servable site: page composition and serving. They run in different places — `prebuild` in your CI, `build` in an isolated container — so they ship separately.
+
+**Widgets come from the layout.** A `rootLayout()` lists the page's widget slots with `<WidgetPlaceholder>`. Fixed slots render on every page that uses the layout. Dynamic slots take a list of widgets per page from the sitemap. See [Slots](/v5/core-concepts/slots.html).
+
+**No page-level data handler.** Each widget calls its own `handler()`. Handler results are memoized by input, so widgets on one page that ask for the same data share one fetch. See [Handlers](/v5/core-concepts/handlers.html).
+
+**Prebuild runs no app code.** `streak-forge prebuild` compiles bundles and purges CSS by reading your source. It never calls a widget or a handler, so CI needs no secrets. See [CSS pipeline](/v5/styling/css-pipeline.html).
+
+**Scoped, per-widget CSS.** Each widget gets only the CSS it uses, with class names prefixed per widget type so two widgets can't clash. See [Class scoping](/v5/styling/class-scoping.html).
+
+**Builds at scale, and pages on demand.** The Streak build platform renders pages in containers, optimizes them in Workers, and can build a page the first time someone requests it (ISR). See [Build platform](/v5/build-platform/overview.html).
+
+> **Note:** v5 is in beta. APIs may still change before the stable release. The [v4 docs](/index.html) stay available, and [Migrating from v4](/v5/migration/from-v4.html) covers every change.
+
+---
+
+## Quick links
+
+- [Quick Start](/v5/quick-start.html) — a running v5 project in a few minutes
+- [Introduction](/v5/introduction.html) — how v5 is put together
+- [Core Concepts](/v5/core-concepts/rendering-pipeline.html) — pipeline, widgets, handlers, shells, slots, sitemap
+- [CLI](/v5/cli/streak-forge.html) — `streak-forge` and `streak-boot` commands
+- [Build platform](/v5/build-platform/overview.html) — full and partial builds, on-demand builds, widget build cache
+- [Migrating from v4](/v5/migration/from-v4.html) — step-by-step upgrade guide

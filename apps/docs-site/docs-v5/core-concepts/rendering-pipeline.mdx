@@ -1,0 +1,70 @@
+---
+title: Rendering Pipeline
+description: "Prebuild, build and serve: what each stage reads, writes and runs in Streak.js v5."
+order: 1
+---
+
+# Rendering Pipeline
+
+A v5 page goes through three stages. Each stage reads only what the previous one wrote.
+
+```
+src/ ──▶ prebuild ──▶ .prebuild/ ──▶ build ──▶ out/ ──▶ serve ──▶ HTML response
+          (no app code)              (app code runs)          (fs reads + string splicing)
+```
+
+---
+
+## 1. Prebuild — `streak-forge prebuild`
+
+**Reads:** `src/`, `src/app.full.css`, `public/`. **Runs:** nothing from your app.
+
+1. **Registry scan.** Parses every file in `src/widgets`, `src/handlers`, `src/components`, `src/shell` with the TypeScript compiler and records each `widget()` / `handler()` / `component()` / shell call: export name, type (file name), `dynamicClasses`, `cache` mode. The code is parsed, never executed.
+2. **Lint.** A bracket class like `text-[11px]` must be listed in its entry's `dynamicClasses`; otherwise prebuild fails. See [Class scoping](/v5/styling/class-scoping.html).
+3. **CSS purge.** For each entry, the purge engine keeps only the rules whose classes appear in that entry's source and the project files it imports, then removes rules already in the shared common CSS, then prefixes class names per type. See [CSS pipeline](/v5/styling/css-pipeline.html).
+4. **JS bundles.** Each entry is bundled to one JS file. Imports of `streak-forge` are rewritten to `streak-forge/runtime`, so rendering a bundle never loads build tooling.
+5. **Registry files.** One `meta.json` per entry plus the `streak-boot.registry.json` marker.
+
+Because nothing runs, prebuild needs no env vars or network: it works in CI with no secrets.
+
+---
+
+## 2. Build — `streak-boot build`
+
+**Reads:** `.prebuild/`, `streak.sitemap.json`. **Runs:** your widgets, handlers and shells (from the bundles).
+
+1. **Setup (once per build).** Renders the `shared[]` widgets and each shell type in use (`html`, `head`, `body`, `rootLayout`), and writes the client runtime scripts.
+2. **Pages.** For each page: renders its rootLayout, reads the page's widgets off the layout's placeholders ([Slots](/v5/core-concepts/slots.html)), renders each per-page widget with `{ data: page.metadata }`, renders the page's own `head()` if it has `metadata`, and writes:
+   - `pages/<url>/meta.json` — the page manifest: its widgets, which are lazy, its CSS, its version hash.
+   - one folder per widget instance: `index.html`, `content.json`, `script.js`.
+   - `pages/<url>/head.html` — the page's own `<head>`.
+3. **Scripts.** Each widget's `<Script>` blocks are extracted into its own `script.js`; the page's `common.js` is joined from them at request time.
+
+Handlers run here, once per input for the whole build (memoized). See [Handlers](/v5/core-concepts/handlers.html).
+
+---
+
+## 3. Serve — `streak-boot serve` or an edge worker
+
+For each request the server reads the page's `meta.json` and splices:
+
+```
+html/<Shell>/index.html          <html lang="en"><head></head><body></body></html>
+  + pages/<url>/head.html         (or head/<Shell>/index.html) + one inline <style> with the page's CSS
+  + body/<Shell>/index.html       <body …> with one marker per slot
+      + each eager widget's index.html, spliced into its slot
+      + lazy widgets keep their marker, for the client runtime
+  + <script> tags for the runtime and the page's common.js
+```
+
+Nothing composed is written to disk. A page's fragments change only when it is rebuilt, so every asset URL carries the page's version (`?v=<hash>`) and can be cached forever.
+
+---
+
+## Development — `streak-forge dev`
+
+`dev` runs all three stages in one process into `.dev/`, with these differences:
+
+- CSS is linked file by file instead of inlined.
+- Every page request **re-renders that page** first, with a fresh handler cache, so a reload shows current data.
+- Changes in `src/widgets`, `src/handlers`, `src/components`, `src/shell`, `public/` or the sitemap trigger a rebuild and a browser reload.

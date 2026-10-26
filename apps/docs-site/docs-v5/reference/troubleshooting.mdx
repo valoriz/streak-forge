@@ -1,0 +1,66 @@
+---
+title: Troubleshooting
+description: "Common Streak.js v5 errors and what they mean."
+order: 4
+---
+
+# Troubleshooting
+
+## Prebuild
+
+**`streak-forge prebuild: src/app.full.css does not exist yet — run your CSS build first`**
+Run your CSS build before prebuild: `streak-forge safelist && bun run css-build && streak-forge prebuild`.
+
+**`streak-forge pre-build failed: … bracket-syntax class(es) text-[11px] used but not declared in dynamicClasses`**
+Add the listed classes to that file's `dynamicClasses`. See [Class scoping](/v5/styling/class-scoping.html#bracket-classes).
+
+**`streak-forge pre-build failed: scopeClasses prefix collision — "A" and "B" both hash to "c3f2"`**
+Two types got the same 3-character code. Rename one of the files.
+
+**`… imports "X" from "streak-forge", which isn't part of the client runtime`**
+Widget, handler and component code may only import the authoring API from `streak-forge`. Move build tooling into a build script.
+
+**`… uses a default import from "streak-forge"; it has no default export`**
+Use named imports: `import { Script } from "streak-forge"`.
+
+## Build
+
+**`page "/x": no rootLayout specified and the project has 3 rootLayout() entries`**
+Set `"rootLayout"` on the page.
+
+**`page "/x": rootLayout "Y" is not a registered rootLayout() entry`**
+The shell file `src/shell/Y.tsx` is missing, misnamed, or has no `rootLayout()` export.
+
+**`page "/x": two widgets with id "hero"`**
+Ids must be unique across fixed slots and every dynamic slot of the page.
+
+**`page "/x": widget "nav" refs unknown shared id "nav"`**
+A `<WidgetPlaceholder id="nav" shared />` or `{ "ref": "nav" }` without a matching `shared[]` entry.
+
+**`…: no registered widget with type "Hero"`**
+No `src/widgets/Hero.tsx` exporting a `widget()` — check the file name and that it's a named export.
+
+**`<WidgetPlaceholder> can only be used inside a rootLayout, not inside a widget`** / **`<ComponentPlaceholder> can only be used inside a widget`**
+Move the placeholder to the right level. Components are one level deep.
+
+**`handler X: result is not JSON-safe (…)`** (warning)
+The handler returned a `Date`, `Map`, class instance or function. Convert it to plain data. See [Handlers](/v5/core-concepts/handlers.html).
+
+## Styling
+
+**A script's class has no effect** (menu won't open, `hidden` ignored)
+The class was renamed or has no CSS. Declare it in `dynamicClasses` — and the element's other classes for the same property. See [Class scoping](/v5/styling/class-scoping.html).
+
+**Spacing or responsive classes missing on a page that looked fine in v4**
+Look for a missing declaration on an element a script touches. Comparing computed styles of the two versions element by element finds it quickly.
+
+**Text slightly taller or shorter than expected**
+Make sure your CSS build writes `src/app.full.css` (the file prebuild reads), and that no old global stylesheet is still linked.
+
+## Dev
+
+**A change in `src/utils` or `src/services` isn't picked up**
+Restart `streak-forge dev`: only files in `src/widgets`, `src/handlers`, `src/components`, `src/shell`, `public/` and the sitemap are watched, and imported modules stay loaded.
+
+**Reloads are slow**
+Each reload re-renders the page and runs its handlers. That time is your page's real data cost.

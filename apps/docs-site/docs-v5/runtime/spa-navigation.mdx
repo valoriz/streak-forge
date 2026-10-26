@@ -1,0 +1,38 @@
+---
+title: SPA Navigation
+description: "Client-side navigation in built v5 sites: page JSON, prefetch on hover, cleanup between pages."
+order: 4
+---
+
+# SPA Navigation
+
+`streak-boot build` turns on client-side navigation by default (`SPA=0` turns it off). With it on, clicking an internal link fetches the next page as JSON and swaps it in, without a full page load.
+
+## How it works
+
+1. The page links `/__streak/spa-router.js`.
+2. On hover or touch of a same-site link, the router **prefetches** that page's `/<page>/index.json` (a small cache of recent prefetches).
+3. On click, it uses the prefetched JSON (or fetches it), then:
+   - pushes the new URL to history,
+   - dispatches `sf:pageunload`,
+   - replaces `<head>` content, `<html>`/`<body>` attributes and the body,
+   - removes listeners and timers the old page's scripts registered,
+   - loads the new page's `common.js` and runs the lazy-widget loader,
+   - scrolls to the top and dispatches `sf:pageload`.
+4. Back/forward buttons use the same path.
+5. Any error falls back to a normal page load.
+
+`index.json` holds the page's `headHtml`, `bodyHtml`, `htmlAttributes`, `bodyAttributes` and `scriptHref`.
+
+## Opting a link out
+
+Links are skipped when they point to another origin, have a `target` other than `_self`, have `download`, or have `data-no-spa`:
+
+```html
+<a href="/account" data-no-spa>Account</a>
+```
+
+## Writing scripts that survive navigation
+
+- Listeners and timers added during a page's scripts are cleaned up for you on navigation.
+- Code that must run on every page view (analytics, re-binding) can listen for `sf:pageload`.

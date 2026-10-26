@@ -1,0 +1,98 @@
+---
+title: Widgets
+description: "Widgets in Streak.js v5: the widget() HOC, props, async rendering, handlers, scripts and the build cache."
+order: 2
+---
+
+# Widgets
+
+A widget is one section of a page — a nav, a hero, a product grid. It is a function that returns JSX, wrapped in the global `widget()` HOC and exported by name from a file in `src/widgets/`.
+
+```tsx
+// src/widgets/HelloBanner.tsx
+type HelloBannerProps = { data?: { heading?: string; accent?: string } };
+
+export const HelloBanner = widget({})((props: HelloBannerProps) => {
+  const heading = props?.data?.heading ?? "Hello";
+  return (
+    <section className="py-24 text-center">
+      <h1 className="text-5xl font-bold">{heading}</h1>
+    </section>
+  );
+});
+```
+
+---
+
+## Rules
+
+- **Type = file name.** `HelloBanner.tsx` registers widget type `HelloBanner`. Rename the file to rename the type.
+- **Named export**, as `export const X = widget({...})(fn)`. The prebuild finds widgets by this exact call shape.
+- **Stateless.** No hooks, no state. A widget renders once per build (or once per page) on the server.
+- **Optional data.** Always read `props?.data?.field ?? fallback`. A widget may be rendered with missing data.
+- **Interactivity** goes in [`<Script>`](/v5/components/script.html) blocks inside the widget.
+
+---
+
+## What `props` holds
+
+| Where the widget sits | `props` |
+|---|---|
+| Typed fixed slot `<WidgetPlaceholder id type />` | `{ data: page.metadata }` |
+| Inline entry in a dynamic slot (`slots.main`) | `{ data: page.metadata }` |
+| Shared widget (`shared[]` entry, `<WidgetPlaceholder id shared />` or `{ ref }`) | the entry's own `props` |
+
+Every per-page widget on a page gets the **same** `props.data`: the page's `metadata`. Per-widget data comes from a [handler](/v5/core-concepts/handlers.html), usually keyed by something in `metadata` (a slug).
+
+---
+
+## Async widgets and handlers
+
+A widget can be `async` and `await` a handler directly:
+
+```tsx
+import { ProductHandler } from "../handlers/ProductHandler";
+
+export const ProductDetail = widget({})(async (props: { data?: { slug?: string } }) => {
+  const product = await ProductHandler({ slug: props?.data?.slug ?? "" });
+  if (!product) return null;
+  return <article className="p-8"><h1>{product.title}</h1></article>;
+});
+```
+
+Handlers are memoized by input, so if `ProductDetail`, `RelatedProducts` and the page's `head()` all call `ProductHandler({ slug })`, it runs once.
+
+---
+
+## `widget()` options
+
+```tsx
+export const Footer = widget({
+  dynamicClasses: [["shadow", "translate-x-full"]],
+  cache: "type",
+})(() => <footer>…</footer>);
+```
+
+| Option | Type | Meaning |
+|---|---|---|
+| `dynamicClasses` | `string[][]` | Classes that must keep their CSS and their exact name: classes added by scripts, built at runtime, or bracket classes. See [Class scoping](/v5/styling/class-scoping.html). Grouping is for readability only. |
+| `cache` | `"none"` \| `"type"` \| `"props"` | Build-time render cache. Default `"none"`. See [Widget cache](/v5/core-concepts/widget-cache.html). |
+
+Options must be literals: the prebuild reads them from the source text.
+
+---
+
+## Helpers next to widgets
+
+A file in `src/widgets/` that exports no `widget()` call is not a widget. A common pattern is to keep the view function separate from the widget and reuse it:
+
+```tsx
+// src/widgets/HorizontalScroll.tsx
+export const HorizontalScrollView = (props: { data?: { products?: Product[] } }) => (/* ... */);
+export const HorizontalScroll = widget({})(/* loads data, renders HorizontalScrollView */);
+
+// src/widgets/HorizontalScroll2.tsx — a second widget type, same view, other data
+export const HorizontalScroll2 = widget({})(/* ... */);
+```
+
+A widget never learns its slot id, so two instances that need different data are best made into two widget types.
