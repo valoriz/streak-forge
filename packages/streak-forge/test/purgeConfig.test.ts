@@ -67,6 +67,15 @@ describe("loadPurgeConfig", () => {
     });
   });
 
+  test("broken config file = undefined, does not throw", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sf-purge-"));
+    fs.writeFileSync(
+      path.join(dir, "purgecss.config.js"),
+      `import x from "not-installed-pkg";\nexport const safelist = [x];\n`,
+    );
+    expect(await loadPurgeConfig(dir)).toBeUndefined();
+  });
+
   test("missing file = undefined", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sf-purge-"));
     expect(await loadPurgeConfig(dir)).toBeUndefined();

@@ -104,7 +104,14 @@ export const loadPurgeConfig = (projectRoot: string): Promise<PurgeConfig | unde
   let pending = cache.get(filePath);
   if (!pending) {
     pending = fs.existsSync(filePath)
-      ? import(filePath).then((mod) => serializePurgeConfig({ ...mod, ...(mod.default ?? {}) }))
+      ? import(filePath)
+          .then((mod) => serializePurgeConfig({ ...mod, ...(mod.default ?? {}) }))
+          // A broken config must not fail the page build - fall back to the
+          // optimizer's defaults, same as having no config at all.
+          .catch((error: Error) => {
+            console.warn(`streak-forge: failed to load ${filePath}, ignored: ${error.message}`);
+            return undefined;
+          })
       : Promise.resolve(undefined);
     cache.set(filePath, pending);
   }
