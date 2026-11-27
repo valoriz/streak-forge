@@ -1,0 +1,217 @@
+---
+title: Streak Snippets
+description: Snippets, real-time diagnostics, completions, and navigation for Streak.js in VS Code and VS Code–based editors.
+order: 2
+---
+
+# Streak Snippets
+
+**Streak Snippets** is a VS Code extension for Streak.js. It combines code snippets with an embedded **Language Server (LSP)** that understands Streak conventions — it validates widgets, layouts, data handlers, `<Script>` blocks, and `streak.sitemap.json` as you type, and adds completions, hovers, go-to-definition, and quick fixes on top.
+
+## Installation
+
+### VS Code (recommended)
+
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=janajithd.streak-snippets). You can also:
+
+- Open the **Extensions** view (`Ctrl+Shift+X` / `Cmd+Shift+X`), search for **Streak Snippets**, and click **Install**, or
+- Open Quick Open (`Ctrl+P` / `Cmd+P`) and run:
+
+```text
+ext install janajithd.streak-snippets
+```
+
+### Other editors (`.vsix`)
+
+For Antigravity, Cursor, VSCodium, and other VS Code–based editors, download the `.vsix` file from the [latest GitHub release](https://github.com/Janajith-D/streak-snippets/releases/latest), then choose **Extensions** → `…` → **Install from VSIX…**, or run:
+
+```bash
+code --install-extension streak-snippets-<version>.vsix  # or codium, cursor, …
+```
+
+> **Note:** `.vsix` installs don't update automatically — reinstall from the latest release to upgrade.
+
+## Snippets
+
+Type a prefix and press `Tab` or `Enter` to expand it.
+
+### Component imports (`.tsx`)
+
+| Prefix  | Expands to                                                     |
+| ------- | -------------------------------------------------------------- |
+| `imWP`  | `import { WidgetPlaceholder } from "streak-forge/components";` |
+| `imS`   | `import { Script } from "streak-forge/components";`            |
+| `imPre` | `import { Preload } from "streak-forge/components";`           |
+| `imDy`  | `import { Dynamic } from "streak-forge/components";`           |
+
+### JSX and scaffolding (`.tsx`)
+
+| Prefix   | Where          | Inserts                                                                                |
+| -------- | -------------- | -------------------------------------------------------------------------------------- |
+| `sfWp`   | Layout JSX     | `<WidgetPlaceholder id="..." type="..." />`                                            |
+| `sfPre`  | Layout JSX     | `<Preload href="..." as="style" media="" />`                                           |
+| `sfS`    | Layout JSX     | A `<Script>` block with an `id`, an `options` object, and a `(gDom, options)` callback |
+| `sfWid`  | `src/widgets/` | A basic widget component with a props interface                                        |
+| `sfWidE` | `src/widgets/` | A typed widget component with a structured example                                     |
+
+The `sfS` snippet expands to:
+
+```tsx
+<Script
+  id="my-script"
+  options={{
+    color: "#818cf8",
+    delay: 800,
+  }}
+>
+  {(gDom: any, options: any) => {
+    // client-side code
+  }}
+</Script>
+```
+
+### Data handlers (`.ts`)
+
+| Prefix | Where          | Inserts                                                                               |
+| ------ | -------------- | ------------------------------------------------------------------------------------- |
+| `sfDH` | `src/handler/` | An `async` data handler that returns `status` plus widget data, with a default export |
+
+```ts
+const getData = async () => {
+  return {
+    status: 200, // required — signals render success
+    PageHead: {
+      // key = widget id from sitemap
+      title: "Hello",
+    },
+    HelloBanner: {
+      heading: "Hello World",
+    },
+  };
+};
+
+export default getData;
+```
+
+### Sitemap (`streak.sitemap.json`)
+
+| Prefix       | Where                    | Inserts                                                        |
+| ------------ | ------------------------ | -------------------------------------------------------------- |
+| `sf-widget`  | Inside a `widgets` array | A widget entry with `id` and `type`                            |
+| `sf-sitemap` | Root array               | A complete page route with `renderConfig`, handler, and layout |
+
+> **Tip:** `sfWid`, `sfWidE`, `sf-widget`, and `sf-sitemap` are provided by the language server, so they only appear in the right location — widget scaffolds inside `src/widgets/`, sitemap snippets inside `streak.sitemap.json`.
+
+## Completions
+
+- **Component tags** — type `<` to list the built-in components: `WidgetPlaceholder`, `Script`, `Preload`, and `Dynamic`. Accepting one adds (or merges into) the import from `"streak-forge/components"`.
+- **`type` on `<WidgetPlaceholder />`** — suggests the widgets registered in `src/widgets/`.
+- **`href` on `<Preload />`** — suggests static files from your `public/` folder.
+- **`id` on `<Dynamic />`** — suggests dynamic component IDs registered in `<Script>` blocks.
+- **`gDom.`** — suggests runtime methods (`addResourceToBody`, `loadPackage`, `loadDynamicComponent`, `addWidgetToBody`) plus any custom methods you declare in `global.d.ts`.
+
+## Hover documentation
+
+- Hover a built-in component tag to see its documentation, required props, and a usage example.
+- Hover a custom widget such as `<WidgetPlaceholder type="ProductCard" />` to see that widget's JSDoc description and typed props contract, read directly from its source file.
+- Hover a `gDom` method to see its signature, parameters, and client execution notes.
+
+## Go to definition (`F12`)
+
+| From                                                          | Jumps to                                      |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| `type="..."` in a layout, or a returned key in a data handler | `src/widgets/<Widget>.tsx`                    |
+| `href="..."` on `<Preload />`                                 | The file in `public/`                         |
+| An ID in `gDom.loadDynamicComponent("...")`                   | The matching `<Dynamic id="...">` declaration |
+
+## Diagnostics
+
+The language server reports problems in the **Problems** panel with the source **Streak Engine**. Each rule has an ID (for example `streak:S101`) and a default severity you can override in settings.
+
+### Widgets and layouts
+
+| ID            | Default | Rule                                                                                   | Setting key                  |
+| ------------- | ------- | -------------------------------------------------------------------------------------- | ---------------------------- |
+| `streak:S101` | Error   | `<WidgetPlaceholder>` must have non-empty `id` and `type` attributes                   | `widgetPlaceholderProps`     |
+| `streak:S102` | Error   | `<WidgetPlaceholder>` may only be used in layout files (`src/layout` or `src/layouts`) | `widgetPlaceholderProps`     |
+| `streak:S301` | Warning | Pages, components, and handlers must have a default export                             | `missingDefaultExport`       |
+| `streak:S302` | Error   | Widgets must not use React hooks (`useState`, `useEffect`, …)                          | `reactHooksNotAllowed`       |
+| `streak:S303` | Error   | `props.data` may be undefined and must be accessed safely                              | `unsafeWidgetDataAccess`     |
+| `streak:S304` | Warning | Widget props should declare `data` as optional (`data?: T`)                            | `invalidWidgetPropsContract` |
+| `streak:S601` | Error   | Widget names must be unique across all widget files                                    | `duplicatedWidget`           |
+| `streak:S801` | Error   | A widget's file name must match its default-exported component name                    | —                            |
+
+### Data handlers
+
+| ID            | Default | Rule                                                          | Setting key            |
+| ------------- | ------- | ------------------------------------------------------------- | ---------------------- |
+| `streak:S201` | Warning | The returned object must include a `status` property          | `dataHandlerStatus`    |
+| `streak:S202` | Error   | The default export must be an `async` function                | `dataHandlerAsync`     |
+| `streak:S203` | Warning | `status` must be a valid HTTP status code (100–599)           | `invalidHandlerStatus` |
+| `streak:S204` | Warning | Returned keys must match widgets registered in `src/widgets/` | `dataHandlerWidgetKey` |
+
+### Script and Dynamic components
+
+| ID            | Default | Rule                                                                                        | Setting key                 |
+| ------------- | ------- | ------------------------------------------------------------------------------------------- | --------------------------- |
+| `streak:S401` | Error   | `<Script>` callbacks must not capture outer-scope variables — pass values through `options` | `scriptClosureCapture`      |
+| `streak:S402` | Error   | The callback signature must be `(gDom, options) => void`                                    | `invalidScriptSignature`    |
+| `streak:S403` | Error   | Script code must not use `import` or `require()`                                            | `importInsideScript`        |
+| `streak:S404` | Error   | `<Script>` callbacks must not be `async`                                                    | `asyncScriptCallback`       |
+| `streak:S405` | Warning | `<Script>` requires a non-empty `id`                                                        | `scriptRequiredId`          |
+| `streak:S406` | Warning | Scroll, wheel, pointer, mouse-move, and touch listeners must pass `{ passive: true }`       | `passiveEventListener`      |
+| `streak:S501` | Error   | `<Dynamic>` must have a static, non-empty `id`                                              | `invalidDynamicComponentId` |
+| `streak:S602` | Error   | `<WidgetPlaceholder>`, `<Script>`, and `<Dynamic>` must not be nested                       | `componentNesting`          |
+| `streak:S603` | Error   | `<Script>` must contain exactly one child wrapping the callback                             | `scriptStructure`           |
+
+### Sitemap
+
+| ID            | Default | Rule                                                                       | Setting key              |
+| ------------- | ------- | -------------------------------------------------------------------------- | ------------------------ |
+| `streak:S901` | Error   | Page routes (`url` values) must be unique                                  | `duplicateRoute`         |
+| `streak:S902` | Warning | A referenced widget `type` must exist as a `.tsx` file in `src/widgets/`   | `missingWidget`          |
+| `streak:S903` | Warning | A referenced `dataHandler` must exist in `src/handler/` or `src/handlers/` | `missingHandler`         |
+| `streak:S904` | Warning | Widgets should be referenced by at least one sitemap page                  | `deadWidget`             |
+| `streak:S905` | Error   | `renderConfig` `renderId` values must be unique                            | `duplicateRenderId`      |
+| `streak:S906` | Warning | A referenced `rootLayout` must exist in `src/layout/` or `src/layouts/`    | `missingLayout`          |
+| `streak:S907` | Warning | A widget's `loadingStrategy` must be `"lazy"` if specified                 | `invalidLoadingStrategy` |
+
+### Custom rules
+
+| ID            | Default | Rule                                                       | Setting key         |
+| ------------- | ------- | ---------------------------------------------------------- | ------------------- |
+| `streak:S702` | Error   | Flags code matching your own forbidden regular expressions | `forbiddenPatterns` |
+
+For the rationale and compliant/non-compliant examples for every rule, see the [Streak Engine Rule Catalog](https://github.com/Janajith-D/streak-snippets/blob/develop/docs/RULES.md).
+
+## Configuration
+
+Settings can go in your user settings or in a project's `.vscode/settings.json`.
+
+| Setting                                   | Type       | Default          | Description                                  |
+| ----------------------------------------- | ---------- | ---------------- | -------------------------------------------- |
+| `streak.snippets.enable`                  | `boolean`  | `true`           | Enable or disable Streak snippets            |
+| `streak.diagnostics.enable`               | `boolean`  | `true`           | Enable or disable real-time diagnostics      |
+| `streak.snippets.widgetDirectory`         | `string`   | `"src/widgets"`  | Folder containing widget components          |
+| `streak.snippets.pageDirectory`           | `string`   | `"src/pages"`    | Folder containing pages                      |
+| `streak.snippets.publicDirectory`         | `string`   | `"public"`       | Folder containing static assets              |
+| `streak.rules.<key>.severity`             | `string`   | see tables above | `"error"`, `"warning"`, `"info"`, or `"off"` |
+| `streak.rules.forbiddenPatterns.patterns` | `string[]` | `[]`             | Regular expressions flagged by `streak:S702` |
+
+Replace `<key>` with a setting key from the diagnostics tables. For example, to lower one rule to info, turn one off, make one stricter, and ban a few patterns:
+
+```json
+{
+  "streak.rules.deadWidget.severity": "info",
+  "streak.rules.invalidWidgetPropsContract.severity": "off",
+  "streak.rules.missingDefaultExport.severity": "error",
+  "streak.rules.forbiddenPatterns.severity": "warning",
+  "streak.rules.forbiddenPatterns.patterns": [
+    "console\\.(log|debug|info)\\s*\\(",
+    "\\beval\\s*\\(",
+    "\\blocalStorage\\b"
+  ]
+}
+```
+
+> **Note:** Patterns are JSON strings, so backslashes in a regular expression must be escaped (`\\b`, `\\s`).
